@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
+    <PackageReference Include="MSTest.TestAdapter" Version="4.4.1" />
+    <PackageReference Include="MSTest.TestFramework" Version="4.4.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\CreatorFlow\CreatorFlow.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\src\CreatorFlow\appsettings.json"
+          Link="appsettings.json"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\src\CreatorFlow\appsettings.Local.json"
+          Link="appsettings.Local.json"
+          CopyToOutputDirectory="PreserveNewest"
+          Condition="Exists('..\..\src\CreatorFlow\appsettings.Local.json')" />
+  </ItemGroup>
+
+</Project>
