@@ -4,11 +4,9 @@ using CreatorFlow.Repositories.Implementations;
 using CreatorFlow.Repositories.InMemory;
 using CreatorFlow.Repositories.Interfaces;
 using CreatorFlow.Services;
-using System.Runtime.Versioning;
 
 namespace CreatorFlow;
 
-[SupportedOSPlatform("windows")]
 static class Program
 {
     /// <summary>
@@ -17,7 +15,7 @@ static class Program
     ///         để vẫn xem/test được giao diện Board + luồng Workflow.
     /// Đổi lại true khi đã setup xong PostgreSQL.
     /// </summary>
-    private static readonly bool UseDatabase = false;
+    private const bool UseDatabase = false;
 
     /// <summary>
     ///  The main entry point for the application.
@@ -27,9 +25,6 @@ static class Program
     {
         // To customize application configuration such as set high DPI settings or default font,
         // see https://aka.ms/applicationconfiguration.
-        // Toàn bộ UI vẽ tay theo pixel cố định (thiết kế ở 100%). Chạy DPI-unaware để layout không bị scale kép
-        // khi Windows để 125%/150%. Phải gọi TRƯỚC ApplicationConfiguration.Initialize().
-        Application.SetHighDpiMode(HighDpiMode.DpiUnaware);
         ApplicationConfiguration.Initialize();
 
         IUnitOfWork uow;
@@ -40,7 +35,6 @@ static class Program
         IBoardRepository boardRepo;
         IReviewQueueRepository reviewQueueRepo;
         IActivityRepository activityRepo;
-        IContentDetailsRepository detailsRepo;
 
         if (UseDatabase)
         {
@@ -53,7 +47,6 @@ static class Program
             boardRepo = new BoardRepository(npgsqlUow);
             reviewQueueRepo = new ReviewQueueRepository(npgsqlUow);
             activityRepo = new ActivityRepository(npgsqlUow);
-            detailsRepo = new ContentDetailsRepository(npgsqlUow);
         }
         else
         {
@@ -65,11 +58,9 @@ static class Program
             boardRepo = new InMemoryBoardRepository();
             reviewQueueRepo = new InMemoryReviewQueueRepository();
             activityRepo = new InMemoryActivityRepository();
-            detailsRepo = new InMemoryContentDetailsRepository();
         }
 
         var workflowService = new WorkflowService(contentRepo, historyRepo, reviewRepo, memberRepo, uow);
-        var contentService = new ContentService(contentRepo, detailsRepo, historyRepo, memberRepo, uow);
 
         // TODO: thay bằng màn Login + chọn Project thật (mục 18 UX spec: Login → Select Project).
         // Tạm hardcode User #1 / Project #1 — khớp seed data ở cả schema.sql lẫn InMemoryDataStore.
@@ -80,7 +71,7 @@ static class Program
 
         if (args.Length > 0 && args[0] == "--test")
         {
-            using var testForm = new BoardForm(workflowService, boardRepo, reviewQueueRepo, activityRepo, memberRepo, contentService);
+            using var testForm = new BoardForm(workflowService, boardRepo, reviewQueueRepo, activityRepo, memberRepo);
             var handle = testForm.Handle;
             testForm.Size = new Size(1440, 900);
             testForm.PerformLayout();
@@ -93,6 +84,6 @@ static class Program
             return;
         }
 
-        Application.Run(new BoardForm(workflowService, boardRepo, reviewQueueRepo, activityRepo, memberRepo, contentService));
+        Application.Run(new BoardForm(workflowService, boardRepo, reviewQueueRepo, activityRepo, memberRepo));
     }
 }
