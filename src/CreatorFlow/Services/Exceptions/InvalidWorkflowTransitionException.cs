@@ -1,4 +1,5 @@
-﻿using System;
+﻿using CreatorFlow.Models.Enums;
+using System;
 using CreatorFlow.Models;
 
 namespace CreatorFlow.Services.Exceptions;
