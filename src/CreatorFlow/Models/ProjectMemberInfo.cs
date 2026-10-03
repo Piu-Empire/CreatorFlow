@@ -1,3 +1,4 @@
+﻿using CreatorFlow.Models.Enums;
 namespace CreatorFlow.Models;
 
 /// <summary>Thành viên của Project (dùng cho ComboBox chọn người phụ trách).</summary>

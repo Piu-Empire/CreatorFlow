@@ -1,4 +1,5 @@
-﻿using CreatorFlow.Models;
+﻿using CreatorFlow.Models.Enums;
+using CreatorFlow.Models;
 using CreatorFlow.Repositories.Interfaces;
 
 namespace CreatorFlow.Repositories.InMemory;
@@ -14,7 +15,10 @@ public class InMemoryActivityRepository : IActivityRepository
             items.Add(new ActivityItem
             {
                 Timestamp = h.ChangedAt,
-                ActorName = InMemoryDataStore.UserNames.GetValueOrDefault(h.ChangedByUserId, "?"),
+                // ChangedByUserId là long? nên phải .Value trước khi tra dictionary key long
+                ActorName = h.ChangedByUserId.HasValue
+                    ? InMemoryDataStore.UserNames.GetValueOrDefault(h.ChangedByUserId.Value, "?")
+                    : "?",
                 Description = $"{h.FromStatus} → {h.ToStatus}",
                 Feedback = h.Note,
             });
