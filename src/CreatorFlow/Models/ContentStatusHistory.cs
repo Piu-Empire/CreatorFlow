@@ -1,18 +1,20 @@
-using System;
+using CreatorFlow.Models.Enums;
 
 namespace CreatorFlow.Models;
 
-/// <summary>
-/// Lưu mọi lần chuyển trạng thái Content (mục 5.4, bảng 18).
-/// Đây là dữ liệu lịch sử; Contents.Status vẫn là trạng thái hiện tại.
-/// </summary>
-public class ContentStatusHistory
+public sealed record ContentStatusHistory
 {
-    public long Id { get; set; }
-    public long ContentId { get; set; }
-    public ContentStatus FromStatus { get; set; }
-    public ContentStatus ToStatus { get; set; }
-    public long ChangedByUserId { get; set; }
-    public DateTime ChangedAt { get; set; }
-    public string? Note { get; set; }
+    public long HistoryId { get; init; }
+
+    public long ContentId { get; init; }
+
+    public ContentStatus? FromStatus { get; init; }
+
+    public ContentStatus ToStatus { get; init; }
+
+    public long? ChangedBy { get; init; }
+
+    public string? Note { get; init; }
+
+    public DateTime ChangedAt { get; init; }
 }
