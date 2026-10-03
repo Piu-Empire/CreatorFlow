@@ -1,4 +1,5 @@
-﻿using CreatorFlow.Models;
+﻿using CreatorFlow.Models.Enums;
+using CreatorFlow.Models;
 using CreatorFlow.Repositories.Interfaces;
 
 namespace CreatorFlow.Repositories.InMemory;
