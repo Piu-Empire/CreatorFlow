@@ -1,3 +1,4 @@
+﻿using CreatorFlow.Models.Enums;
 using System;
 
 namespace CreatorFlow.Models;

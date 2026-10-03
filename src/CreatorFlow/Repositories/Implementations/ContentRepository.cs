@@ -1,4 +1,5 @@
-﻿using CreatorFlow.Data;
+﻿using CreatorFlow.Models.Enums;
+using CreatorFlow.Data;
 using CreatorFlow.Models;
 using CreatorFlow.Repositories.Interfaces;
 
