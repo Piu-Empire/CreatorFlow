@@ -15,10 +15,14 @@ public partial class CreateContentDialog : Form
     /// <summary>Kết quả nhập, đọc sau khi ShowDialog() trả về DialogResult.OK.</summary>
     public ContentDraft Draft { get; private set; } = new();
 
-    public CreateContentDialog(List<ProjectMemberInfo> members, ContentStatus initialStatus = ContentStatus.Idea)
+    /// <param name="platforms">Tên các nền tảng đang bật (lấy từ ContentService.GetAvailablePlatforms) — mỗi tên là 1 checkbox.</param>
+    public CreateContentDialog(List<ProjectMemberInfo> members, List<string> platforms, ContentStatus initialStatus = ContentStatus.Idea)
     {
         InitializeComponent();
         _members = members;
+
+        foreach (string name in platforms)
+            _pnlPlatforms.Controls.Add(new CheckBox { Text = name, AutoSize = true, Margin = new Padding(0, 0, 24, 0) });
 
         // Label coi "&" là ký tự phím tắt và ẩn nó đi (VD "Ideas & Discovery" → "Ideas  Discovery") — tắt để hiện đúng.
         lblHeader.UseMnemonic = false;
@@ -67,11 +71,9 @@ public partial class CreateContentDialog : Form
 
     private List<string> CollectPlatforms()
     {
-        var list = new List<string>();
-        if (_chkYouTube.Checked) list.Add("YouTube");
-        if (_chkTikTok.Checked) list.Add("TikTok");
-        if (_chkInstagram.Checked) list.Add("Instagram");
-        if (_chkFacebook.Checked) list.Add("Facebook");
-        return list;
+        return _pnlPlatforms.Controls.OfType<CheckBox>()
+            .Where(c => c.Checked)
+            .Select(c => c.Text)
+            .ToList();
     }
 }

@@ -54,7 +54,8 @@ public partial class ContentDetailPanel : UserControl
 
     // Index: 0 Pipeline Stage (chỉ đọc) · 1 Platform · 2 Priority · 3 Sprint · 4 Target Week · 5 Estimated Duration
     private readonly Label _lblStageVal;
-    private readonly ComboBox _cboPlatform;
+    private readonly Button _btnPlatforms;
+    private readonly ContextMenuStrip _mnuPlatforms;
     private readonly ComboBox _cboPriorityEdit;
     private readonly ComboBox _cboSprintEdit;
     private readonly DateTimePicker _dtpTargetWeek;
@@ -219,11 +220,26 @@ public partial class ContentDetailPanel : UserControl
         _metaBoxes[0].FillColor = UITheme.Neutral100;
         _metaBoxes[0].Controls.Add(_lblStageVal);
 
-        // 1. Platform
-        _cboPlatform = MakeFlatCombo();
-        _cboPlatform.Items.AddRange(ContentService.AvailablePlatforms);
-        _cboPlatform.SelectedIndexChanged += (_, _) => MarkDirty();
-        _metaBoxes[1].Controls.Add(Pad(_cboPlatform, 12, 7));
+        // 1. Platform — chọn nhiều: bấm nút để mở menu tick, menu không đóng sau mỗi lần tick.
+        // Các mục của menu được nạp từ bảng platforms trong Initialize().
+        _mnuPlatforms = new ContextMenuStrip { ShowImageMargin = false, ShowCheckMargin = true, Font = new Font("Segoe UI", 10F) };
+        _mnuPlatforms.Closing += (_, e) =>
+        {
+            if (e.CloseReason == ToolStripDropDownCloseReason.ItemClicked) e.Cancel = true;
+        };
+        _btnPlatforms = new Button
+        {
+            Font = new Font("Segoe UI", 10F),
+            FlatStyle = FlatStyle.Flat,
+            BackColor = UITheme.White,
+            TextAlign = ContentAlignment.MiddleLeft,
+            AutoEllipsis = true,
+            UseMnemonic = false,
+        };
+        _btnPlatforms.FlatAppearance.BorderSize = 0;
+        _btnPlatforms.Click += (_, _) => _mnuPlatforms.Show(_btnPlatforms, new Point(0, _btnPlatforms.Height));
+        _metaBoxes[1].Controls.Add(Pad(_btnPlatforms, 12, 7));
+        UpdatePlatformButtonText();
 
         // 2. Priority
         _cboPriorityEdit = MakeFlatCombo();
@@ -547,6 +563,27 @@ public partial class ContentDetailPanel : UserControl
         _activityRepo = activityRepo;
         _memberRepo = memberRepo;
         _contentService = contentService;
+
+        _mnuPlatforms.Items.Clear();
+        foreach (string name in contentService.GetAvailablePlatforms())
+        {
+            var item = new ToolStripMenuItem(name) { CheckOnClick = true };
+            item.CheckedChanged += (_, _) =>
+            {
+                UpdatePlatformButtonText();
+                MarkDirty();
+            };
+            _mnuPlatforms.Items.Add(item);
+        }
+    }
+
+    private List<string> SelectedPlatformNames() =>
+        _mnuPlatforms.Items.OfType<ToolStripMenuItem>().Where(i => i.Checked).Select(i => i.Text).ToList();
+
+    private void UpdatePlatformButtonText()
+    {
+        var names = SelectedPlatformNames();
+        _btnPlatforms.Text = (names.Count == 0 ? "Chọn nền tảng" : string.Join(" • ", names)) + "  ▾";
     }
 
     public void LoadContent(ContentBoardCard card)
@@ -564,8 +601,7 @@ public partial class ContentDetailPanel : UserControl
         _pnlContent.Visible = true;
         _pnlFooter.Visible = true;
 
-        string platform = card.Platforms.Count > 0 ? card.Platforms[0] : "";
-        _pnlHeader.SetData(card.Code, platform, card.Sprint);
+        _pnlHeader.SetData(card.Code, card.Platforms, card.Sprint);
         _lblFooterCode.Text = card.Code;
 
         _txtTitleVal.Text = card.Title;
@@ -573,8 +609,9 @@ public partial class ContentDetailPanel : UserControl
 
         _lblStageVal.Text = UITheme.GetStageDisplayName(card.Status);
 
-        _cboPlatform.SelectedItem = platform;
-        if (_cboPlatform.SelectedIndex < 0 && _cboPlatform.Items.Count > 0) _cboPlatform.SelectedIndex = 0;
+        foreach (var item in _mnuPlatforms.Items.OfType<ToolStripMenuItem>())
+            item.Checked = card.Platforms.Contains(item.Text, StringComparer.OrdinalIgnoreCase);
+        UpdatePlatformButtonText();
 
         _cboPriorityEdit.SelectedItem = card.Priority;
 
@@ -637,7 +674,7 @@ public partial class ContentDetailPanel : UserControl
             Title = _txtTitleVal.Text,
             Description = _txtHookVal.Text,
             Priority = _cboPriorityEdit.SelectedItem is Priority p ? p : _current.Priority,
-            Platforms = _cboPlatform.SelectedItem is string plat ? new List<string> { plat } : new List<string>(),
+            Platforms = SelectedPlatformNames(),
             Sprint = _cboSprintEdit.SelectedItem as string ?? _current.Sprint,
             Deadline = _dtpTargetWeek.Value.Date,
             EstimatedDuration = _txtDurationEdit.Text,
@@ -811,7 +848,7 @@ public partial class ContentDetailPanel : UserControl
     private sealed class HeaderPanel : Panel
     {
         private string _code = "";
-        private string _platform = "";
+        private IReadOnlyList<string> _platforms = Array.Empty<string>();
         private string _sprint = "";
         private bool _closeHover;
         private Rectangle _closeRect;
@@ -824,9 +861,9 @@ public partial class ContentDetailPanel : UserControl
             BackColor = UITheme.White;
         }
 
-        public void SetData(string code, string platform, string sprint)
+        public void SetData(string code, IReadOnlyList<string> platforms, string sprint)
         {
-            _code = code; _platform = platform; _sprint = sprint;
+            _code = code; _platforms = platforms; _sprint = sprint;
             Invalidate();
         }
 
@@ -869,13 +906,22 @@ public partial class ContentDetailPanel : UserControl
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
             x = codeRect.Right + 10;
 
-            // Pill nền tảng
-            if (!string.IsNullOrEmpty(_platform))
+            // Pill nền tảng đầu tiên + "+N" nếu Content có nhiều nền tảng (danh sách đầy đủ nằm ở ô Platform)
+            if (_platforms.Count > 0)
             {
-                int pw = UIIcons.MeasurePlatformPill(g, _platform, 34);
+                int pw = UIIcons.MeasurePlatformPill(g, _platforms[0], 34);
                 var pr = new Rectangle(x, cy - 17, pw, 34);
-                UIIcons.DrawPlatformPill(g, _platform, pr);
+                UIIcons.DrawPlatformPill(g, _platforms[0], pr);
                 x = pr.Right + 10;
+
+                if (_platforms.Count > 1)
+                {
+                    string more = $"+{_platforms.Count - 1}";
+                    var moreSize = TextRenderer.MeasureText(g, more, UITheme.FontBodyBold, new Size(int.MaxValue, 30), TextFormatFlags.NoPadding);
+                    TextRenderer.DrawText(g, more, UITheme.FontBodyBold, new Rectangle(x, cy - 15, moreSize.Width, 30), UITheme.Neutral600,
+                        TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+                    x += moreSize.Width + 10;
+                }
             }
 
             // Chip sprint

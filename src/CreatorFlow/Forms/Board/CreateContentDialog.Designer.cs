@@ -15,10 +15,7 @@ partial class CreateContentDialog
     private System.Windows.Forms.Label lblHook;
     private System.Windows.Forms.TextBox _txtHook;
     private System.Windows.Forms.Label lblPlatforms;
-    private System.Windows.Forms.CheckBox _chkYouTube;
-    private System.Windows.Forms.CheckBox _chkTikTok;
-    private System.Windows.Forms.CheckBox _chkInstagram;
-    private System.Windows.Forms.CheckBox _chkFacebook;
+    private System.Windows.Forms.FlowLayoutPanel _pnlPlatforms;
     private System.Windows.Forms.Label lblPriority;
     private System.Windows.Forms.Label lblSprint;
     private System.Windows.Forms.ComboBox _cboPriority;
@@ -53,10 +50,7 @@ partial class CreateContentDialog
         this.lblHook = new System.Windows.Forms.Label();
         this._txtHook = new System.Windows.Forms.TextBox();
         this.lblPlatforms = new System.Windows.Forms.Label();
-        this._chkYouTube = new System.Windows.Forms.CheckBox();
-        this._chkTikTok = new System.Windows.Forms.CheckBox();
-        this._chkInstagram = new System.Windows.Forms.CheckBox();
-        this._chkFacebook = new System.Windows.Forms.CheckBox();
+        this._pnlPlatforms = new System.Windows.Forms.FlowLayoutPanel();
         this.lblPriority = new System.Windows.Forms.Label();
         this.lblSprint = new System.Windows.Forms.Label();
         this._cboPriority = new System.Windows.Forms.ComboBox();
@@ -150,39 +144,13 @@ partial class CreateContentDialog
         this.lblPlatforms.TabIndex = 5;
         this.lblPlatforms.Text = "Nền tảng đăng bài";
         // 
-        // _chkYouTube
+        // _pnlPlatforms
         // 
-        this._chkYouTube.AutoSize = true;
-        this._chkYouTube.Checked = true;
-        this._chkYouTube.CheckState = System.Windows.Forms.CheckState.Checked;
-        this._chkYouTube.Location = new System.Drawing.Point(28, 272);
-        this._chkYouTube.Name = "_chkYouTube";
-        this._chkYouTube.TabIndex = 2;
-        this._chkYouTube.Text = "YouTube";
-        // 
-        // _chkTikTok
-        // 
-        this._chkTikTok.AutoSize = true;
-        this._chkTikTok.Location = new System.Drawing.Point(128, 272);
-        this._chkTikTok.Name = "_chkTikTok";
-        this._chkTikTok.TabIndex = 3;
-        this._chkTikTok.Text = "TikTok";
-        // 
-        // _chkInstagram
-        // 
-        this._chkInstagram.AutoSize = true;
-        this._chkInstagram.Location = new System.Drawing.Point(228, 272);
-        this._chkInstagram.Name = "_chkInstagram";
-        this._chkInstagram.TabIndex = 4;
-        this._chkInstagram.Text = "Instagram";
-        // 
-        // _chkFacebook
-        // 
-        this._chkFacebook.AutoSize = true;
-        this._chkFacebook.Location = new System.Drawing.Point(343, 272);
-        this._chkFacebook.Name = "_chkFacebook";
-        this._chkFacebook.TabIndex = 5;
-        this._chkFacebook.Text = "Facebook";
+        this._pnlPlatforms.AutoSize = true;
+        this._pnlPlatforms.Location = new System.Drawing.Point(28, 272);
+        this._pnlPlatforms.Name = "_pnlPlatforms";
+        this._pnlPlatforms.TabIndex = 2;
+        this._pnlPlatforms.WrapContents = false;
         // 
         // lblPriority
         // 
@@ -333,10 +301,7 @@ partial class CreateContentDialog
         this.Controls.Add(this.lblHook);
         this.Controls.Add(this._txtHook);
         this.Controls.Add(this.lblPlatforms);
-        this.Controls.Add(this._chkYouTube);
-        this.Controls.Add(this._chkTikTok);
-        this.Controls.Add(this._chkInstagram);
-        this.Controls.Add(this._chkFacebook);
+        this.Controls.Add(this._pnlPlatforms);
         this.Controls.Add(this.lblPriority);
         this.Controls.Add(this.lblSprint);
         this.Controls.Add(this._cboPriority);

@@ -311,7 +311,7 @@ public partial class BoardForm : Form, IMessageFilter
     private void OpenCreateContentDialog(ContentStatus initialStatus = ContentStatus.Idea)
     {
         var members = _contentService.GetMembers(CurrentSession.CurrentProjectId);
-        using var dlg = new CreateContentDialog(members, initialStatus);
+        using var dlg = new CreateContentDialog(members, _contentService.GetAvailablePlatforms(), initialStatus);
         if (dlg.ShowDialog(this) != DialogResult.OK) return;
 
         try
