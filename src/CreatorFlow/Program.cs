@@ -45,7 +45,7 @@ static class Program
 
         if (UseDatabase)
         {
-            var npgsqlUow = new NpgsqlUnitOfWork(DatabaseConfiguration.GetConnectionString());
+            var npgsqlUow = new NpgsqlUnitOfWork(DbConfig.ConnectionString);
             uow = npgsqlUow;
             contentRepo = new ContentRepository(npgsqlUow);
             historyRepo = new ContentStatusHistoryRepository(npgsqlUow);

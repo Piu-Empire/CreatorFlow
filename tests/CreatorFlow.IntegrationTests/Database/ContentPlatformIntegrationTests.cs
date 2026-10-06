@@ -23,7 +23,14 @@ public sealed class ContentPlatformIntegrationTests
     [TestInitialize]
     public void Setup()
     {
-        _uow = new NpgsqlUnitOfWork(DatabaseConfiguration.GetConnectionString());
+        // Cùng quy ước với PlanRepositoryIntegrationTests: chỉ chạy khi đặt biến môi trường trỏ tới DB test đã đồng ý.
+        string? connectionString = Environment.GetEnvironmentVariable("CREATORFLOW_TEST_CONNECTION_STRING");
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            Assert.Inconclusive("Set CREATORFLOW_TEST_CONNECTION_STRING for an explicitly approved test database.");
+        }
+
+        _uow = new NpgsqlUnitOfWork(connectionString);
         _details = new ContentDetailsRepository(_uow);
         _platforms = new PlatformRepository(_uow);
 
@@ -36,8 +43,8 @@ public sealed class ContentPlatformIntegrationTests
     [TestCleanup]
     public void Cleanup()
     {
-        _uow.Rollback();
-        _uow.Dispose();
+        _uow?.Rollback();
+        _uow?.Dispose();
     }
 
     [TestMethod]
