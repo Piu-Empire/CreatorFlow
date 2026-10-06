@@ -11,6 +11,7 @@ namespace CreatorFlow.IntegrationTests.Database;
 public sealed class PlanRepositoryIntegrationTests
 {
     [TestMethod]
+    [TestCategory("DatabaseConnectivity")]
     public async Task OpenConnectionAsync_WithValidConfiguration_OpensConnection()
     {
         var connectionFactory = CreateConnectionFactory();
@@ -21,11 +22,19 @@ public sealed class PlanRepositoryIntegrationTests
         Assert.AreEqual(
             System.Data.ConnectionState.Open,
             connection.State);
+
+        await using var command = new NpgsqlCommand("SELECT 1;", connection);
+        Assert.AreEqual(1, await command.ExecuteScalarAsync());
     }
 
     [TestMethod]
+    [TestCategory("DatabasePersistence")]
     public async Task AddAndGetByIdAsync_WithValidPlan_PersistsAndReadsPlan()
     {
+        if (Environment.GetEnvironmentVariable("CREATORFLOW_TEST_ALLOW_WRITES") != "true")
+        {
+            Assert.Inconclusive("Database write tests require explicit CREATORFLOW_TEST_ALLOW_WRITES=true on an approved disposable database.");
+        }
         NpgsqlConnectionFactory connectionFactory = CreateConnectionFactory();
         var repository = new PlanRepository(connectionFactory);
         Plan? insertedPlan = null;
@@ -68,7 +77,11 @@ public sealed class PlanRepositoryIntegrationTests
 
     private static NpgsqlConnectionFactory CreateConnectionFactory()
     {
-        string connectionString = DatabaseConfiguration.GetConnectionString();
+        string? connectionString = Environment.GetEnvironmentVariable("CREATORFLOW_TEST_CONNECTION_STRING");
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            Assert.Inconclusive("Set CREATORFLOW_TEST_CONNECTION_STRING for an explicitly approved test database.");
+        }
         return new NpgsqlConnectionFactory(connectionString);
     }
 

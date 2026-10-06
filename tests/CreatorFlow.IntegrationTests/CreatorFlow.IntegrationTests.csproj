@@ -16,16 +16,14 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\CreatorFlow\CreatorFlow.csproj" />
+    <ProjectReference Include="..\..\src\CreatorFlow.Api\CreatorFlow.Api.csproj" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
   <ItemGroup>
     <None Include="..\..\src\CreatorFlow\appsettings.json"
           Link="appsettings.json"
           CopyToOutputDirectory="PreserveNewest" />
-    <None Include="..\..\src\CreatorFlow\appsettings.Local.json"
-          Link="appsettings.Local.json"
-          CopyToOutputDirectory="PreserveNewest"
-          Condition="Exists('..\..\src\CreatorFlow\appsettings.Local.json')" />
   </ItemGroup>
 
 </Project>
