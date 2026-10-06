@@ -12,7 +12,7 @@ namespace CreatorFlow;
 static class Program
 {
     /// <summary>
-    /// true  = kết nối PostgreSQL thật (cần đã chạy Database/schema.sql + sửa Data/DbConfig.cs).
+    /// true  = kết nối PostgreSQL thật (cần đã chạy database/01_schema.sql + 02_seed.sql và đặt ConnectionStrings:CreatorFlow trong appsettings.Local.json).
     /// false = chạy tạm với dữ liệu trong RAM (Repositories/InMemory), dùng khi CHƯA có DB
     ///         để vẫn xem/test được giao diện Board + luồng Workflow.
     /// Đổi lại true khi đã setup xong PostgreSQL.
@@ -41,6 +41,7 @@ static class Program
         IReviewQueueRepository reviewQueueRepo;
         IActivityRepository activityRepo;
         IContentDetailsRepository detailsRepo;
+        IPlatformRepository platformRepo;
 
         if (UseDatabase)
         {
@@ -54,6 +55,7 @@ static class Program
             reviewQueueRepo = new ReviewQueueRepository(npgsqlUow);
             activityRepo = new ActivityRepository(npgsqlUow);
             detailsRepo = new ContentDetailsRepository(npgsqlUow);
+            platformRepo = new PlatformRepository(npgsqlUow);
         }
         else
         {
@@ -66,10 +68,11 @@ static class Program
             reviewQueueRepo = new InMemoryReviewQueueRepository();
             activityRepo = new InMemoryActivityRepository();
             detailsRepo = new InMemoryContentDetailsRepository();
+            platformRepo = new InMemoryPlatformRepository();
         }
 
         var workflowService = new WorkflowService(contentRepo, historyRepo, reviewRepo, memberRepo, uow);
-        var contentService = new ContentService(contentRepo, detailsRepo, historyRepo, memberRepo, uow);
+        var contentService = new ContentService(contentRepo, detailsRepo, historyRepo, memberRepo, platformRepo, uow);
 
         // TODO: thay bằng màn Login + chọn Project thật (mục 18 UX spec: Login → Select Project).
         // Tạm hardcode User #1 / Project #1 — khớp seed data ở cả schema.sql lẫn InMemoryDataStore.

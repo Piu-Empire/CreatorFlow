@@ -5,7 +5,7 @@ using CreatorFlow.Repositories.Interfaces;
 
 namespace CreatorFlow.Repositories.Implementations;
 
-/// <summary>Cài đặt Npgsql cho IContentRepository (bảng Contents — mục 5.4 bảng 10).</summary>
+/// <summary>Cài đặt Npgsql cho IContentRepository (bảng contents).</summary>
 public class ContentRepository : IContentRepository
 {
     private readonly IDbSession _session;
@@ -15,8 +15,8 @@ public class ContentRepository : IContentRepository
     public Content GetById(long contentId)
     {
         using var cmd = _session.CreateCommand(
-            "SELECT id, projectid, ideaid, title, status, createdbyuserid, updatedat " +
-            "FROM contents WHERE id = @id");
+            "SELECT content_id, project_id, source_idea_id, title, status::text, created_by, updated_at " +
+            "FROM contents WHERE content_id = @id");
         cmd.Parameters.AddWithValue("id", contentId);
 
         using var reader = cmd.ExecuteReader();
@@ -29,18 +29,18 @@ public class ContentRepository : IContentRepository
             ProjectId = reader.GetInt64(1),
             IdeaId = reader.IsDBNull(2) ? null : reader.GetInt64(2),
             Title = reader.GetString(3),
-            Status = Enum.Parse<ContentStatus>(reader.GetString(4)),
+            Status = PostgresEnumMapper.Parse<ContentStatus>(reader.GetString(4)),
             CreatedByUserId = reader.GetInt64(5),
             UpdatedAt = reader.GetDateTime(6),
         };
     }
 
-    /// <summary>Chạy trong transaction hiện hành của session (nếu WorkflowService đang Begin()).</summary>
+    /// <summary>Chạy trong transaction hiện hành của session (nếu WorkflowService đang Begin()). updated_at do trigger set_updated_at cập nhật.</summary>
     public void UpdateStatus(long contentId, ContentStatus newStatus)
     {
         using var cmd = _session.CreateCommand(
-            "UPDATE contents SET status = @status, updatedat = now() WHERE id = @id");
-        cmd.Parameters.AddWithValue("status", newStatus.ToString());
+            "UPDATE contents SET status = @status::content_status WHERE content_id = @id");
+        cmd.Parameters.AddWithValue("status", PostgresEnumMapper.ToDatabaseValue(newStatus));
         cmd.Parameters.AddWithValue("id", contentId);
         cmd.ExecuteNonQuery();
     }
