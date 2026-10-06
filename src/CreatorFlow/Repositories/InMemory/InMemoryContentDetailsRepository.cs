@@ -34,10 +34,10 @@ public class InMemoryContentDetailsRepository : IContentDetailsRepository
         r.Title = d.Title;
         r.Description = d.Description;
         r.Priority = d.Priority;
-        r.Platforms = new List<string>(d.Platforms);
         r.Sprint = d.Sprint;
         r.Deadline = d.Deadline;
         r.EstimatedDuration = d.EstimatedDuration;
         r.AssigneeUserId = d.AssigneeUserId;
+        r.Platforms = d.Platforms.ToList(); // nền tảng đã được ContentService chuẩn hóa tên
     }
 }
