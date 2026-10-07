@@ -1,5 +1,6 @@
 ﻿using CreatorFlow.Models.Enums;
 using CreatorFlow.Controls;
+using CreatorFlow.Forms.Tasks;
 using CreatorFlow.Models;
 using CreatorFlow.Repositories.Interfaces;
 using CreatorFlow.Services;
@@ -29,6 +30,7 @@ public partial class BoardForm : Form, IMessageFilter
     private readonly IActivityRepository _activityRepository;
     private readonly IProjectMemberRepository _memberRepository;
     private readonly ContentService _contentService;
+    private readonly MyTaskService _myTaskService;
     private readonly AuthApiFacade? _auth;
     private ProfileControl? _profile;
     private readonly CancellationTokenSource _authLifetime = new();
@@ -52,6 +54,7 @@ public partial class BoardForm : Form, IMessageFilter
         _activityRepository = null!;
         _memberRepository = null!;
         _contentService = null!;
+        _myTaskService = null!;
     }
 
     public BoardForm(
@@ -60,12 +63,15 @@ public partial class BoardForm : Form, IMessageFilter
         IReviewQueueRepository reviewQueueRepository,
         IActivityRepository activityRepository,
         IProjectMemberRepository memberRepository,
+        ContentService contentService,
+        MyTaskService myTaskService)
         ContentService contentService, AuthApiFacade? auth = null)
     {
         InitializeComponent();
         _workflowService = workflowService;
         _boardRepository = boardRepository;
         _contentService = contentService;
+        _myTaskService = myTaskService;
         _reviewQueueRepository = reviewQueueRepository;
         _activityRepository = activityRepository;
         _memberRepository = memberRepository;
@@ -95,6 +101,8 @@ public partial class BoardForm : Form, IMessageFilter
         _modulePageHeader.PlatformFilterChanged += (_, _) => ApplyFilters();
 
         _sidebarControl.ReviewQueueRequested += (_, _) => OpenReviewQueue();
+        _sidebarControl.BoardRequested += (_, _) => ReloadBoard();
+        _sidebarControl.MyTasksRequested += (_, _) => OpenMyTasks();
         _sidebarControl.BoardRequested += (_, _) => { CloseProfile(); ReloadBoard(); };
 
         Load += (_, _) =>
@@ -176,6 +184,7 @@ public partial class BoardForm : Form, IMessageFilter
         _topHeaderControl.UpdateStats(_allCards.Count, overdueCount);
         var pendingReviews = _reviewQueueRepository.GetPendingReviews(CurrentSession.CurrentProjectId);
         _sidebarControl.ReviewQueueCount = pendingReviews.Count;
+        _sidebarControl.MyWorkCount = _myTaskService.CountOpenTasks(CurrentSession.CurrentProjectId, CurrentSession.CurrentUserId);
         _sidebarControl.Invalidate();
         ApplyFilters();
 
@@ -338,6 +347,8 @@ public partial class BoardForm : Form, IMessageFilter
     // ==========================================================
     private void OpenCreateContentDialog(ContentStatus initialStatus = ContentStatus.Idea)
     {
+        var members = _contentService.GetAssignableMembers(CurrentSession.CurrentProjectId, CurrentSession.CurrentUserId);
+        using var dlg = new CreateContentDialog(members, initialStatus);
         if (_auth is not null && (!_auth.Session.IsAuthenticated || CurrentSession.CurrentProjectId <= 0)) return;
         var members = _contentService.GetMembers(CurrentSession.CurrentProjectId);
         using var dlg = new CreateContentDialog(members, _contentService.GetAvailablePlatforms(), initialStatus);
@@ -358,6 +369,47 @@ public partial class BoardForm : Form, IMessageFilter
         {
             MessageBox.Show(this, ex.Message, "Không đủ quyền", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
+    }
+
+    /// <summary>Mở màn My Tasks; nếu người dùng bấm "Mở Content" thì mở drawer chi tiết Content đó trên Board.</summary>
+    private void OpenMyTasks()
+    {
+        long? contentId;
+        using (var tasksForm = new MyTasksForm(_myTaskService))
+        {
+            tasksForm.ShowDialog(this);
+            contentId = tasksForm.RequestedContentId;
+        }
+
+        ReloadBoard();
+        if (contentId.HasValue) OpenContentById(contentId.Value);
+    }
+
+    /// <summary>Mở drawer chi tiết cho Content theo Id (kể cả khi thẻ đang bị ẩn bởi bộ lọc tìm kiếm/platform).</summary>
+    private void OpenContentById(long contentId)
+    {
+        var card = _allCards.FirstOrDefault(c => c.ContentId == contentId);
+        if (card is null)
+        {
+            _toast.ShowToast(this, "Khong tim thay Content tren Board");
+            return;
+        }
+
+        // Đang mở thẻ khác và có thay đổi chưa lưu → hỏi trước khi chuyển (Clear() tự hiện hộp thoại xác nhận).
+        if (_selectedContentId.HasValue && _selectedContentId != contentId && _contentDetailPanel.HasUnsavedChanges)
+        {
+            if (!_contentDetailPanel.Clear()) return;
+        }
+
+        if (_selectedCardControl != null && !_selectedCardControl.IsDisposed)
+            _selectedCardControl.IsSelected = false;
+
+        _selectedCardControl = FindCardControl(contentId);
+        if (_selectedCardControl != null) _selectedCardControl.IsSelected = true;
+        _selectedContentId = contentId;
+
+        _pnlDrawerHost.Visible = true;
+        _contentDetailPanel.LoadContent(card);
     }
 
     private void OpenReviewQueue()

@@ -13,6 +13,7 @@ public class SidebarControl : UserControl
 
     public event EventHandler? ReviewQueueRequested;
     public event EventHandler? BoardRequested;
+    public event EventHandler? MyTasksRequested;
     public event EventHandler? ProfileRequested;
 
     private readonly Button _accountButton;
@@ -23,7 +24,7 @@ public class SidebarControl : UserControl
     private bool _hasAuthenticatedAccount;
 
     public int BacklogCount = 28;
-    public int MyWorkCount = 9;
+    public int MyWorkCount = 0;
     public int ReviewQueueCount = 2;
 
     private enum NavIcon { Summary, Board, List, Calendar, Chart, Check, Review, Sparkle, Gear }
@@ -144,7 +145,7 @@ public class SidebarControl : UserControl
 
         y += 10;
         _groups.Add(("WORK", y)); y += 26;
-        _items.Add(new NavItem { Title = "My Work", Icon = NavIcon.Check, Y = y, Badge = () => MyWorkCount }); y += ItemStep;
+        _items.Add(new NavItem { Title = "My Tasks", Icon = NavIcon.Check, Y = y, Badge = () => MyWorkCount, Action = () => MyTasksRequested?.Invoke(this, EventArgs.Empty) }); y += ItemStep;
         _items.Add(new NavItem { Title = "Review Queue", Icon = NavIcon.Review, Y = y, Badge = () => ReviewQueueCount, Action = () => ReviewQueueRequested?.Invoke(this, EventArgs.Empty) }); y += ItemStep;
 
         y += 10;
