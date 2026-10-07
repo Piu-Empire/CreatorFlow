@@ -20,6 +20,7 @@ public class InMemoryContentRepository : IContentRepository
             Title = r.Title,
             Status = r.Status,
             CreatedByUserId = r.CreatedByUserId,
+            Deadline = r.Deadline,
             UpdatedAt = r.UpdatedAt,
         };
     }

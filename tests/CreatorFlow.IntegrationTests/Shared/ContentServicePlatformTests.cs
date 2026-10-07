@@ -28,7 +28,7 @@ public sealed class ContentServicePlatformTests
             new InMemoryContentStatusHistoryRepository(),
             new InMemoryProjectMemberRepository(),
             _platforms,
-            new InMemoryUnitOfWork());
+            new InMemoryUnitOfWork(), new InMemoryMyTaskRepository());
     }
 
     [TestMethod]

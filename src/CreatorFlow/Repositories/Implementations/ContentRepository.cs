@@ -15,7 +15,7 @@ public class ContentRepository : IContentRepository
     public Content GetById(long contentId)
     {
         using var cmd = _session.CreateCommand(
-            "SELECT content_id, project_id, source_idea_id, title, status::text, created_by, updated_at " +
+            "SELECT content_id, project_id, source_idea_id, title, status::text, created_by, updated_at, deadline " +
             "FROM contents WHERE content_id = @id");
         cmd.Parameters.AddWithValue("id", contentId);
 
@@ -32,6 +32,7 @@ public class ContentRepository : IContentRepository
             Status = PostgresEnumMapper.Parse<ContentStatus>(reader.GetString(4)),
             CreatedByUserId = reader.GetInt64(5),
             UpdatedAt = reader.GetDateTime(6),
+            Deadline = reader.IsDBNull(7) ? null : reader.GetDateTime(7).ToLocalTime(),
         };
     }
 

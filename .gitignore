@@ -5,6 +5,9 @@
 
 # dotenv files
 .env
+deploy/docker/.env.*
+!deploy/docker/.env.example
+!deploy/docker/.env.server.example
 
 # Local application settings may contain development secrets
 appsettings.Local.json
