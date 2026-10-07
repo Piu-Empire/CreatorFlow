@@ -31,10 +31,9 @@ public class ContentService
         IContentDetailsRepository detailsRepo,
         IContentStatusHistoryRepository historyRepo,
         IProjectMemberRepository memberRepo,
+        IPlatformRepository platformRepo,
         IUnitOfWork unitOfWork,
         IMyTaskRepository taskRepo)
-        IPlatformRepository platformRepo,
-        IUnitOfWork unitOfWork)
     {
         _contentRepo = contentRepo;
         _detailsRepo = detailsRepo;
