@@ -22,6 +22,7 @@ public class InMemoryContentRecord
     public string Sprint = "Sprint 25";
     public string EstimatedDuration = string.Empty;
     public List<string> Platforms = new();
+    public HashSet<string> PublishedPlatforms = new();
     public List<string> Tags = new();
     public long? AssigneeUserId;
     public long CreatedByUserId;
@@ -63,6 +64,14 @@ public static class InMemoryDataStore
         { (1, 2), ProjectRole.Creator },
         { (1, 3), ProjectRole.Manager },
         { (1, 4), ProjectRole.Creator },
+    };
+
+    public static readonly List<Platform> Platforms = new()
+    {
+        new() { PlatformId = 1, Code = "TIKTOK", Name = "TikTok" },
+        new() { PlatformId = 2, Code = "YOUTUBE", Name = "YouTube" },
+        new() { PlatformId = 3, Code = "FACEBOOK", Name = "Facebook" },
+        new() { PlatformId = 4, Code = "INSTAGRAM", Name = "Instagram" },
     };
 
     public static readonly List<InMemoryContentRecord> Contents = new()

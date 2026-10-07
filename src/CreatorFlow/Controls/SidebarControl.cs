@@ -14,6 +14,14 @@ public class SidebarControl : UserControl
     public event EventHandler? ReviewQueueRequested;
     public event EventHandler? BoardRequested;
     public event EventHandler? MyTasksRequested;
+    public event EventHandler? ProfileRequested;
+
+    private readonly Button _accountButton;
+    private string _accountName = string.Empty;
+    private string _accountEmail = string.Empty;
+    private Image? _accountAvatar;
+    private bool _accountHovered;
+    private bool _hasAuthenticatedAccount;
 
     public int BacklogCount = 28;
     public int MyWorkCount = 0;
@@ -44,6 +52,82 @@ public class SidebarControl : UserControl
         BackColor = UITheme.Black;
         DoubleBuffered = true;
         BuildNavItems();
+        _accountButton = new Button { Name = "authenticatedAccount", Text = string.Empty,
+            Bounds = new Rectangle(14, 68, Width - 28, 60), Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
+            FlatStyle = FlatStyle.Flat, BackColor = UITheme.Black, UseVisualStyleBackColor = false,
+            Cursor = Cursors.Hand, Visible = false, TabIndex = 0, AccessibleRole = AccessibleRole.PushButton };
+        _accountButton.FlatAppearance.BorderSize = 0;
+        _accountButton.Paint += PaintAccount;
+        _accountButton.MouseEnter += (_, _) => { _accountHovered = true; _accountButton.Invalidate(); };
+        _accountButton.MouseLeave += (_, _) => { _accountHovered = false; _accountButton.Invalidate(); };
+        _accountButton.GotFocus += (_, _) => _accountButton.Invalidate();
+        _accountButton.LostFocus += (_, _) => _accountButton.Invalidate();
+        _accountButton.Click += (_, _) => ProfileRequested?.Invoke(this, EventArgs.Empty);
+        Controls.Add(_accountButton);
+    }
+
+    // The shell transfers ownership of its decoded image to this control.
+    public void SetAuthenticatedAccount(string name, string email, Image? avatar)
+    {
+        _accountName = name;
+        _accountEmail = email;
+        _hasAuthenticatedAccount = true;
+        Image? previous = _accountAvatar;
+        _accountAvatar = avatar;
+        if (!ReferenceEquals(previous, avatar)) previous?.Dispose();
+        _accountButton.AccessibleName = $"Mở hồ sơ cá nhân của {name}";
+        _accountButton.Visible = true;
+        _accountButton.Invalidate();
+        Invalidate();
+    }
+
+    private void PaintAccount(object? sender, PaintEventArgs e)
+    {
+        var g = e.Graphics;
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        g.Clear(UITheme.Black);
+        var bounds = new Rectangle(0, 0, _accountButton.Width - 1, _accountButton.Height - 1);
+        using var path = UITheme.CreateRoundedRectanglePath(bounds, 10);
+        using var fill = new SolidBrush(_accountHovered ? UITheme.Neutral800 : UITheme.Neutral900);
+        using var border = new Pen(UITheme.Neutral800);
+        g.FillPath(fill, path);
+        g.DrawPath(border, path);
+        var avatarBounds = new Rectangle(12, 12, 36, 36);
+        if (_accountAvatar is null)
+        {
+            string[] words = _accountName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            string initials = words.Length == 0 ? "?" :
+                (System.Globalization.StringInfo.GetNextTextElement(words[0]) +
+                 (words.Length > 1 ? System.Globalization.StringInfo.GetNextTextElement(words[^1]) : string.Empty)).ToUpperInvariant();
+            UITheme.DrawAvatar(g, initials, avatarBounds, UITheme.White, UITheme.Black, UITheme.FontLabelBold);
+        }
+        else
+        {
+            var state = g.Save();
+            using var circle = new GraphicsPath();
+            circle.AddEllipse(avatarBounds);
+            g.SetClip(circle);
+            g.DrawImage(_accountAvatar, avatarBounds);
+            g.Restore(state);
+        }
+        const TextFormatFlags flags = TextFormatFlags.Left | TextFormatFlags.VerticalCenter |
+            TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis;
+        int textWidth = Math.Max(0, bounds.Width - 72);
+        TextRenderer.DrawText(g, _accountName, UITheme.FontBodyBold, new Rectangle(60, 10, textWidth, 20), UITheme.White, flags);
+        TextRenderer.DrawText(g, _accountEmail, UITheme.FontLabel, new Rectangle(60, 30, textWidth, 18), UITheme.SidebarTextMuted, flags);
+        if (_accountButton.Focused) ControlPaint.DrawFocusRectangle(g, Rectangle.Inflate(bounds, -4, -4), UITheme.White, UITheme.Neutral900);
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _accountAvatar?.Dispose();
+            _accountAvatar = null;
+            _accountName = _accountEmail = string.Empty;
+            _hasAuthenticatedAccount = false;
+        }
+        base.Dispose(disposing);
     }
 
     private void BuildNavItems()
@@ -125,6 +209,8 @@ public class SidebarControl : UserControl
             TextRenderer.DrawText(g, "CreatorFlow", brandFont, new Rectangle(58, 18, Width - 70, 32), UITheme.White, tf);
 
         // 2. Project selector
+        if (!_hasAuthenticatedAccount)
+        {
         var card = new Rectangle(14, 68, Width - 28, 60);
         using (var cBrush = new SolidBrush(ColorTranslator.FromHtml("#171717")))
         using (var cPen = new Pen(ColorTranslator.FromHtml("#262626"), 1f))
@@ -145,6 +231,7 @@ public class SidebarControl : UserControl
         TextRenderer.DrawText(g, "Q3 Release", UITheme.FontLabel, new Rectangle(av.Right + 10, card.Y + 31, card.Width - 90, 18), UITheme.SidebarTextMuted, tf);
         UIIcons.Chevron(g, new Rectangle(card.Right - 34, card.Y + 12, 22, 18), ChevronDir.Up, UITheme.SidebarText, 1.6f);
         UIIcons.Chevron(g, new Rectangle(card.Right - 34, card.Y + 28, 22, 18), ChevronDir.Down, UITheme.SidebarText, 1.6f);
+        }
 
         // 3. Nhãn nhóm
         foreach (var (text, y) in _groups)

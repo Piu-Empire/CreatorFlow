@@ -1,8 +1,11 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/CreatorFlow/CreatorFlow.csproj" />
+    <Project Path="src/CreatorFlow.Api/CreatorFlow.Api.csproj" />
+    <Project Path="src/CreatorFlow.Contracts/CreatorFlow.Contracts.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/CreatorFlow.Api.Tests/CreatorFlow.Api.Tests.csproj" />
     <Project Path="tests/CreatorFlow.IntegrationTests/CreatorFlow.IntegrationTests.csproj" />
   </Folder>
 </Solution>

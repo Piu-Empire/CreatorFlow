@@ -31,6 +31,10 @@ public partial class BoardForm : Form, IMessageFilter
     private readonly IProjectMemberRepository _memberRepository;
     private readonly ContentService _contentService;
     private readonly MyTaskService _myTaskService;
+    private readonly AuthApiFacade? _auth;
+    private ProfileControl? _profile;
+    private readonly CancellationTokenSource _authLifetime = new();
+    private int _avatarGeneration;
 
     private readonly Dictionary<ContentStatus, KanbanColumnControl> _columns = new();
     private List<ContentBoardCard> _allCards = new();
@@ -61,6 +65,7 @@ public partial class BoardForm : Form, IMessageFilter
         IProjectMemberRepository memberRepository,
         ContentService contentService,
         MyTaskService myTaskService)
+        ContentService contentService, AuthApiFacade? auth = null)
     {
         InitializeComponent();
         _workflowService = workflowService;
@@ -70,6 +75,15 @@ public partial class BoardForm : Form, IMessageFilter
         _reviewQueueRepository = reviewQueueRepository;
         _activityRepository = activityRepository;
         _memberRepository = memberRepository;
+        _auth = auth;
+        if (auth is not null)
+        {
+            _topHeaderControl.AuthenticatedShell = true;
+            _sidebarControl.SetAuthenticatedAccount(auth.Session.CurrentUser?.DisplayName ?? string.Empty,
+                auth.Session.CurrentUser?.Email ?? string.Empty, null);
+            Shown += async (_, _) => await RefreshAuthenticatedAvatarAsync();
+            _sidebarControl.ProfileRequested += async (_, _) => await OpenProfileAsync();
+        }
 
         _pnlDrawerHost.Paint += PnlDrawerHost_Paint;
         BuildColumns();
@@ -89,6 +103,7 @@ public partial class BoardForm : Form, IMessageFilter
         _sidebarControl.ReviewQueueRequested += (_, _) => OpenReviewQueue();
         _sidebarControl.BoardRequested += (_, _) => ReloadBoard();
         _sidebarControl.MyTasksRequested += (_, _) => OpenMyTasks();
+        _sidebarControl.BoardRequested += (_, _) => { CloseProfile(); ReloadBoard(); };
 
         Load += (_, _) =>
         {
@@ -106,6 +121,8 @@ public partial class BoardForm : Form, IMessageFilter
 
     protected override void OnFormClosed(FormClosedEventArgs e)
     {
+        _authLifetime.Cancel();
+        _authLifetime.Dispose();
         Application.RemoveMessageFilter(this);
         base.OnFormClosed(e);
     }
@@ -150,6 +167,18 @@ public partial class BoardForm : Form, IMessageFilter
     // ==========================================================
     private void ReloadBoard()
     {
+        if (_auth is not null && (!_auth.Session.IsAuthenticated || CurrentSession.CurrentProjectId <= 0))
+        {
+            _modulePageHeader.Visible = false;
+            _flowColumns.Visible = false;
+            _pnlDrawerHost.Visible = false;
+            if (_pnlBoardArea.Controls["noProjectContext"] is null)
+                _pnlBoardArea.Controls.Add(new Label { Name = "noProjectContext", Dock = DockStyle.Fill,
+                    Text = "Chưa có ngữ cảnh dự án. Bạn có thể quản lý Hồ sơ hoặc đăng xuất.",
+                    ForeColor = UITheme.Neutral600, BackColor = UITheme.Neutral50,
+                    TextAlign = ContentAlignment.MiddleCenter });
+            return;
+        }
         _allCards = _boardRepository.GetBoardCards(CurrentSession.CurrentProjectId);
         int overdueCount = _allCards.Count(c => c.IsOverdue);
         _topHeaderControl.UpdateStats(_allCards.Count, overdueCount);
@@ -278,6 +307,7 @@ public partial class BoardForm : Form, IMessageFilter
 
     private void TryMoveNext(ContentBoardCard card)
     {
+        if (_auth is not null && (!_auth.Session.IsAuthenticated || CurrentSession.CurrentProjectId <= 0)) return;
         try
         {
             switch (card.Status)
@@ -319,6 +349,9 @@ public partial class BoardForm : Form, IMessageFilter
     {
         var members = _contentService.GetAssignableMembers(CurrentSession.CurrentProjectId, CurrentSession.CurrentUserId);
         using var dlg = new CreateContentDialog(members, initialStatus);
+        if (_auth is not null && (!_auth.Session.IsAuthenticated || CurrentSession.CurrentProjectId <= 0)) return;
+        var members = _contentService.GetMembers(CurrentSession.CurrentProjectId);
+        using var dlg = new CreateContentDialog(members, _contentService.GetAvailablePlatforms(), initialStatus);
         if (dlg.ShowDialog(this) != DialogResult.OK) return;
 
         try
@@ -381,9 +414,69 @@ public partial class BoardForm : Form, IMessageFilter
 
     private void OpenReviewQueue()
     {
+        if (_auth is not null && (!_auth.Session.IsAuthenticated || CurrentSession.CurrentProjectId <= 0)) return;
+        CloseProfile();
         using var queueForm = new Review.ReviewQueueForm(_reviewQueueRepository, _workflowService);
         queueForm.ShowDialog(this);
         ReloadBoard();
+    }
+
+    private async Task OpenProfileAsync()
+    {
+        if (_auth is null || !_auth.Session.IsAuthenticated || _profile is not null) return;
+        var profile = new ProfileControl(_auth) { Dock = DockStyle.Fill };
+        _profile = profile;
+        profile.ProfileSaved += async saved =>
+        {
+            CurrentSession.CurrentUserName = saved.DisplayName;
+            await RefreshAuthenticatedAvatarAsync();
+        };
+        profile.PasswordChanged += (_, _) => _auth.Logout();
+        profile.LogoutRequested += (_, _) => _auth.Logout();
+        _pnlDrawerHost.Visible = false;
+        _pnlBoardArea.Visible = false;
+        _pnlMain.Controls.Add(profile);
+        profile.BringToFront();
+        _topHeaderControl.SetAuthenticatedPage("Hồ sơ cá nhân");
+        await profile.LoadProfileAsync();
+    }
+
+    private void CloseProfile()
+    {
+        if (_profile is null) return;
+        ProfileControl profile = _profile;
+        _profile = null;
+        _pnlMain.Controls.Remove(profile);
+        profile.Dispose();
+        _pnlBoardArea.Visible = true;
+        _topHeaderControl.SetAuthenticatedPage("Board");
+    }
+
+    private async Task RefreshAuthenticatedAvatarAsync()
+    {
+        if (_auth is null || !_auth.Session.IsAuthenticated || IsDisposed || _authLifetime.IsCancellationRequested) return;
+        int generation = ++_avatarGeneration;
+        long sessionGeneration = _auth.Session.Generation;
+        Image? avatar = null;
+        try
+        {
+            var stored = await _auth.GetCurrentAvatarAsync(_authLifetime.Token);
+            if (IsDisposed || _authLifetime.IsCancellationRequested || !_auth.Session.IsAuthenticated) return;
+            if (stored is not null) avatar = CreatorFlow.Helpers.AvatarImageLoader.Decode(stored.ImageData);
+            else
+            {
+                var profile = await _auth.GetCurrentProfileAsync(_authLifetime.Token);
+                avatar = await CreatorFlow.Helpers.AvatarImageLoader.LoadAsync(profile.Profile?.AvatarUrl, _authLifetime.Token);
+            }
+            if (IsDisposed || _authLifetime.IsCancellationRequested || generation != _avatarGeneration ||
+                !_auth.Session.IsAuthenticated || _auth.Session.Generation != sessionGeneration)
+            { return; }
+            var currentUser = _auth.Session.CurrentUser!;
+            _sidebarControl.SetAuthenticatedAccount(currentUser.DisplayName, currentUser.Email, avatar);
+            avatar = null; // Sidebar now owns the image.
+        }
+        catch (OperationCanceledException) when (_authLifetime.IsCancellationRequested) { }
+        finally { avatar?.Dispose(); }
     }
 
     // ==========================================================
