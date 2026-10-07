@@ -1,0 +1,21 @@
+name: creatorflow-server
+services:
+  api:
+    image: ${CREATORFLOW_API_IMAGE:?Set the reviewed API image tag}
+    platform: linux/amd64
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5080:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__CreatorFlow: ${CREATORFLOW_CONNECTION_STRING:?Set the server database connection string}
+      Jwt__Issuer: ${CREATORFLOW_JWT_ISSUER:?Set the server JWT issuer}
+      Jwt__Audience: ${CREATORFLOW_JWT_AUDIENCE:?Set the server JWT audience}
+      Jwt__SigningKey: ${CREATORFLOW_JWT_KEY:?Set the server JWT key}
+      PasswordReset__VerifierKey: ${CREATORFLOW_OTP_KEY:?Set the server OTP key}
+      PasswordReset__Smtp__Host: ${CREATORFLOW_SMTP_HOST:?Set SMTP host}
+      PasswordReset__Smtp__Port: ${CREATORFLOW_SMTP_PORT:-587}
+      PasswordReset__Smtp__TlsMode: ${CREATORFLOW_SMTP_TLS:-StartTls}
+      PasswordReset__Smtp__From: ${CREATORFLOW_SMTP_FROM:?Set sender mailbox}
+      PasswordReset__Smtp__Username: ${CREATORFLOW_SMTP_USERNAME:?Set SMTP username}
+      PasswordReset__Smtp__Password: ${CREATORFLOW_SMTP_PASSWORD:?Set SMTP secret outside Git}
