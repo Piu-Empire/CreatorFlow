@@ -15,9 +15,7 @@ public class ContentRepository : IContentRepository
     public Content GetById(long contentId)
     {
         using var cmd = _session.CreateCommand(
-            "SELECT id, projectid, ideaid, title, status, createdbyuserid, updatedat, deadline " +
-            "FROM contents WHERE id = @id");
-            "SELECT content_id, project_id, source_idea_id, title, status::text, created_by, updated_at " +
+            "SELECT content_id, project_id, source_idea_id, title, status::text, created_by, updated_at, deadline " +
             "FROM contents WHERE content_id = @id");
         cmd.Parameters.AddWithValue("id", contentId);
 
