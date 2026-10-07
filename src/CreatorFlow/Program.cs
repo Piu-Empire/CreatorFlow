@@ -4,6 +4,7 @@ using CreatorFlow.Repositories.Implementations;
 using CreatorFlow.Repositories.InMemory;
 using CreatorFlow.Repositories.Interfaces;
 using CreatorFlow.Services;
+using CreatorFlow.ApiClients;
 using System.Runtime.Versioning;
 
 namespace CreatorFlow;
@@ -73,13 +74,18 @@ static class Program
 
         // TODO: thay bằng màn Login + chọn Project thật (mục 18 UX spec: Login → Select Project).
         // Tạm hardcode User #1 / Project #1 — khớp seed data ở cả schema.sql lẫn InMemoryDataStore.
-        CurrentSession.CurrentUserId = 1;
-        CurrentSession.CurrentUserName = "Demo Owner";
-        CurrentSession.CurrentProjectId = 1;
-        CurrentSession.CurrentProjectName = "Creator Team";
+        CurrentSession.CurrentUserId = 0;
+        CurrentSession.CurrentUserName = string.Empty;
+        CurrentSession.CurrentProjectId = 0;
+        CurrentSession.CurrentProjectName = string.Empty;
 
         if (args.Length > 0 && args[0] == "--test")
         {
+            // Explicit Board rendering harness only; this does not authenticate to the API.
+            CurrentSession.CurrentUserId = 1;
+            CurrentSession.CurrentUserName = "Demo Owner";
+            CurrentSession.CurrentProjectId = 1;
+            CurrentSession.CurrentProjectName = "Creator Team";
             using var testForm = new BoardForm(workflowService, boardRepo, reviewQueueRepo, activityRepo, memberRepo, contentService);
             var handle = testForm.Handle;
             testForm.Size = new Size(1440, 900);
@@ -93,6 +99,18 @@ static class Program
             return;
         }
 
-        Application.Run(new BoardForm(workflowService, boardRepo, reviewQueueRepo, activityRepo, memberRepo, contentService));
+        try
+        {
+            using var api = ApiClient.Create(ApiClientConfiguration.Load());
+            var session = new UserSession();
+            var auth = new AuthApiFacade(api, session);
+            using var context = new AuthenticationApplicationContext(auth, () =>
+                new BoardForm(workflowService, boardRepo, reviewQueueRepo, activityRepo, memberRepo, contentService, auth));
+            Application.Run(context);
+        }
+        catch (InvalidOperationException)
+        {
+            MessageBox.Show("Không thể đọc cấu hình API. Vui lòng kiểm tra Api:BaseUrl.", "CreatorFlow", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
     }
 }
