@@ -1,5 +1,6 @@
 ﻿using CreatorFlow.Models.Enums;
 using System.Drawing.Drawing2D;
+using CreatorFlow.Forms.Board;
 using CreatorFlow.Models;
 using CreatorFlow.Repositories.Interfaces;
 using CreatorFlow.Services;
@@ -27,6 +28,7 @@ public partial class ContentDetailPanel : UserControl
     private List<ProjectMemberInfo> _members = new();
     private int _selectedTabIndex = 0; // 0: Overview, 1: Script, 2: Checklist, 3: Activity
     private bool _isDirty;
+    private bool _deadlineEdited; // true khi người dùng thật sự đổi ô Deadline (tránh vô tình ghi deadline mặc định khi chỉ sửa tiêu đề)
     private bool _isLoading; // true trong lúc LoadContent() đang gán giá trị → bỏ qua sự kiện TextChanged/SelectedIndexChanged
 
     public event EventHandler? ContentChanged;
@@ -63,6 +65,7 @@ public partial class ContentDetailPanel : UserControl
     private readonly RoundedPanel _boxLead;
     private readonly ComboBox _cboAssigneeEdit;
     private string _leadName = "";
+    private string _leadCaption = "Assignee";
     private readonly FlowLayoutPanel _flowActions;
 
     // Tab 2: Script
@@ -244,7 +247,11 @@ public partial class ContentDetailPanel : UserControl
             Font = new Font("Segoe UI", 10F),
             Format = DateTimePickerFormat.Short,
         };
-        _dtpTargetWeek.ValueChanged += (_, _) => MarkDirty();
+        _dtpTargetWeek.ValueChanged += (_, _) =>
+        {
+            if (!_isLoading) _deadlineEdited = true;
+            MarkDirty();
+        };
         _metaBoxes[4].Controls.Add(Pad(_dtpTargetWeek, 10, 7));
 
         // 5. Estimated Duration
@@ -527,9 +534,9 @@ public partial class ContentDetailPanel : UserControl
 
         UITheme.DrawAvatar(g, initials, new Rectangle(18, (_boxLead.Height - 44) / 2, 44, 44), UITheme.Neutral800, UITheme.White, UITheme.FontLabelBold);
         const TextFormatFlags tf = TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis;
-        int textW = Math.Max(40, _cboAssigneeEdit.Left - 74 - 10);
+        int textW = Math.Max(40, _boxLead.Width - 74 - 18);
         TextRenderer.DrawText(g, name, UITheme.FontBodyBold, new Rectangle(74, 16, textW, 22), UITheme.Ink, tf);
-        TextRenderer.DrawText(g, "Assignee", UITheme.FontLabel, new Rectangle(74, 38, textW, 20), UITheme.Neutral600, tf);
+        TextRenderer.DrawText(g, _leadCaption, UITheme.FontLabel, new Rectangle(74, 38, textW, 20), UITheme.Neutral600, tf);
     }
 
     private string[] GetTabLabels()
@@ -582,6 +589,9 @@ public partial class ContentDetailPanel : UserControl
         if (_cboSprintEdit.SelectedIndex < 0) _cboSprintEdit.SelectedIndex = 0;
 
         _dtpTargetWeek.Value = (card.Deadline ?? DateTime.Today.AddDays(7)).Date;
+        // Phân quyền deadline: chỉ Owner/Manager được sửa; Creator chỉ xem.
+        _dtpTargetWeek.Enabled = TaskRules.CanChangeDeadline(_memberRepo.GetRole(card.ProjectId, CurrentSession.CurrentUserId));
+        _deadlineEdited = false;
 
         _txtDurationEdit.Text = card.EstimatedDuration;
 
@@ -590,10 +600,22 @@ public partial class ContentDetailPanel : UserControl
         // Đặt lại DisplayMember tường minh ngay trước khi gán DataSource mới để chắc chắn không bị mất.
         _cboAssigneeEdit.DataSource = null;
         _cboAssigneeEdit.DisplayMember = "Name";
-        _cboAssigneeEdit.DataSource = _members;
         var currentMember = _members.FirstOrDefault(m => m.UserId == card.AssigneeUserId);
+        _cboAssigneeEdit.DataSource = _members;
+        _cboAssigneeEdit.Enabled = false; // chỉ hiển thị người đang phụ trách; giao việc dùng nút "Giao việc cho Creator" ở Workflow Actions
         _cboAssigneeEdit.SelectedItem = currentMember;
-        _leadName = currentMember?.Name ?? card.AssigneeName ?? "";
+        // Nhiều Creator: hiện tất cả tên; caption cho biết bao nhiêu người đã hoàn thành.
+        _leadName = card.Assignees.Count > 0
+            ? string.Join(", ", card.Assignees.Select(a => a.Name))
+            : currentMember?.Name ?? card.AssigneeName ?? "";
+        _leadCaption = card.Assignees.Count switch
+        {
+            0 or 1 => "Assignee",
+            _ => card.IsTeamCompleted
+                ? $"Assignee · tất cả {card.TeamTotal} Creator đã hoàn thành"
+                : $"Assignee · {card.TeamDone}/{card.TeamTotal} Creator hoàn thành",
+        };
+        _cboAssigneeEdit.Visible = false; // chỉ để lưu dữ liệu; giao việc dùng nút "Giao việc cho Creator"
         _boxLead.Invalidate();
 
         RebuildActionButtons();
@@ -639,14 +661,15 @@ public partial class ContentDetailPanel : UserControl
             Priority = _cboPriorityEdit.SelectedItem is Priority p ? p : _current.Priority,
             Platforms = _cboPlatform.SelectedItem is string plat ? new List<string> { plat } : new List<string>(),
             Sprint = _cboSprintEdit.SelectedItem as string ?? _current.Sprint,
-            Deadline = _dtpTargetWeek.Value.Date,
+            Deadline = _dtpTargetWeek.Enabled && _deadlineEdited ? _dtpTargetWeek.Value.Date : _current.Deadline,
             EstimatedDuration = _txtDurationEdit.Text,
-            AssigneeUserId = (_cboAssigneeEdit.SelectedItem as ProjectMemberInfo)?.UserId,
+            AssigneeUserId = _current.AssigneeUserId, // giữ nguyên; đổi người phụ trách chỉ qua nút "Giao việc cho Creator"
         };
 
         try
         {
             _contentService.Update(_current.ContentId, draft, CurrentSession.CurrentUserId);
+            _deadlineEdited = false;
             _isDirty = false;
             _btnSave.Enabled = false;
             _lblSaveHint.Text = "Đã lưu";
@@ -698,6 +721,9 @@ public partial class ContentDetailPanel : UserControl
 
         var role = _memberRepo!.GetRole(_current.ProjectId, CurrentSession.CurrentUserId);
         var canReview = role == ProjectRole.Owner || role == ProjectRole.Manager;
+
+        if (TaskRules.CanAssign(role) && _current.Status is not (ContentStatus.Published or ContentStatus.Archived))
+            AddActionButton("Giao việc cho Creator", RoundButtonStyle.Secondary, OnAssignClicked);
 
         switch (_current.Status)
         {
@@ -751,6 +777,37 @@ public partial class ContentDetailPanel : UserControl
             AutoSize = true,
             Padding = new Padding(0, 8, 0, 0),
         });
+    }
+
+    private void OnAssignClicked(object? sender, EventArgs e)
+    {
+        if (_current == null || _contentService == null) return;
+
+        // Sau khi giao, drawer được tải lại → thay đổi chưa lưu sẽ mất, nên hỏi trước.
+        if (_isDirty && MessageBox.Show(this,
+                "Có thay đổi chưa lưu. Giao việc sẽ tải lại nội dung và bỏ các thay đổi này. Tiếp tục?",
+                "Giao việc", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+            return;
+
+        var creators = _contentService.GetAssignableMembers(_current.ProjectId, CurrentSession.CurrentUserId);
+        using var dlg = new AssignContentDialog(
+            $"CNT-{_current.ContentId:000}", _current.Title, creators,
+            _contentService.GetAssignments(_current.ContentId), _current.Deadline);
+        if (dlg.ShowDialog(FindForm()) != DialogResult.OK) return;
+
+        try
+        {
+            _contentService.AssignContent(_current.ContentId, dlg.Assignments, CurrentSession.CurrentUserId);
+            ContentChanged?.Invoke(this, EventArgs.Empty);
+        }
+        catch (ContentValidationException ex)
+        {
+            MessageBox.Show(this, ex.Message, "Dữ liệu không hợp lệ", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        catch (UnauthorizedWorkflowActionException ex)
+        {
+            MessageBox.Show(this, ex.Message, "Không đủ quyền", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
     }
 
     private void OnMoveNextClicked(object? sender, EventArgs e)

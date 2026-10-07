@@ -18,7 +18,6 @@
 
 	<ItemGroup>
 		<Folder Include="Models\Enums\" />
-		<Folder Include="Repositories\InMemory\" />
 	</ItemGroup>
 
 	<ItemGroup>

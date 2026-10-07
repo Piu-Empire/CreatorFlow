@@ -41,6 +41,7 @@ static class Program
         IReviewQueueRepository reviewQueueRepo;
         IActivityRepository activityRepo;
         IContentDetailsRepository detailsRepo;
+        IMyTaskRepository myTaskRepo;
 
         if (UseDatabase)
         {
@@ -54,6 +55,7 @@ static class Program
             reviewQueueRepo = new ReviewQueueRepository(npgsqlUow);
             activityRepo = new ActivityRepository(npgsqlUow);
             detailsRepo = new ContentDetailsRepository(npgsqlUow);
+            myTaskRepo = new MyTaskRepository(npgsqlUow);
         }
         else
         {
@@ -66,10 +68,12 @@ static class Program
             reviewQueueRepo = new InMemoryReviewQueueRepository();
             activityRepo = new InMemoryActivityRepository();
             detailsRepo = new InMemoryContentDetailsRepository();
+            myTaskRepo = new InMemoryMyTaskRepository();
         }
 
         var workflowService = new WorkflowService(contentRepo, historyRepo, reviewRepo, memberRepo, uow);
-        var contentService = new ContentService(contentRepo, detailsRepo, historyRepo, memberRepo, uow);
+        var contentService = new ContentService(contentRepo, detailsRepo, historyRepo, memberRepo, uow, myTaskRepo);
+        var myTaskService = new MyTaskService(myTaskRepo, memberRepo, uow);
 
         // TODO: thay bằng màn Login + chọn Project thật (mục 18 UX spec: Login → Select Project).
         // Tạm hardcode User #1 / Project #1 — khớp seed data ở cả schema.sql lẫn InMemoryDataStore.
@@ -80,7 +84,7 @@ static class Program
 
         if (args.Length > 0 && args[0] == "--test")
         {
-            using var testForm = new BoardForm(workflowService, boardRepo, reviewQueueRepo, activityRepo, memberRepo, contentService);
+            using var testForm = new BoardForm(workflowService, boardRepo, reviewQueueRepo, activityRepo, memberRepo, contentService, myTaskService);
             var handle = testForm.Handle;
             testForm.Size = new Size(1440, 900);
             testForm.PerformLayout();
@@ -93,6 +97,6 @@ static class Program
             return;
         }
 
-        Application.Run(new BoardForm(workflowService, boardRepo, reviewQueueRepo, activityRepo, memberRepo, contentService));
+        Application.Run(new BoardForm(workflowService, boardRepo, reviewQueueRepo, activityRepo, memberRepo, contentService, myTaskService));
     }
 }
