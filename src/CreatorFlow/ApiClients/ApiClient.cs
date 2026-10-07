@@ -5,7 +5,7 @@ using CreatorFlow.Contracts.Health;
 
 namespace CreatorFlow.ApiClients;
 
-public sealed class ApiClient : IDisposable
+public sealed partial class ApiClient : IDisposable
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly HttpClient httpClient;
