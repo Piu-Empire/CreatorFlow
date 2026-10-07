@@ -1,0 +1,42 @@
+name: creatorflow-dev
+services:
+  db:
+    image: postgres:18-trixie
+    platform: linux/amd64
+    environment:
+      POSTGRES_DB: creatorflow_dev
+      POSTGRES_USER: creatorflow_dev
+      POSTGRES_PASSWORD: ${CREATORFLOW_DB_PASSWORD:?Set a local database password}
+    volumes:
+      - postgres-dev:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U creatorflow_dev -d creatorflow_dev"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+  api:
+    build:
+      context: ../..
+      dockerfile: src/CreatorFlow.Api/Dockerfile
+      target: runtime
+    platform: linux/amd64
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:5080:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__CreatorFlow: Host=db;Port=5432;Database=creatorflow_dev;Username=creatorflow_dev;Password=${CREATORFLOW_DB_PASSWORD}
+      Jwt__Issuer: CreatorFlow.Dev
+      Jwt__Audience: CreatorFlow.WinForms.Dev
+      Jwt__SigningKey: ${CREATORFLOW_JWT_KEY:?Set a Base64 JWT key of at least 32 random bytes}
+      PasswordReset__VerifierKey: ${CREATORFLOW_OTP_KEY:?Set a Base64 OTP key of 32 random bytes}
+      PasswordReset__Smtp__Host: ${CREATORFLOW_SMTP_HOST:-smtp.gmail.com}
+      PasswordReset__Smtp__Port: ${CREATORFLOW_SMTP_PORT:-587}
+      PasswordReset__Smtp__TlsMode: ${CREATORFLOW_SMTP_TLS:-StartTls}
+      PasswordReset__Smtp__From: ${CREATORFLOW_SMTP_FROM:-}
+      PasswordReset__Smtp__Username: ${CREATORFLOW_SMTP_USERNAME:-}
+      PasswordReset__Smtp__Password: ${CREATORFLOW_SMTP_PASSWORD:-}
+volumes:
+  postgres-dev:

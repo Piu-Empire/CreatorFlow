@@ -14,6 +14,14 @@ public class TopHeaderControl : UserControl
     private string _statsText = "";
     private Rectangle _newContentRect;
     private bool _newContentHover;
+    public bool AuthenticatedShell { get; set; }
+    private string _authenticatedPage = "Board";
+
+    public void SetAuthenticatedPage(string page)
+    {
+        _authenticatedPage = page;
+        Invalidate();
+    }
 
     public event EventHandler? NewContentClicked;
 
@@ -36,7 +44,7 @@ public class TopHeaderControl : UserControl
     protected override void OnMouseMove(MouseEventArgs e)
     {
         base.OnMouseMove(e);
-        bool hover = _newContentRect.Contains(e.Location);
+        bool hover = !AuthenticatedShell && _newContentRect.Contains(e.Location);
         if (hover != _newContentHover)
         {
             _newContentHover = hover;
@@ -54,7 +62,7 @@ public class TopHeaderControl : UserControl
     protected override void OnMouseClick(MouseEventArgs e)
     {
         base.OnMouseClick(e);
-        if (_newContentRect.Contains(e.Location))
+        if (!AuthenticatedShell && _newContentRect.Contains(e.Location))
             NewContentClicked?.Invoke(this, EventArgs.Empty);
     }
 
@@ -67,6 +75,14 @@ public class TopHeaderControl : UserControl
 
         using (var borderPen = new Pen(UITheme.Neutral200, 1f))
             g.DrawLine(borderPen, 0, Height - 1, Width, Height - 1);
+
+        if (AuthenticatedShell)
+        {
+            TextRenderer.DrawText(g, $"CreatorFlow  /  {_authenticatedPage}", UITheme.FontBodyBold,
+                new Rectangle(PadX, 0, Math.Max(0, Width - PadX * 2), Height), UITheme.Ink,
+                TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix);
+            return;
+        }
 
         int cy = Height / 2;
         var bodyFont = new Font("Segoe UI", 10F);
