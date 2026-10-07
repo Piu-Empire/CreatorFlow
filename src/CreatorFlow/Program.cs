@@ -42,6 +42,7 @@ static class Program
         IReviewQueueRepository reviewQueueRepo;
         IActivityRepository activityRepo;
         IContentDetailsRepository detailsRepo;
+        IMyTaskRepository myTaskRepo;
         IPlatformRepository platformRepo;
 
         if (UseDatabase)
@@ -56,6 +57,7 @@ static class Program
             reviewQueueRepo = new ReviewQueueRepository(npgsqlUow);
             activityRepo = new ActivityRepository(npgsqlUow);
             detailsRepo = new ContentDetailsRepository(npgsqlUow);
+            myTaskRepo = new MyTaskRepository(npgsqlUow);
             platformRepo = new PlatformRepository(npgsqlUow);
         }
         else
@@ -69,6 +71,12 @@ static class Program
             reviewQueueRepo = new InMemoryReviewQueueRepository();
             activityRepo = new InMemoryActivityRepository();
             detailsRepo = new InMemoryContentDetailsRepository();
+            myTaskRepo = new InMemoryMyTaskRepository();
+        }
+
+        var workflowService = new WorkflowService(contentRepo, historyRepo, reviewRepo, memberRepo, uow);
+        var contentService = new ContentService(contentRepo, detailsRepo, historyRepo, memberRepo, uow, myTaskRepo);
+        var myTaskService = new MyTaskService(myTaskRepo, memberRepo, uow);
             platformRepo = new InMemoryPlatformRepository();
         }
 
@@ -84,6 +92,7 @@ static class Program
 
         if (args.Length > 0 && args[0] == "--test")
         {
+            using var testForm = new BoardForm(workflowService, boardRepo, reviewQueueRepo, activityRepo, memberRepo, contentService, myTaskService);
             // Explicit Board rendering harness only; this does not authenticate to the API.
             CurrentSession.CurrentUserId = 1;
             CurrentSession.CurrentUserName = "Demo Owner";
@@ -102,6 +111,7 @@ static class Program
             return;
         }
 
+        Application.Run(new BoardForm(workflowService, boardRepo, reviewQueueRepo, activityRepo, memberRepo, contentService, myTaskService));
         try
         {
             using var api = ApiClient.Create(ApiClientConfiguration.Load());
