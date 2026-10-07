@@ -9,7 +9,9 @@ namespace CreatorFlow.Services;
 /// Nghiệp vụ tạo mới / chỉnh sửa thông tin Content (Status vẫn chỉ đổi qua WorkflowService).
 /// Quy tắc:
 ///   - Phải là thành viên của Project.
-///   - Tiêu đề bắt buộc (tối đa 200 ký tự), thời lượng tối đa 30 ký tự.
+///   - Tiêu đề bắt buộc (tối đa 200 ký tự), mô tả tối đa 2000 ký tự, kịch bản tối đa 20000 ký tự, thời lượng tối đa 30 ký tự.
+///   - Loại nội dung phải nằm trong AvailableContentTypes (để trống = loại mặc định); ưu tiên phải hợp lệ.
+///   - Ngày dự kiến đăng (tùy chọn) không được sớm hơn hạn hoàn thành (Deadline).
 ///   - Không tạo trực tiếp ở giai đoạn Review (Review phải đi qua Submit for Review).
 ///   - Sửa: Owner/Manager sửa mọi Content; Creator chỉ sửa Content do mình tạo; Content đã Published không được sửa.
 ///   - Platform: chọn nhiều, phải tồn tại và đang active trong bảng platforms; không được bỏ platform đã PUBLISHED.
@@ -17,6 +19,17 @@ namespace CreatorFlow.Services;
 public class ContentService
 {
     public static readonly string[] AvailableSprints = { "Sprint 24", "Sprint 25", "Sprint 26" };
+
+    /// <summary>Các loại nội dung chọn được (cột contents.content_type là VARCHAR tự do nên danh sách do ứng dụng quản lý).</summary>
+    public static readonly string[] AvailableContentTypes =
+        { "Short video", "Long video", "Reel", "Livestream", "Image post", "Story", "Article" };
+
+    public const string DefaultContentType = "Short video";
+
+    public const int MaxTitleLength = 200;
+    public const int MaxDescriptionLength = 2000;
+    public const int MaxScriptLength = 20000;
+    public const int MaxDurationLength = 30;
 
     private readonly IContentRepository _contentRepo;
     private readonly IContentDetailsRepository _detailsRepo;
@@ -45,6 +58,46 @@ public class ContentService
 
     /// <summary>Tên các nền tảng đang bật trong bảng platforms — nguồn cho checkbox chọn platform.</summary>
     public List<string> GetAvailablePlatforms() => _platformRepo.GetActive().Select(p => p.Name).ToList();
+
+    /// <summary>
+    /// Đọc đầy đủ thông tin lập kế hoạch của Content để hiển thị ở Content Detail.
+    /// Chỉ thành viên của Project chứa Content mới được xem.
+    /// </summary>
+    public Content GetDetail(long contentId, long userId)
+    {
+        var content = _detailsRepo.GetDetail(contentId)
+            ?? throw new InvalidOperationException($"Không tìm thấy Content #{contentId}.");
+
+        EnsureIsProjectMember(content.ProjectId, userId);
+        return content;
+    }
+
+    /// <summary>
+    /// Kiểm tra dữ liệu nhập, trả về thông báo lỗi đầu tiên (hoặc null nếu hợp lệ) mà không ném exception.
+    /// Form dùng hàm này để báo lỗi ngay trong dialog và giữ nguyên dữ liệu người dùng đã nhập.
+    /// Hàm này KHÔNG sửa <paramref name="draft"/>: gọi <see cref="Normalize"/> trước nếu draft đến từ ô nhập của người dùng.
+    /// </summary>
+    public static string? GetValidationError(ContentDraft draft)
+    {
+        if (draft.Title.Length == 0)
+            return "Vui lòng nhập tiêu đề.";
+        if (draft.Title.Length > MaxTitleLength)
+            return $"Tiêu đề tối đa {MaxTitleLength} ký tự.";
+        if (draft.Description.Length > MaxDescriptionLength)
+            return $"Mô tả tối đa {MaxDescriptionLength} ký tự.";
+        if (draft.Script.Length > MaxScriptLength)
+            return $"Kịch bản tối đa {MaxScriptLength} ký tự.";
+        if (!AvailableContentTypes.Contains(draft.ContentType, StringComparer.Ordinal))
+            return $"Loại nội dung '{draft.ContentType}' không hợp lệ.";
+        if (!Enum.IsDefined(draft.Priority))
+            return "Mức độ ưu tiên không hợp lệ.";
+        if (draft.EstimatedDuration.Length > MaxDurationLength)
+            return $"Thời lượng dự kiến tối đa {MaxDurationLength} ký tự (VD: 24 min).";
+        if (draft.Deadline.HasValue && draft.PlannedPublishAt.HasValue && draft.PlannedPublishAt.Value < draft.Deadline.Value)
+            return "Ngày dự kiến đăng không được sớm hơn hạn hoàn thành.";
+
+        return null;
+    }
 
     public long Create(long projectId, ContentStatus initialStatus, ContentDraft draft, long userId)
     {
@@ -114,10 +167,15 @@ public class ContentService
         }
     }
 
-    private static void Normalize(ContentDraft d)
+    /// <summary>Chuẩn hóa dữ liệu nhập trực tiếp trên draft: trim chữ, chọn loại mặc định, bỏ phần giờ của ngày, loại trùng platform.</summary>
+    public static void Normalize(ContentDraft d)
     {
         d.Title = (d.Title ?? string.Empty).Trim();
         d.Description = (d.Description ?? string.Empty).Trim();
+        d.Script = (d.Script ?? string.Empty).Trim();
+        d.ContentType = ResolveContentType(d.ContentType);
+        d.Deadline = d.Deadline?.Date;
+        d.PlannedPublishAt = d.PlannedPublishAt?.Date;
         d.EstimatedDuration = (d.EstimatedDuration ?? string.Empty).Trim();
         d.Sprint = string.IsNullOrWhiteSpace(d.Sprint) ? AvailableSprints[1] : d.Sprint.Trim();
         d.Platforms = (d.Platforms ?? new List<string>())
@@ -127,14 +185,21 @@ public class ContentService
             .ToList();
     }
 
+    /// <summary>Trống → loại mặc định; khớp không phân biệt hoa/thường thì đổi về đúng cách viết trong danh sách; không khớp thì giữ nguyên để Validate báo lỗi.</summary>
+    private static string ResolveContentType(string? contentType)
+    {
+        string trimmed = (contentType ?? string.Empty).Trim();
+        if (trimmed.Length == 0)
+            return DefaultContentType;
+
+        return AvailableContentTypes.FirstOrDefault(t => t.Equals(trimmed, StringComparison.OrdinalIgnoreCase)) ?? trimmed;
+    }
+
     private static void Validate(ContentDraft d)
     {
-        if (d.Title.Length == 0)
-            throw new ContentValidationException("Vui lòng nhập tiêu đề.");
-        if (d.Title.Length > 200)
-            throw new ContentValidationException("Tiêu đề tối đa 200 ký tự.");
-        if (d.EstimatedDuration.Length > 30)
-            throw new ContentValidationException("Thời lượng dự kiến tối đa 30 ký tự (VD: 24 min).");
+        string? error = GetValidationError(d);
+        if (error != null)
+            throw new ContentValidationException(error);
     }
 
     /// <summary>

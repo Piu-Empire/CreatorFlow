@@ -28,6 +28,7 @@ public partial class ContentDetailPanel : UserControl
     private int _selectedTabIndex = 0; // 0: Overview, 1: Script, 2: Checklist, 3: Activity
     private bool _isDirty;
     private bool _isLoading; // true trong lúc LoadContent() đang gán giá trị → bỏ qua sự kiện TextChanged/SelectedIndexChanged
+    private bool _detailLoaded; // false nếu đọc chi tiết (script, loại, ngày đăng) từ DB thất bại → chặn Lưu để không ghi đè dữ liệu bằng giá trị rỗng
 
     public event EventHandler? ContentChanged;
     public event EventHandler? CloseRequested;
@@ -49,10 +50,10 @@ public partial class ContentDetailPanel : UserControl
     private readonly TextBox _txtTitleVal;
     private readonly TextBox _txtHookVal;
     private readonly RoundedPanel _boxMeta;
-    private readonly Label[] _metaCaptions = new Label[6];
-    private readonly RoundedPanel[] _metaBoxes = new RoundedPanel[6];
+    private readonly Label[] _metaCaptions = new Label[8];
+    private readonly RoundedPanel[] _metaBoxes = new RoundedPanel[8];
 
-    // Index: 0 Pipeline Stage (chỉ đọc) · 1 Platform · 2 Priority · 3 Sprint · 4 Target Week · 5 Estimated Duration
+    // Index: 0 Pipeline Stage (chỉ đọc) · 1 Platform · 2 Priority · 3 Sprint · 4 Target Week · 5 Estimated Duration · 6 Content Type · 7 Planned Publish Date
     private readonly Label _lblStageVal;
     private readonly Button _btnPlatforms;
     private readonly ContextMenuStrip _mnuPlatforms;
@@ -60,6 +61,8 @@ public partial class ContentDetailPanel : UserControl
     private readonly ComboBox _cboSprintEdit;
     private readonly DateTimePicker _dtpTargetWeek;
     private readonly TextBox _txtDurationEdit;
+    private readonly ComboBox _cboTypeEdit;
+    private readonly DateTimePicker _dtpPlannedPublish;
 
     private readonly RoundedPanel _boxLead;
     private readonly ComboBox _cboAssigneeEdit;
@@ -188,9 +191,9 @@ public partial class ContentDetailPanel : UserControl
         _txtHookVal.TextChanged += (_, _) => MarkDirty();
         AddOverviewRow(MakeBox(104, Pad(_txtHookVal, 16, 12)), 20);
 
-        _boxMeta = new RoundedPanel { Height = 18 + 3 * 78 + 6, FillColor = UITheme.Neutral50, Radius = 10 };
-        string[] captions = { "Pipeline Stage", "Platform", "Priority", "Sprint Allocation", "Target Week", "Estimated Duration" };
-        for (int i = 0; i < 6; i++)
+        _boxMeta = new RoundedPanel { Height = 18 + 4 * 78 + 6, FillColor = UITheme.Neutral50, Radius = 10 };
+        string[] captions = { "Pipeline Stage", "Platform", "Priority", "Sprint Allocation", "Target Week", "Estimated Duration", "Content Type", "Planned Publish Date" };
+        for (int i = 0; i < 8; i++)
         {
             _metaCaptions[i] = new Label
             {
@@ -274,6 +277,24 @@ public partial class ContentDetailPanel : UserControl
         _txtDurationEdit.TextChanged += (_, _) => MarkDirty();
         _metaBoxes[5].Controls.Add(Pad(_txtDurationEdit, 14, 11));
 
+        // 6. Content Type — danh sách cố định ContentService.AvailableContentTypes
+        _cboTypeEdit = MakeFlatCombo();
+        _cboTypeEdit.Items.AddRange(ContentService.AvailableContentTypes);
+        _cboTypeEdit.SelectedIndexChanged += (_, _) => MarkDirty();
+        _metaBoxes[6].Controls.Add(Pad(_cboTypeEdit, 12, 7));
+
+        // 7. Planned Publish Date — tùy chọn: bỏ tick = chưa lên lịch đăng
+        _dtpPlannedPublish = new DateTimePicker
+        {
+            Dock = DockStyle.Fill,
+            Font = new Font("Segoe UI", 10F),
+            Format = DateTimePickerFormat.Short,
+            ShowCheckBox = true,
+            Checked = false,
+        };
+        _dtpPlannedPublish.ValueChanged += (_, _) => MarkDirty();
+        _metaBoxes[7].Controls.Add(Pad(_dtpPlannedPublish, 10, 7));
+
         AddOverviewRow(_boxMeta, 20);
 
         AddOverviewRow(MakeSectionLabel("DIRECTOR & CREATOR LEAD"), 6);
@@ -317,8 +338,10 @@ public partial class ContentDetailPanel : UserControl
             ScrollBars = ScrollBars.Vertical,
             Font = new Font("Segoe UI", 10.5F),
             BorderStyle = BorderStyle.FixedSingle,
-            Text = "Kịch bản / Screenplay Notes:\r\n\r\n[Hook 0-3s]: Giới thiệu điểm ấn tượng nhất của sản phẩm.\r\n[Body 3-30s]: Chi tiết tính năng nổi bật + góc quay cận.\r\n[Call To Action]: Đăng ký và theo dõi Studio!",
+            AcceptsReturn = true,
+            PlaceholderText = "Kịch bản: [Hook 0-3s] ... [Body] ... [Call To Action] ...",
         };
+        _txtScript.TextChanged += (_, _) => MarkDirty();
         _pnlTabScript.Controls.Add(_txtScript);
 
         // ---- TAB 3: CHECKLIST ----
@@ -512,7 +535,7 @@ public partial class ContentDetailPanel : UserControl
         // Lưới 2 cột trong khung meta
         int inner = w - 40;
         int colW = (inner - 16) / 2;
-        for (int i = 0; i < 6; i++)
+        for (int i = 0; i < _metaBoxes.Length; i++)
         {
             int x = 20 + (i % 2) * (colW + 16);
             int cy = 18 + (i / 2) * 78;
@@ -622,6 +645,13 @@ public partial class ContentDetailPanel : UserControl
 
         _txtDurationEdit.Text = card.EstimatedDuration;
 
+        // Script, loại nội dung và ngày dự kiến đăng không nằm trong thẻ Board nên đọc riêng từ DB khi mở Content Detail.
+        var detail = TryLoadDetail(card.ContentId);
+        _detailLoaded = detail != null;
+        _txtScript.Text = detail?.Script ?? string.Empty;
+        SelectContentType(detail?.ContentType);
+        SetPlannedPublish(detail?.PlannedPublishAt);
+
         // Gán lại DataSource = null rồi DataSource mới đôi khi làm ComboBox quên mất DisplayMember đã đặt
         // (WinForms quirk), khiến nó tự hiện Object.ToString() — tức tên đầy đủ của class thay vì tên người.
         // Đặt lại DisplayMember tường minh ngay trước khi gán DataSource mới để chắc chắn không bị mất.
@@ -643,6 +673,39 @@ public partial class ContentDetailPanel : UserControl
         _isDirty = false;
         _btnSave.Enabled = false;
         _lblSaveHint.Text = "";
+    }
+
+    /// <summary>Đọc chi tiết Content qua ContentService. Lỗi (không có quyền, không tìm thấy, lỗi DB) được báo cho người dùng và trả về null.</summary>
+    private Content? TryLoadDetail(long contentId)
+    {
+        try
+        {
+            return _contentService!.GetDetail(contentId, CurrentSession.CurrentUserId);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "Không tải được chi tiết nội dung", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return null;
+        }
+    }
+
+    /// <summary>Chọn loại nội dung; để trống → loại mặc định; loại lạ (dữ liệu cũ) được thêm tạm vào danh sách để không bị đổi âm thầm.</summary>
+    private void SelectContentType(string? contentType)
+    {
+        string type = string.IsNullOrWhiteSpace(contentType) ? ContentService.DefaultContentType : contentType.Trim();
+
+        int index = _cboTypeEdit.FindStringExact(type);
+        if (index < 0)
+            index = _cboTypeEdit.Items.Add(type);
+
+        _cboTypeEdit.SelectedIndex = index;
+    }
+
+    /// <summary>Gán Value trước rồi mới đặt Checked, vì WinForms có thể tự bật tick khi gán Value.</summary>
+    private void SetPlannedPublish(DateTime? plannedPublishAt)
+    {
+        _dtpPlannedPublish.Value = (plannedPublishAt ?? DateTime.Today).Date;
+        _dtpPlannedPublish.Checked = plannedPublishAt.HasValue;
     }
 
     /// <summary>Trả về false (và không xoá gì) nếu người dùng chọn giữ lại thay đổi chưa lưu.</summary>
@@ -669,10 +732,20 @@ public partial class ContentDetailPanel : UserControl
     {
         if (_current == null || _contentService == null) return;
 
+        if (!_detailLoaded)
+        {
+            MessageBox.Show(this, "Chưa tải được chi tiết nội dung (script, loại nội dung, ngày dự kiến đăng) nên không thể lưu. Hãy đóng và mở lại nội dung này.",
+                "Không thể lưu", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
         var draft = new ContentDraft
         {
             Title = _txtTitleVal.Text,
             Description = _txtHookVal.Text,
+            Script = _txtScript.Text,
+            ContentType = _cboTypeEdit.SelectedItem as string ?? string.Empty,
+            PlannedPublishAt = _dtpPlannedPublish.Checked ? _dtpPlannedPublish.Value.Date : null,
             Priority = _cboPriorityEdit.SelectedItem is Priority p ? p : _current.Priority,
             Platforms = SelectedPlatformNames(),
             Sprint = _cboSprintEdit.SelectedItem as string ?? _current.Sprint,

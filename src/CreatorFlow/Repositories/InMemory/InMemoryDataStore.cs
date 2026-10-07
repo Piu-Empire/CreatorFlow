@@ -19,6 +19,9 @@ public class InMemoryContentRecord
     public Priority Priority;
     public DateTime? Deadline;
     public string Description = string.Empty;
+    public string Script = string.Empty;
+    public string ContentType = string.Empty;
+    public DateTime? PlannedPublishAt;
     public string Sprint = "Sprint 25";
     public string EstimatedDuration = string.Empty;
     public List<string> Platforms = new();
@@ -56,12 +59,12 @@ public static class InMemoryDataStore
 
     public static readonly List<InMemoryContentRecord> Contents = new()
     {
-        new() { Id = 1, ProjectId = 1, Description = "Trend TikTok tháng 10: cách khai thác âm thanh đang lên xu hướng.", EstimatedDuration = "60 sec", Title = "TikTok trend tháng 10", Status = ContentStatus.Idea, Priority = Priority.High, Deadline = DateTime.Today.AddDays(5), Platforms = { "TikTok" }, AssigneeUserId = 2, CreatedByUserId = 2 },
-        new() { Id = 2, ProjectId = 1, Description = "Hướng dẫn nhanh 5 tính năng chính của sản phẩm cho người mới.", EstimatedDuration = "8 min", Title = "Video hướng dẫn sản phẩm", Status = ContentStatus.Script, Priority = Priority.Medium, Deadline = DateTime.Today.AddDays(3), AssigneeUserId = 2, CreatedByUserId = 2 },
-        new() { Id = 3, ProjectId = 1, Description = "Reel ngắn chủ đề A, quay dọc, cắt nhanh theo nhịp nhạc.", EstimatedDuration = "30 sec", Title = "Reel ngắn chủ đề A", Status = ContentStatus.Production, Priority = Priority.High, Deadline = DateTime.Today.AddDays(-1), Platforms = { "Instagram" }, AssigneeUserId = 2, CreatedByUserId = 2 },
-        new() { Id = 4, ProjectId = 1, Description = "Chiến dịch ra mắt: teaser + video chính cho TikTok và Instagram.", EstimatedDuration = "45 sec", Title = "TikTok Launch Campaign", Status = ContentStatus.Editing, Priority = Priority.Low, Deadline = DateTime.Today.AddDays(2), Platforms = { "TikTok", "Instagram" }, AssigneeUserId = 2, CreatedByUserId = 2 },
-        new() { Id = 5, ProjectId = 1, Description = "Video hướng dẫn chi tiết từ A đến Z, có phụ đề và chương mục.", EstimatedDuration = "24 min", Title = "YouTube Tutorial", Status = ContentStatus.Review, Priority = Priority.High, Deadline = DateTime.Today.AddDays(1), Platforms = { "YouTube" }, AssigneeUserId = 2, CreatedByUserId = 2 },
-        new() { Id = 6, ProjectId = 1, Description = "Bài đăng chiến dịch Facebook: ảnh + video ngắn kèm CTA.", EstimatedDuration = "2 min", Title = "Facebook Campaign", Status = ContentStatus.Ready, Priority = Priority.Medium, Deadline = DateTime.Today.AddDays(7), Platforms = { "Facebook" }, AssigneeUserId = 2, CreatedByUserId = 2 },
+        new() { Id = 1, ProjectId = 1, ContentType = "Short video", Script = "[Hook 0-3s]: Âm thanh đang lên xu hướng.\n[Body]: 3 cách khai thác âm thanh.\n[CTA]: Theo dõi để xem thêm.", PlannedPublishAt = DateTime.Today.AddDays(8), Description = "Trend TikTok tháng 10: cách khai thác âm thanh đang lên xu hướng.", EstimatedDuration = "60 sec", Title = "TikTok trend tháng 10", Status = ContentStatus.Idea, Priority = Priority.High, Deadline = DateTime.Today.AddDays(5), Platforms = { "TikTok" }, AssigneeUserId = 2, CreatedByUserId = 2 },
+        new() { Id = 2, ProjectId = 1, ContentType = "Long video", Description = "Hướng dẫn nhanh 5 tính năng chính của sản phẩm cho người mới.", EstimatedDuration = "8 min", Title = "Video hướng dẫn sản phẩm", Status = ContentStatus.Script, Priority = Priority.Medium, Deadline = DateTime.Today.AddDays(3), AssigneeUserId = 2, CreatedByUserId = 2 },
+        new() { Id = 3, ProjectId = 1, ContentType = "Reel", Description = "Reel ngắn chủ đề A, quay dọc, cắt nhanh theo nhịp nhạc.", EstimatedDuration = "30 sec", Title = "Reel ngắn chủ đề A", Status = ContentStatus.Production, Priority = Priority.High, Deadline = DateTime.Today.AddDays(-1), Platforms = { "Instagram" }, AssigneeUserId = 2, CreatedByUserId = 2 },
+        new() { Id = 4, ProjectId = 1, ContentType = "Short video", Description = "Chiến dịch ra mắt: teaser + video chính cho TikTok và Instagram.", EstimatedDuration = "45 sec", Title = "TikTok Launch Campaign", Status = ContentStatus.Editing, Priority = Priority.Low, Deadline = DateTime.Today.AddDays(2), Platforms = { "TikTok", "Instagram" }, AssigneeUserId = 2, CreatedByUserId = 2 },
+        new() { Id = 5, ProjectId = 1, ContentType = "Long video", Description = "Video hướng dẫn chi tiết từ A đến Z, có phụ đề và chương mục.", EstimatedDuration = "24 min", Title = "YouTube Tutorial", Status = ContentStatus.Review, Priority = Priority.High, Deadline = DateTime.Today.AddDays(1), Platforms = { "YouTube" }, AssigneeUserId = 2, CreatedByUserId = 2 },
+        new() { Id = 6, ProjectId = 1, ContentType = "Image post", Description = "Bài đăng chiến dịch Facebook: ảnh + video ngắn kèm CTA.", EstimatedDuration = "2 min", Title = "Facebook Campaign", Status = ContentStatus.Ready, Priority = Priority.Medium, Deadline = DateTime.Today.AddDays(7), Platforms = { "Facebook" }, AssigneeUserId = 2, CreatedByUserId = 2 },
     };
 
     public static readonly List<ContentStatusHistory> StatusHistory = new();

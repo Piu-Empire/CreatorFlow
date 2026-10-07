@@ -29,10 +29,38 @@ public class InMemoryContentDetailsRepository : IContentDetailsRepository
         record.UpdatedAt = DateTime.Now;
     }
 
+    public Content? GetDetail(long contentId)
+    {
+        var r = InMemoryDataStore.Contents.FirstOrDefault(c => c.Id == contentId);
+        if (r == null)
+            return null;
+
+        return new Content
+        {
+            ContentId = r.Id,
+            ProjectId = r.ProjectId,
+            SourceIdeaId = r.IdeaId,
+            Title = r.Title,
+            Description = r.Description,
+            Script = string.IsNullOrEmpty(r.Script) ? null : r.Script,
+            ContentType = string.IsNullOrEmpty(r.ContentType) ? null : r.ContentType,
+            Priority = r.Priority,
+            Status = r.Status,
+            Deadline = r.Deadline,
+            PlannedPublishAt = r.PlannedPublishAt,
+            CreatedBy = r.CreatedByUserId,
+            CreatedAt = r.UpdatedAt,
+            UpdatedAt = r.UpdatedAt,
+        };
+    }
+
     private static void Apply(InMemoryContentRecord r, ContentDraft d)
     {
         r.Title = d.Title;
         r.Description = d.Description;
+        r.Script = d.Script;
+        r.ContentType = d.ContentType;
+        r.PlannedPublishAt = d.PlannedPublishAt;
         r.Priority = d.Priority;
         r.Sprint = d.Sprint;
         r.Deadline = d.Deadline;
