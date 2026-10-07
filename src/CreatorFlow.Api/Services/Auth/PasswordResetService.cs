@@ -10,11 +10,13 @@ public sealed class PasswordResetService
     private readonly EmailOtpCodeProtector? _resetProtector;
     private readonly IEmailSender? _emailSender;
     private readonly TimeProvider _timeProvider;
+    private readonly ILogger<PasswordResetService> _logger;
     public PasswordResetService(CreatorFlow.Api.Repositories.Auth.IUserRepository repository, CreatorFlow.Api.Authentication.CurrentAuthenticatedUser userSession,
-        EmailOtpCodeProtector? protector, IEmailSender? sender, TimeProvider? clock = null)
+        EmailOtpCodeProtector? protector, IEmailSender? sender, TimeProvider? clock = null, ILogger<PasswordResetService>? logger = null)
     {
         userRepository = repository; session = userSession; _resetProtector = protector;
         _emailSender = sender; _timeProvider = clock ?? TimeProvider.System;
+        _logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<PasswordResetService>.Instance;
     }
 
     public const int PasswordResetResendSeconds = 60;
@@ -27,7 +29,11 @@ public sealed class PasswordResetService
     {
         if (_resetProtector is null || _emailSender is not { IsConfigured: true } || session.IsAuthenticated) return false;
         try { return await userRepository.IsPasswordResetSchemaReadyAsync(cancellationToken); }
-        catch (Exception exception) when (AuthRules.IsDatabaseError(exception, cancellationToken)) { return false; }
+        catch (Exception exception) when (AuthRules.IsDatabaseError(exception, cancellationToken))
+        {
+            _logger.LogWarning("Auth database readiness failed. FailureType: {FailureType}", exception.GetType().Name);
+            return false;
+        }
     }
 
     public Task<PasswordResetResult> ResendPasswordResetAsync(string? email, CancellationToken cancellationToken = default) =>
@@ -67,9 +73,16 @@ public sealed class PasswordResetService
                         if (!await userRepository.MarkPasswordResetDeliveredAsync(requestId, cancellationToken))
                             await InvalidateUndeliveredResetAsync(requestId);
                     }
-                    catch (EmailDeliveryException) { await InvalidateUndeliveredResetAsync(requestId); }
+                    catch (EmailDeliveryException)
+                    {
+                        _logger.LogWarning("Email provider delivery failed. Operation: PasswordReset");
+                        await InvalidateUndeliveredResetAsync(requestId);
+                    }
                     catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-                    { await InvalidateUndeliveredResetAsync(requestId); }
+                    {
+                        _logger.LogWarning("Email provider delivery timed out. Operation: PasswordReset");
+                        await InvalidateUndeliveredResetAsync(requestId);
+                    }
                 }
             }
             TimeSpan remaining = TimeSpan.FromSeconds(10) - _timeProvider.GetElapsedTime(started);
