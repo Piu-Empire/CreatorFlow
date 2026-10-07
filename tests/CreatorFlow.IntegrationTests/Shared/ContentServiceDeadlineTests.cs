@@ -75,6 +75,7 @@ public sealed class ContentServiceDeadlineTests
             details,
             new FakeHistoryRepository(),
             new FakeMemberRepository(userId, role),
+            new InMemoryPlatformRepository(),
             new FakeUnitOfWork(),
             new InMemoryMyTaskRepository());
         return (service, details);

@@ -27,7 +27,7 @@ public sealed class ContentPlatformTests
             new InMemoryContentStatusHistoryRepository(),
             new InMemoryProjectMemberRepository(),
             _platformRepo,
-            new InMemoryUnitOfWork());
+            new InMemoryUnitOfWork(), new InMemoryMyTaskRepository());
     }
 
     private static ContentDraft Draft(params string[] platforms) => new()
