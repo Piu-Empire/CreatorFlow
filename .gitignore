@@ -480,3 +480,21 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Local environment files (keep examples safe to commit)
+.env.*
+!.env.example
+!.env.*.example
+
+# Local development secrets and runtime configuration
+secrets.json
+secrets.*.json
+appsettings.Development.json
+local.settings.json
+
+# CodeGraph generated indexes and caches
+.codegraph/
+
+# Project-local OpenCode configuration
+/opencode.json
+/opencode.jsonc
