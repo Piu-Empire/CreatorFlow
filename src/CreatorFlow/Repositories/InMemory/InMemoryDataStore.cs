@@ -19,6 +19,9 @@ public class InMemoryContentRecord
     public Priority Priority;
     public DateTime? Deadline;
     public string Description = string.Empty;
+    public string Script = string.Empty;
+    public string ContentType = string.Empty;
+    public DateTime? PlannedPublishAt;
     public string Sprint = "Sprint 25";
     public string EstimatedDuration = string.Empty;
     public List<string> Platforms = new();
@@ -74,14 +77,15 @@ public static class InMemoryDataStore
         new() { PlatformId = 4, Code = "INSTAGRAM", Name = "Instagram" },
     };
 
+
     public static readonly List<InMemoryContentRecord> Contents = new()
     {
-        new() { Id = 1, ProjectId = 1, AssignmentStatus = AssignmentStatus.Assigned, ProgressPercent = 0, AssignedByUserId = 3, Description = "Trend TikTok tháng 10: cách khai thác âm thanh đang lên xu hướng.", EstimatedDuration = "60 sec", Title = "TikTok trend tháng 10", Status = ContentStatus.Idea, Priority = Priority.High, Deadline = DateTime.Today.AddDays(5), Platforms = { "TikTok" }, AssigneeUserId = 2, CreatedByUserId = 2 },
-        new() { Id = 2, ProjectId = 1, AssignmentStatus = AssignmentStatus.InProgress, ProgressPercent = 30, AssignedByUserId = 3, Description = "Hướng dẫn nhanh 5 tính năng chính của sản phẩm cho người mới.", EstimatedDuration = "8 min", Title = "Video hướng dẫn sản phẩm", Status = ContentStatus.Script, Priority = Priority.Medium, Deadline = DateTime.Today.AddDays(3), AssigneeUserId = 2, CreatedByUserId = 2 },
-        new() { Id = 3, ProjectId = 1, AssignmentStatus = AssignmentStatus.InProgress, ProgressPercent = 60, AssignedByUserId = 3, Description = "Reel ngắn chủ đề A, quay dọc, cắt nhanh theo nhịp nhạc.", EstimatedDuration = "30 sec", Title = "Reel ngắn chủ đề A", Status = ContentStatus.Production, Priority = Priority.High, Deadline = DateTime.Today.AddDays(-1), Platforms = { "Instagram" }, AssigneeUserId = 2, CreatedByUserId = 2 },
-        new() { Id = 4, ProjectId = 1, AssignmentStatus = AssignmentStatus.InProgress, ProgressPercent = 80, AssignedByUserId = 3, Description = "Chiến dịch ra mắt: teaser + video chính cho TikTok và Instagram.", EstimatedDuration = "45 sec", Title = "TikTok Launch Campaign", Status = ContentStatus.Editing, Priority = Priority.Low, Deadline = DateTime.Today.AddDays(2), Platforms = { "TikTok", "Instagram" }, AssigneeUserId = 2, CreatedByUserId = 2 },
-        new() { Id = 5, ProjectId = 1, AssignmentStatus = AssignmentStatus.InProgress, ProgressPercent = 90, AssignedByUserId = 3, Description = "Video hướng dẫn chi tiết từ A đến Z, có phụ đề và chương mục.", EstimatedDuration = "24 min", Title = "YouTube Tutorial", Status = ContentStatus.Review, Priority = Priority.High, Deadline = DateTime.Today.AddDays(1), Platforms = { "YouTube" }, AssigneeUserId = 2, CreatedByUserId = 2 },
-        new() { Id = 6, ProjectId = 1, AssignmentStatus = AssignmentStatus.Completed, ProgressPercent = 100, AssignedByUserId = 3, Description = "Bài đăng chiến dịch Facebook: ảnh + video ngắn kèm CTA.", EstimatedDuration = "2 min", Title = "Facebook Campaign", Status = ContentStatus.Ready, Priority = Priority.Medium, Deadline = DateTime.Today.AddDays(7), Platforms = { "Facebook" }, AssigneeUserId = 2, CreatedByUserId = 2 },
+        new() { Id = 1, ProjectId = 1, ContentType = "Short video", Script = "[Hook 0-3s]: Âm thanh đang lên xu hướng.\n[Body]: 3 cách khai thác âm thanh.\n[CTA]: Theo dõi để xem thêm.", PlannedPublishAt = DateTime.Today.AddDays(8), AssignmentStatus = AssignmentStatus.Assigned, ProgressPercent = 0, AssignedByUserId = 3, Description = "Trend TikTok tháng 10: cách khai thác âm thanh đang lên xu hướng.", EstimatedDuration = "60 sec", Title = "TikTok trend tháng 10", Status = ContentStatus.Idea, Priority = Priority.High, Deadline = DateTime.Today.AddDays(5), Platforms = { "TikTok" }, AssigneeUserId = 2, CreatedByUserId = 2 },
+        new() { Id = 2, ProjectId = 1, ContentType = "Long video", AssignmentStatus = AssignmentStatus.InProgress, ProgressPercent = 30, AssignedByUserId = 3, Description = "Hướng dẫn nhanh 5 tính năng chính của sản phẩm cho người mới.", EstimatedDuration = "8 min", Title = "Video hướng dẫn sản phẩm", Status = ContentStatus.Script, Priority = Priority.Medium, Deadline = DateTime.Today.AddDays(3), AssigneeUserId = 2, CreatedByUserId = 2 },
+        new() { Id = 3, ProjectId = 1, ContentType = "Reel", AssignmentStatus = AssignmentStatus.InProgress, ProgressPercent = 60, AssignedByUserId = 3, Description = "Reel ngắn chủ đề A, quay dọc, cắt nhanh theo nhịp nhạc.", EstimatedDuration = "30 sec", Title = "Reel ngắn chủ đề A", Status = ContentStatus.Production, Priority = Priority.High, Deadline = DateTime.Today.AddDays(-1), Platforms = { "Instagram" }, AssigneeUserId = 2, CreatedByUserId = 2 },
+        new() { Id = 4, ProjectId = 1, ContentType = "Short video", AssignmentStatus = AssignmentStatus.InProgress, ProgressPercent = 80, AssignedByUserId = 3, Description = "Chiến dịch ra mắt: teaser + video chính cho TikTok và Instagram.", EstimatedDuration = "45 sec", Title = "TikTok Launch Campaign", Status = ContentStatus.Editing, Priority = Priority.Low, Deadline = DateTime.Today.AddDays(2), Platforms = { "TikTok", "Instagram" }, AssigneeUserId = 2, CreatedByUserId = 2 },
+        new() { Id = 5, ProjectId = 1, ContentType = "Long video", AssignmentStatus = AssignmentStatus.InProgress, ProgressPercent = 90, AssignedByUserId = 3, Description = "Video hướng dẫn chi tiết từ A đến Z, có phụ đề và chương mục.", EstimatedDuration = "24 min", Title = "YouTube Tutorial", Status = ContentStatus.Review, Priority = Priority.High, Deadline = DateTime.Today.AddDays(1), Platforms = { "YouTube" }, AssigneeUserId = 2, CreatedByUserId = 2 },
+        new() { Id = 6, ProjectId = 1, ContentType = "Image post", AssignmentStatus = AssignmentStatus.Completed, ProgressPercent = 100, AssignedByUserId = 3, Description = "Bài đăng chiến dịch Facebook: ảnh + video ngắn kèm CTA.", EstimatedDuration = "2 min", Title = "Facebook Campaign", Status = ContentStatus.Ready, Priority = Priority.Medium, Deadline = DateTime.Today.AddDays(7), Platforms = { "Facebook" }, AssigneeUserId = 2, CreatedByUserId = 2 },
         // --- Task giao cho User #1 (Demo Owner = CurrentSession mặc định) để thử màn My Tasks ---
         new() { Id = 7, ProjectId = 1, Title = "Podcast tập 12 — kịch bản", Description = "Viết kịch bản và outline cho tập podcast số 12.", EstimatedDuration = "35 min", Status = ContentStatus.Script, Priority = Priority.Medium, Deadline = DateTime.Today.AddDays(4), Platforms = { "YouTube" }, AssigneeUserId = 1, CreatedByUserId = 3, AssignedByUserId = 3, AssignmentStatus = AssignmentStatus.InProgress, ProgressPercent = 40 },
         new() { Id = 8, ProjectId = 1, Title = "Banner Facebook tuần lễ ra mắt", Description = "Thiết kế bộ banner cho chiến dịch tuần lễ ra mắt.", EstimatedDuration = "2 min", Status = ContentStatus.Production, Priority = Priority.High, Deadline = DateTime.Today.AddDays(-2), Platforms = { "Facebook" }, AssigneeUserId = 1, CreatedByUserId = 3, AssignedByUserId = 3, AssignmentStatus = AssignmentStatus.InProgress, ProgressPercent = 15 },
@@ -91,6 +95,7 @@ public static class InMemoryDataStore
         // Project #2: cùng User #1 nhưng KHÁC Project → My Tasks của Project #1 không được hiện dòng này.
         new() { Id = 12, ProjectId = 2, Title = "Task thuộc Project khác", Description = "Dùng để kiểm tra lọc theo Project.", Status = ContentStatus.Script, Priority = Priority.High, Deadline = DateTime.Today.AddDays(1), AssigneeUserId = 1, CreatedByUserId = 1, AssignedByUserId = 3, AssignmentStatus = AssignmentStatus.InProgress, ProgressPercent = 50 },
     };
+
 
     /// <summary>Assignment đang có (kể cả Cancelled để giữ lịch sử). Khởi tạo từ dữ liệu Contents mẫu phía trên.</summary>
     public static readonly List<InMemoryAssignmentRecord> Assignments = BuildSeedAssignments();
