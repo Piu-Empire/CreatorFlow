@@ -30,7 +30,8 @@ public sealed class ContentPlanningTests
             new InMemoryContentStatusHistoryRepository(),
             new InMemoryProjectMemberRepository(),
             new InMemoryPlatformRepository(),
-            new InMemoryUnitOfWork());
+            new InMemoryUnitOfWork(),
+            new InMemoryMyTaskRepository());
     }
 
     // ---------- Lưu SQL / hiển thị lại đúng Content Detail ----------
@@ -48,8 +49,8 @@ public sealed class ContentPlanningTests
         Assert.AreEqual("[Hook] Mở hộp\n[Body] Thử âm thanh\n[CTA] Theo dõi kênh", detail.Script);
         Assert.AreEqual("Long video", detail.ContentType);
         Assert.AreEqual(Priority.High, detail.Priority);
-        Assert.AreEqual(new DateTime(2026, 11, 1), detail.Deadline);
-        Assert.AreEqual(new DateTime(2026, 11, 5), detail.PlannedPublishAt);
+        Assert.AreEqual(Day(30), detail.Deadline);
+        Assert.AreEqual(Day(34), detail.PlannedPublishAt);
         Assert.AreEqual(ContentStatus.Script, detail.Status);
         Assert.AreEqual(ProjectId, detail.ProjectId);
         Assert.AreEqual(OwnerId, detail.CreatedByUserId);
@@ -65,8 +66,8 @@ public sealed class ContentPlanningTests
         edited.Script = "Kịch bản mới";
         edited.ContentType = "Reel";
         edited.Priority = Priority.Low;
-        edited.Deadline = new DateTime(2026, 12, 1);
-        edited.PlannedPublishAt = new DateTime(2026, 12, 3);
+        edited.Deadline = Day(60);
+        edited.PlannedPublishAt = Day(62);
         _service.Update(id, edited, OwnerId);
 
         Content detail = _service.GetDetail(id, OwnerId);
@@ -74,8 +75,8 @@ public sealed class ContentPlanningTests
         Assert.AreEqual("Kịch bản mới", detail.Script);
         Assert.AreEqual("Reel", detail.ContentType);
         Assert.AreEqual(Priority.Low, detail.Priority);
-        Assert.AreEqual(new DateTime(2026, 12, 1), detail.Deadline);
-        Assert.AreEqual(new DateTime(2026, 12, 3), detail.PlannedPublishAt);
+        Assert.AreEqual(Day(60), detail.Deadline);
+        Assert.AreEqual(Day(62), detail.PlannedPublishAt);
     }
 
     [TestMethod]
@@ -113,14 +114,14 @@ public sealed class ContentPlanningTests
     public void Create_IgnoresTimeOfDayForDeadlineAndPlannedPublishDate()
     {
         var draft = FullDraft();
-        draft.Deadline = new DateTime(2026, 11, 1, 17, 45, 0);
-        draft.PlannedPublishAt = new DateTime(2026, 11, 5, 9, 30, 0);
+        draft.Deadline = Day(30).AddHours(17).AddMinutes(45);
+        draft.PlannedPublishAt = Day(34).AddHours(9).AddMinutes(30);
 
         long id = _service.Create(ProjectId, ContentStatus.Script, draft, OwnerId);
 
         Content detail = _service.GetDetail(id, OwnerId);
-        Assert.AreEqual(new DateTime(2026, 11, 1), detail.Deadline);
-        Assert.AreEqual(new DateTime(2026, 11, 5), detail.PlannedPublishAt);
+        Assert.AreEqual(Day(30), detail.Deadline);
+        Assert.AreEqual(Day(34), detail.PlannedPublishAt);
     }
 
     // ---------- Loại nội dung ----------
@@ -236,8 +237,8 @@ public sealed class ContentPlanningTests
     public void Create_PlannedPublishBeforeDeadline_Throws()
     {
         var draft = FullDraft();
-        draft.Deadline = new DateTime(2026, 11, 10);
-        draft.PlannedPublishAt = new DateTime(2026, 11, 9);
+        draft.Deadline = Day(40);
+        draft.PlannedPublishAt = Day(39);
 
         var ex = Assert.ThrowsExactly<ContentValidationException>(
             () => _service.Create(ProjectId, ContentStatus.Script, draft, OwnerId));
@@ -249,12 +250,12 @@ public sealed class ContentPlanningTests
     public void Create_PlannedPublishOnSameDayAsDeadline_IsAllowed()
     {
         var draft = FullDraft();
-        draft.Deadline = new DateTime(2026, 11, 10, 8, 0, 0);
-        draft.PlannedPublishAt = new DateTime(2026, 11, 10, 20, 0, 0);
+        draft.Deadline = Day(40).AddHours(8);
+        draft.PlannedPublishAt = Day(40).AddHours(20);
 
         long id = _service.Create(ProjectId, ContentStatus.Script, draft, OwnerId);
 
-        Assert.AreEqual(new DateTime(2026, 11, 10), _service.GetDetail(id, OwnerId).PlannedPublishAt);
+        Assert.AreEqual(Day(40), _service.GetDetail(id, OwnerId).PlannedPublishAt);
     }
 
     [TestMethod]
@@ -262,13 +263,13 @@ public sealed class ContentPlanningTests
     {
         var draft = FullDraft();
         draft.Deadline = null;
-        draft.PlannedPublishAt = new DateTime(2026, 11, 10);
+        draft.PlannedPublishAt = Day(40);
 
         long id = _service.Create(ProjectId, ContentStatus.Script, draft, OwnerId);
 
         Content detail = _service.GetDetail(id, OwnerId);
         Assert.IsNull(detail.Deadline);
-        Assert.AreEqual(new DateTime(2026, 11, 10), detail.PlannedPublishAt);
+        Assert.AreEqual(Day(40), detail.PlannedPublishAt);
     }
 
     [TestMethod]
@@ -371,6 +372,9 @@ public sealed class ContentPlanningTests
         Assert.ThrowsExactly<UnauthorizedWorkflowActionException>(() => _service.Update(id, FullDraft(), CreatorId));
     }
 
+    /// <summary>Ngày tương đối so với hôm nay: Update kiểm tra deadline mới không ở quá khứ nên không được dùng ngày cố định.</summary>
+    private static DateTime Day(int daysFromToday) => DateTime.Today.AddDays(daysFromToday);
+
     private static ContentDraft FullDraft() => new()
     {
         Title = "Review tai nghe mới",
@@ -378,8 +382,8 @@ public sealed class ContentPlanningTests
         Script = "[Hook] Mở hộp\n[Body] Thử âm thanh\n[CTA] Theo dõi kênh",
         ContentType = "Long video",
         Priority = Priority.High,
-        Deadline = new DateTime(2026, 11, 1),
-        PlannedPublishAt = new DateTime(2026, 11, 5),
+        Deadline = Day(30),
+        PlannedPublishAt = Day(34),
         Platforms = new List<string> { "YouTube" },
     };
 }
