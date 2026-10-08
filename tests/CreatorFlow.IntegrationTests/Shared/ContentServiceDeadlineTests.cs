@@ -101,6 +101,7 @@ public sealed class ContentServiceDeadlineTests
         public int UpdateCount { get; private set; }
         public long Create(long projectId, ContentStatus status, ContentDraft draft, long createdByUserId) => 1;
         public void Update(long contentId, ContentDraft draft) => UpdateCount++;
+        public Content? GetDetail(long contentId) => null;
     }
 
     private sealed class FakeHistoryRepository : IContentStatusHistoryRepository
