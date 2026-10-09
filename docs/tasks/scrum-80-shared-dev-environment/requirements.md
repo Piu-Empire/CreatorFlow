@@ -93,3 +93,6 @@ File này là tài liệu yêu cầu; chỉ kiểm tra tĩnh nội dung, không 
 - Nếu gần giới hạn free hoặc không đủ cho đợt dự kiến: dừng test không cần thiết, chờ quota/reset; với storage không reset thì chỉ tiếp tục khi có dung lượng miễn phí đủ và phương án đã review. Không upgrade hoặc tự xóa dữ liệu để lấy quota.
 - Neon chỉ tạo tài nguyên DEV tối thiểu cần thiết. Không tạo thêm project/branch/database để thử nếu không cần; restore/upgrade drill ưu tiên PostgreSQL disposable local trên tài nguyên sẵn có, không dùng thêm cloud resources khi chưa review nhu cầu/quota.
 - Không thao tác nào được phép làm ngân sách lớn hơn 0 đồng để đạt PASS. Điều kiện miễn phí không đáp ứng thì ghi BLOCKED, không mua workaround.
+
+## Acceptance amendment — explicit user decision, 2026-10-09
+The user explicitly waived the second-machine acceptance criterion because no second machine is available and requested completion of all remaining checks. This criterion is WAIVED BY USER, not PASS. All zero-cost guardrails and other required acceptance remain applicable. See test-results-cloud.md for evidence and limitations.
