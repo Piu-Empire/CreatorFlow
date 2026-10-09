@@ -65,6 +65,7 @@ public partial class BoardForm : Form, IMessageFilter
         IProjectMemberRepository memberRepository,
         ContentService contentService,
         MyTaskService myTaskService,
+        ScriptService scriptService,
         AuthApiFacade? auth = null)
     {
         InitializeComponent();
@@ -87,7 +88,7 @@ public partial class BoardForm : Form, IMessageFilter
         _pnlDrawerHost.Paint += PnlDrawerHost_Paint;
         BuildColumns();
 
-        _contentDetailPanel.Initialize(_workflowService, _activityRepository, _memberRepository, _contentService);
+        _contentDetailPanel.Initialize(_workflowService, _activityRepository, _memberRepository, _contentService, scriptService);
         _contentDetailPanel.ContentChanged += (_, _) => { ReloadBoard(); _toast.ShowToast(this, "Cap nhat thanh cong!"); };
         _contentDetailPanel.CloseRequested += (_, _) => CloseDrawer();
 
@@ -189,10 +190,15 @@ public partial class BoardForm : Form, IMessageFilter
             _flowColumns.Visible = false;
             _pnlDrawerHost.Visible = false;
             if (_pnlBoardArea.Controls["noProjectContext"] is null)
-                _pnlBoardArea.Controls.Add(new Label { Name = "noProjectContext", Dock = DockStyle.Fill,
+                _pnlBoardArea.Controls.Add(new Label
+                {
+                    Name = "noProjectContext",
+                    Dock = DockStyle.Fill,
                     Text = "Chưa chọn dự án. Bạn có thể mở Hồ sơ từ avatar bên trái để quản lý tài khoản hoặc đăng xuất.",
-                    ForeColor = UITheme.Neutral600, BackColor = UITheme.Neutral50,
-                    TextAlign = ContentAlignment.MiddleCenter });
+                    ForeColor = UITheme.Neutral600,
+                    BackColor = UITheme.Neutral50,
+                    TextAlign = ContentAlignment.MiddleCenter
+                });
             return;
         }
         if (_pnlBoardArea.Controls["noProjectContext"] is Control emptyState)
