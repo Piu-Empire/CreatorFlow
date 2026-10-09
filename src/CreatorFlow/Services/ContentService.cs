@@ -9,7 +9,7 @@ namespace CreatorFlow.Services;
 /// Nghiệp vụ tạo mới / chỉnh sửa thông tin Content (Status vẫn chỉ đổi qua WorkflowService).
 /// Quy tắc:
 ///   - Phải là thành viên của Project.
-///   - Tiêu đề bắt buộc (tối đa 200 ký tự), mô tả tối đa 2000 ký tự, kịch bản tối đa 20000 ký tự, thời lượng tối đa 30 ký tự.
+///   - Tiêu đề bắt buộc (tối đa 200 ký tự), mô tả tối đa 2000 ký tự, kịch bản tối đa 100000 ký tự, thời lượng tối đa 30 ký tự.
 ///   - Loại nội dung phải nằm trong AvailableContentTypes (để trống = loại mặc định); ưu tiên phải hợp lệ.
 ///   - Ngày dự kiến đăng (tùy chọn) không được sớm hơn hạn hoàn thành (Deadline).
 ///   - Không tạo trực tiếp ở giai đoạn Review (Review phải đi qua Submit for Review).
@@ -28,7 +28,7 @@ public class ContentService
 
     public const int MaxTitleLength = 200;
     public const int MaxDescriptionLength = 2000;
-    public const int MaxScriptLength = 20000;
+    public const int MaxScriptLength = ScriptService.MaxScriptLength; // dùng chung giới hạn với ScriptService (SCRUM-33)
     public const int MaxDurationLength = 30;
 
     private readonly IContentRepository _contentRepo;

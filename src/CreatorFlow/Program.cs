@@ -4,6 +4,7 @@ using CreatorFlow.Repositories.Implementations;
 using CreatorFlow.Repositories.InMemory;
 using CreatorFlow.Repositories.Interfaces;
 using CreatorFlow.Services;
+using CreatorFlow.Services.AI;
 using CreatorFlow.ApiClients;
 using System.Runtime.Versioning;
 
@@ -44,6 +45,7 @@ static class Program
         IContentDetailsRepository detailsRepo;
         IMyTaskRepository myTaskRepo;
         IPlatformRepository platformRepo;
+        IContentScriptRepository scriptRepo;
 
         if (UseDatabase)
         {
@@ -59,6 +61,7 @@ static class Program
             detailsRepo = new ContentDetailsRepository(npgsqlUow);
             myTaskRepo = new MyTaskRepository(npgsqlUow);
             platformRepo = new PlatformRepository(npgsqlUow);
+            scriptRepo = new ContentScriptRepository(npgsqlUow);
         }
         else
         {
@@ -73,11 +76,14 @@ static class Program
             detailsRepo = new InMemoryContentDetailsRepository();
             myTaskRepo = new InMemoryMyTaskRepository();
             platformRepo = new InMemoryPlatformRepository();
+            scriptRepo = new InMemoryContentScriptRepository();
         }
 
         var workflowService = new WorkflowService(contentRepo, historyRepo, reviewRepo, memberRepo, uow);
         var contentService = new ContentService(contentRepo, detailsRepo, historyRepo, memberRepo, platformRepo, uow, myTaskRepo);
         var myTaskService = new MyTaskService(myTaskRepo, memberRepo, uow);
+        // SCRUM-33: AI chưa có cài đặt thật nên dùng NotConfiguredAiService; thay bằng AIService thật khi có.
+        var scriptService = new ScriptService(scriptRepo, detailsRepo, platformRepo, memberRepo, myTaskRepo, uow, new NotConfiguredAiService());
 
         // AuthenticationApplicationContext binds the authenticated user; project selection belongs to SCRUM-25.
         CurrentSession.CurrentUserId = 0;
@@ -94,7 +100,7 @@ static class Program
             {
                 // Diagnostic layout only: no authentication, project queries, or message loop.
                 using var testForm = new BoardForm(workflowService, boardRepo, reviewQueueRepo,
-                    activityRepo, memberRepo, contentService, myTaskService, auth);
+                    activityRepo, memberRepo, contentService, myTaskService, scriptService, auth);
                 var handle = testForm.Handle;
                 testForm.Size = new Size(1440, 900);
                 testForm.PerformLayout();
@@ -102,7 +108,7 @@ static class Program
                 return;
             }
             using var context = new AuthenticationApplicationContext(auth, () =>
-                new BoardForm(workflowService, boardRepo, reviewQueueRepo, activityRepo, memberRepo, contentService, myTaskService, auth));
+                new BoardForm(workflowService, boardRepo, reviewQueueRepo, activityRepo, memberRepo, contentService, myTaskService, scriptService, auth));
             Application.Run(context);
         }
         catch (InvalidOperationException)

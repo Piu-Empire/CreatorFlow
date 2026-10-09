@@ -74,7 +74,8 @@ public partial class ContentDetailPanel : UserControl
 
     // Tab 2: Script
     private readonly Panel _pnlTabScript;
-    private readonly TextBox _txtScript;
+    private readonly ScriptEditorControl _scriptEditor;
+    private string _persistedScript = string.Empty; // script đang lưu trong DB; "Lưu thay đổi" ghi lại đúng bản này để không đụng tới script (script lưu riêng ở tab Script)
 
     // Tab 3: Checklist
     private readonly Panel _pnlTabChecklist;
@@ -338,18 +339,10 @@ public partial class ContentDetailPanel : UserControl
 
         // ---- TAB 2: SCRIPT ----
         _pnlTabScript = new Panel { Dock = DockStyle.Fill, Padding = new Padding(PadX, 20, PadX, 20), Visible = false };
-        _txtScript = new TextBox
-        {
-            Dock = DockStyle.Fill,
-            Multiline = true,
-            ScrollBars = ScrollBars.Vertical,
-            Font = new Font("Segoe UI", 10.5F),
-            BorderStyle = BorderStyle.FixedSingle,
-            AcceptsReturn = true,
-            PlaceholderText = "Kịch bản: [Hook 0-3s] ... [Body] ... [Call To Action] ...",
-        };
-        _txtScript.TextChanged += (_, _) => MarkDirty();
-        _pnlTabScript.Controls.Add(_txtScript);
+        // Khu vực script (SCRUM-33): lưu riêng qua ScriptService, có phân quyền, Ctrl+S và thống kê.
+        _scriptEditor = new ScriptEditorControl { Dock = DockStyle.Fill };
+        _scriptEditor.ScriptSaved += (_, text) => _persistedScript = text;
+        _pnlTabScript.Controls.Add(_scriptEditor);
 
         // ---- TAB 3: CHECKLIST ----
         _pnlTabChecklist = new Panel { Dock = DockStyle.Fill, Padding = new Padding(PadX, 20, PadX, 20), Visible = false };
@@ -587,8 +580,9 @@ public partial class ContentDetailPanel : UserControl
 
     // ---------- API công khai ----------
 
-    public void Initialize(WorkflowService workflowService, IActivityRepository activityRepo, IProjectMemberRepository memberRepo, ContentService contentService)
+    public void Initialize(WorkflowService workflowService, IActivityRepository activityRepo, IProjectMemberRepository memberRepo, ContentService contentService, ScriptService scriptService)
     {
+        _scriptEditor.Initialize(scriptService);
         _workflowService = workflowService;
         _activityRepo = activityRepo;
         _memberRepo = memberRepo;
@@ -658,7 +652,8 @@ public partial class ContentDetailPanel : UserControl
         // Script, loại nội dung và ngày dự kiến đăng không nằm trong thẻ Board nên đọc riêng từ DB khi mở Content Detail.
         var detail = TryLoadDetail(card.ContentId);
         _detailLoaded = detail != null;
-        _txtScript.Text = detail?.Script ?? string.Empty;
+        _persistedScript = detail?.Script ?? string.Empty;
+        _scriptEditor.LoadScript(card.ContentId, CurrentSession.CurrentUserId);
         SelectContentType(detail?.ContentType);
         SetPlannedPublish(detail?.PlannedPublishAt);
 
@@ -733,7 +728,7 @@ public partial class ContentDetailPanel : UserControl
     /// <summary>Trả về false (và không xoá gì) nếu người dùng chọn giữ lại thay đổi chưa lưu.</summary>
     public bool Clear()
     {
-        if (_isDirty && _current != null)
+        if (HasUnsavedChanges && _current != null)
         {
             var result = MessageBox.Show(this,
                 "Bạn có thay đổi chưa lưu. Đóng và bỏ qua thay đổi?",
@@ -743,12 +738,13 @@ public partial class ContentDetailPanel : UserControl
 
         _current = null;
         _isDirty = false;
+        _scriptEditor.Reset();
         ShowEmptyState();
         return true;
     }
 
     /// <summary>true nếu có thay đổi chưa lưu — BoardForm dùng để hỏi trước khi reload/đóng.</summary>
-    public bool HasUnsavedChanges => _isDirty;
+    public bool HasUnsavedChanges => _isDirty || _scriptEditor.IsDirty;
 
     private void SaveChanges()
     {
@@ -765,7 +761,7 @@ public partial class ContentDetailPanel : UserControl
         {
             Title = _txtTitleVal.Text,
             Description = _txtHookVal.Text,
-            Script = _txtScript.Text,
+            Script = _persistedScript, // không sửa script ở đây: tab Script lưu riêng qua ScriptService
             ContentType = _cboTypeEdit.SelectedItem as string ?? string.Empty,
             PlannedPublishAt = _dtpPlannedPublish.Checked ? _dtpPlannedPublish.Value.Date : null,
             Priority = _cboPriorityEdit.SelectedItem is Priority p ? p : _current.Priority,
@@ -894,7 +890,7 @@ public partial class ContentDetailPanel : UserControl
         if (_current == null || _contentService == null) return;
 
         // Sau khi giao, drawer được tải lại → thay đổi chưa lưu sẽ mất, nên hỏi trước.
-        if (_isDirty && MessageBox.Show(this,
+        if (HasUnsavedChanges && MessageBox.Show(this,
                 "Có thay đổi chưa lưu. Giao việc sẽ tải lại nội dung và bỏ các thay đổi này. Tiếp tục?",
                 "Giao việc", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
             return;
