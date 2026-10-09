@@ -87,9 +87,9 @@ static class Program
 
         // AuthenticationApplicationContext binds the authenticated user; project selection belongs to SCRUM-25.
         CurrentSession.CurrentUserId = 0;
-        CurrentSession.CurrentUserName = "Demo Owner";
-        CurrentSession.CurrentProjectId = 1;
-        CurrentSession.CurrentProjectName = "Creator Team";
+        CurrentSession.CurrentUserName = string.Empty;
+        CurrentSession.CurrentProjectId = 0;
+        CurrentSession.CurrentProjectName = string.Empty;
 
         if (args.Length > 0 && args[0] == "--test")
         {
