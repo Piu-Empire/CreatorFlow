@@ -22,9 +22,11 @@ builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddSingleton<IEmailSender>(mail is null ? new UnavailableEmailSender() : new SmtpEmailSender(mail));
 EmailOtpCodeProtector? protector = mail is null ? null : new EmailOtpCodeProtector(mail.VerifierKey);
 builder.Services.AddScoped(services => new EmailVerificationService(services.GetRequiredService<IUserRepository>(),
-    services.GetRequiredService<CurrentAuthenticatedUser>(), protector, services.GetRequiredService<IEmailSender>(), services.GetRequiredService<TimeProvider>()));
+    services.GetRequiredService<CurrentAuthenticatedUser>(), protector, services.GetRequiredService<IEmailSender>(), services.GetRequiredService<TimeProvider>(),
+    services.GetRequiredService<ILogger<EmailVerificationService>>()));
 builder.Services.AddScoped(services => new PasswordResetService(services.GetRequiredService<IUserRepository>(),
-    services.GetRequiredService<CurrentAuthenticatedUser>(), protector, services.GetRequiredService<IEmailSender>(), services.GetRequiredService<TimeProvider>()));
+    services.GetRequiredService<CurrentAuthenticatedUser>(), protector, services.GetRequiredService<IEmailSender>(), services.GetRequiredService<TimeProvider>(),
+    services.GetRequiredService<ILogger<PasswordResetService>>()));
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<UserService>();
 builder.Services.AddSingleton<IAvatarImageProcessor, AvatarImageProcessor>();
@@ -32,6 +34,8 @@ builder.Services.AddSingleton<IAvatarImageProcessor, AvatarImageProcessor>();
 builder.Services.AddSingleton<IDbConnectionFactory>(new NpgsqlConnectionFactory(connectionString));
 builder.Services.AddScoped<IPlanRepository, PlanRepository>();
 builder.Services.AddSingleton<HealthService>();
+builder.Services.AddScoped<IDatabaseReadinessRepository, DatabaseReadinessRepository>();
+builder.Services.AddScoped<DatabaseReadinessService>();
 builder.Services.AddProblemDetails(options =>
 {
     options.CustomizeProblemDetails = context =>
@@ -40,7 +44,19 @@ builder.Services.AddProblemDetails(options =>
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 
 var app = builder.Build();
+string version = typeof(Program).Assembly
+    .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+    .OfType<System.Reflection.AssemblyInformationalVersionAttribute>().Single().InformationalVersion;
+app.Logger.LogInformation("CreatorFlow API starting. Version: {Version}; Environment: {Environment}; MailConfigured: {MailConfigured}",
+    version, app.Environment.EnvironmentName, mail is not null);
 app.UseExceptionHandler();
+app.Use(async (context, next) =>
+{
+    await next(context);
+    if (context.Response.StatusCode >= 400)
+        app.Logger.LogWarning("API request rejected. TraceId: {TraceId}; StatusCode: {StatusCode}",
+            context.TraceIdentifier, context.Response.StatusCode);
+});
 app.UseStatusCodePages();
 app.UseAuthentication();
 app.UseAuthorization();

@@ -1,0 +1,30 @@
+# Reference only. Configure keys in the Render dashboard; never store real values here.
+# No payment method on Render, Neon, Brevo or any auxiliary provider.
+ASPNETCORE_ENVIRONMENT=Production
+ASPNETCORE_HTTP_PORTS=8080
+PORT=8080
+# Replace with the exact assigned hostname (no scheme or path), never a guessed live URL.
+AllowedHosts=<assigned-service>.onrender.com
+
+# Backend-only Npgsql format, not a postgres:// URL. Use Neon direct endpoint + VerifyFull.
+# Set Host, Database, Username, Password, SSL Mode=VerifyFull, Maximum Pool Size=10.
+ConnectionStrings__CreatorFlow=
+Jwt__Issuer=CreatorFlow.SharedDev
+Jwt__Audience=CreatorFlow.WinForms.SharedDev
+# Base64, at least 32 random bytes; separate from local keys.
+Jwt__SigningKey=
+
+# Optional mail group; all fields must be valid to enable verification/reset.
+# Missing configuration means BLOCKED mail flows, never an Auth bypass.
+# Base64 of exactly 32 random bytes, separate from JWT/local keys.
+PasswordReset__VerifierKey=
+PasswordReset__Smtp__Host=smtp-relay.brevo.com
+PasswordReset__Smtp__Port=2525
+PasswordReset__Smtp__TlsMode=StartTls
+PasswordReset__Smtp__From=
+PasswordReset__Smtp__Username=
+PasswordReset__Smtp__Password=
+
+# Render supplies RENDER_GIT_COMMIT at build/runtime. Do not override it.
+# Do not set SOURCE_REVISION on Render; the Dockerfile defaults to RENDER_GIT_COMMIT.
+# Do not set connection/SMTP secrets as Docker ARGs or commit a filled copy of this file.

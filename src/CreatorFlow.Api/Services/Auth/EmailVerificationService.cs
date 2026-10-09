@@ -10,11 +10,13 @@ public sealed class EmailVerificationService
     private readonly EmailOtpCodeProtector? _resetProtector;
     private readonly IEmailSender? _emailSender;
     private readonly TimeProvider _timeProvider;
+    private readonly ILogger<EmailVerificationService> _logger;
     public EmailVerificationService(CreatorFlow.Api.Repositories.Auth.IUserRepository repository, CreatorFlow.Api.Authentication.CurrentAuthenticatedUser userSession,
-        EmailOtpCodeProtector? protector, IEmailSender? sender, TimeProvider? clock = null)
+        EmailOtpCodeProtector? protector, IEmailSender? sender, TimeProvider? clock = null, ILogger<EmailVerificationService>? logger = null)
     {
         userRepository = repository; session = userSession; _resetProtector = protector;
         _emailSender = sender; _timeProvider = clock ?? TimeProvider.System;
+        _logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<EmailVerificationService>.Instance;
     }
 
     public const int EmailVerificationResendSeconds = 60;
@@ -26,7 +28,11 @@ public sealed class EmailVerificationService
     {
         if (_resetProtector is null || _emailSender is not { IsConfigured: true } || session.IsAuthenticated) return false;
         try { return await userRepository.IsEmailVerificationSchemaReadyAsync(cancellationToken); }
-        catch (Exception exception) when (AuthRules.IsDatabaseError(exception, cancellationToken)) { return false; }
+        catch (Exception exception) when (AuthRules.IsDatabaseError(exception, cancellationToken))
+        {
+            _logger.LogWarning("Auth database readiness failed. FailureType: {FailureType}", exception.GetType().Name);
+            return false;
+        }
     }
 
     public Task<PasswordResetResult> ResendEmailVerificationAsync(string? email, CancellationToken cancellationToken = default) =>
@@ -70,9 +76,16 @@ public sealed class EmailVerificationService
                         delivered = await userRepository.MarkEmailVerificationDeliveredAsync(requestId, cancellationToken);
                         if (!delivered) await InvalidateUndeliveredVerificationAsync(requestId);
                     }
-                    catch (EmailDeliveryException) { await InvalidateUndeliveredVerificationAsync(requestId); }
+                    catch (EmailDeliveryException)
+                    {
+                        _logger.LogWarning("Email provider delivery failed. Operation: EmailVerification");
+                        await InvalidateUndeliveredVerificationAsync(requestId);
+                    }
                     catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-                    { await InvalidateUndeliveredVerificationAsync(requestId); }
+                    {
+                        _logger.LogWarning("Email provider delivery timed out. Operation: EmailVerification");
+                        await InvalidateUndeliveredVerificationAsync(requestId);
+                    }
                 }
             }
             TimeSpan remaining = TimeSpan.FromSeconds(10) - _timeProvider.GetElapsedTime(started);
