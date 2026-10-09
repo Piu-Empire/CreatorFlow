@@ -87,18 +87,13 @@ static class Program
 
         // AuthenticationApplicationContext binds the authenticated user; project selection belongs to SCRUM-25.
         CurrentSession.CurrentUserId = 0;
-        CurrentSession.CurrentUserName = string.Empty;
-        CurrentSession.CurrentProjectId = 0;
-        CurrentSession.CurrentProjectName = string.Empty;
+        CurrentSession.CurrentUserName = "Demo Owner";
+        CurrentSession.CurrentProjectId = 1;
+        CurrentSession.CurrentProjectName = "Creator Team";
 
         if (args.Length > 0 && args[0] == "--test")
         {
             using var testForm = new BoardForm(workflowService, boardRepo, reviewQueueRepo, activityRepo, memberRepo, contentService, myTaskService, scriptService);
-            // Explicit Board rendering harness only; this does not authenticate to the API.
-            CurrentSession.CurrentUserId = 1;
-            CurrentSession.CurrentUserName = "Demo Owner";
-            CurrentSession.CurrentProjectId = 1;
-            CurrentSession.CurrentProjectName = "Creator Team";
             var handle = testForm.Handle;
             testForm.Size = new Size(1440, 900);
             testForm.PerformLayout();
@@ -111,23 +106,11 @@ static class Program
             return;
         }
 
-        Application.Run(new BoardForm(workflowService, boardRepo, reviewQueueRepo, activityRepo, memberRepo, contentService, myTaskService, scriptService));
         try
         {
             using var api = ApiClient.Create(ApiClientConfiguration.Load());
             var session = new UserSession();
             var auth = new AuthApiFacade(api, session);
-            if (args.Length > 0 && args[0] == "--test")
-            {
-                // Diagnostic layout only: no authentication, project queries, or message loop.
-                using var testForm = new BoardForm(workflowService, boardRepo, reviewQueueRepo,
-                    activityRepo, memberRepo, contentService, myTaskService, scriptService, auth);
-                var handle = testForm.Handle;
-                testForm.Size = new Size(1440, 900);
-                testForm.PerformLayout();
-                Console.WriteLine("LAYOUT_OK: no-project Board shell created. Handle: " + handle);
-                return;
-            }
             using var context = new AuthenticationApplicationContext(auth, () =>
                 new BoardForm(workflowService, boardRepo, reviewQueueRepo, activityRepo, memberRepo, contentService, myTaskService, scriptService, auth));
             Application.Run(context);

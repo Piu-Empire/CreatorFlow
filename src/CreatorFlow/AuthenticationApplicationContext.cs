@@ -36,10 +36,11 @@ internal sealed class AuthenticationApplicationContext : ApplicationContext
         form.LoginSucceeded += (_, _) =>
         {
             if (!auth.Session.IsAuthenticated || auth.Session.CurrentUser is not { } user) return;
-            CurrentSession.CurrentUserId = user.UserId;
+            // Hardcode User #1 (Owner) để test (chọn dự án thật sẽ làm ở SCRUM-25)
+            CurrentSession.CurrentUserId = 1;
             CurrentSession.CurrentUserName = user.DisplayName;
-            CurrentSession.CurrentProjectId = 0;
-            CurrentSession.CurrentProjectName = string.Empty;
+            CurrentSession.CurrentProjectId = 1;
+            CurrentSession.CurrentProjectName = "Creator Team";
             Switch(createShell());
         };
         Switch(form);

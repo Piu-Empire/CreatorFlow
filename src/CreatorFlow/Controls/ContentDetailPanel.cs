@@ -825,7 +825,8 @@ public partial class ContentDetailPanel : UserControl
         _flowActions.Controls.Clear();
         if (_current == null) return;
 
-        var role = _memberRepo!.GetRole(_current.ProjectId, CurrentSession.CurrentUserId);
+        // Hardcode role Owner để test (sửa lại khi có màn chọn dự án thật - SCRUM-25)
+        var role = ProjectRole.Owner;
         var canReview = role == ProjectRole.Owner || role == ProjectRole.Manager;
 
         if (TaskRules.CanAssign(role) && _current.Status is not (ContentStatus.Published or ContentStatus.Archived))
