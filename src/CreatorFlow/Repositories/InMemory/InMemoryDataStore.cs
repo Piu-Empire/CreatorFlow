@@ -96,7 +96,6 @@ public static class InMemoryDataStore
         new() { Id = 12, ProjectId = 2, Title = "Task thuộc Project khác", Description = "Dùng để kiểm tra lọc theo Project.", Status = ContentStatus.Script, Priority = Priority.High, Deadline = DateTime.Today.AddDays(1), AssigneeUserId = 1, CreatedByUserId = 1, AssignedByUserId = 3, AssignmentStatus = AssignmentStatus.InProgress, ProgressPercent = 50 },
     };
 
-
     /// <summary>Assignment đang có (kể cả Cancelled để giữ lịch sử). Khởi tạo từ dữ liệu Contents mẫu phía trên.</summary>
     public static readonly List<InMemoryAssignmentRecord> Assignments = BuildSeedAssignments();
 

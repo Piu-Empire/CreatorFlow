@@ -24,9 +24,9 @@ public class SidebarControl : UserControl
     private bool _hasAuthenticatedAccount;
 
     public bool ProjectActionsEnabled { get; set; }
-    public int BacklogCount = 0;
+    public int BacklogCount = 28;
     public int MyWorkCount = 0;
-    public int ReviewQueueCount = 0;
+    public int ReviewQueueCount = 2;
 
     private enum NavIcon { Summary, Board, List, Calendar, Chart, Check, Review, Sparkle, Gear }
 
