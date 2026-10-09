@@ -101,6 +101,7 @@ public partial class BoardForm : Form, IMessageFilter
         _modulePageHeader.PlatformFilterChanged += (_, _) => ApplyFilters();
 
         _sidebarControl.ReviewQueueRequested += (_, _) => OpenReviewQueue();
+        _sidebarControl.BoardRequested += (_, _) => { CloseProfile(); ReloadBoard(); };
         _sidebarControl.MyTasksRequested += (_, _) => OpenMyTasks();
         _sidebarControl.BoardRequested += (_, _) => { CloseProfile(); ReloadBoard(); };
         UpdateProjectContext();
