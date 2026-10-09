@@ -12,6 +12,10 @@ deploy/docker/.env.*
 # Local application settings may contain development secrets
 appsettings.Local.json
 
+# Database backups must be stored outside the repository; ignore accidental copies.
+*.dump
+deploy/backups/
+
 # User-specific files
 *.rsuser
 *.suo
