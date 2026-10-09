@@ -4,6 +4,7 @@ using CreatorFlow.Repositories.Implementations;
 using CreatorFlow.Repositories.InMemory;
 using CreatorFlow.Repositories.Interfaces;
 using CreatorFlow.Services;
+using CreatorFlow.Services.AI;
 using CreatorFlow.ApiClients;
 using System.Runtime.Versioning;
 
@@ -44,6 +45,7 @@ static class Program
         IContentDetailsRepository detailsRepo;
         IMyTaskRepository myTaskRepo;
         IPlatformRepository platformRepo;
+        IContentScriptRepository scriptRepo;
 
         if (UseDatabase)
         {
@@ -59,6 +61,7 @@ static class Program
             detailsRepo = new ContentDetailsRepository(npgsqlUow);
             myTaskRepo = new MyTaskRepository(npgsqlUow);
             platformRepo = new PlatformRepository(npgsqlUow);
+            scriptRepo = new ContentScriptRepository(npgsqlUow);
         }
         else
         {
@@ -72,19 +75,17 @@ static class Program
             activityRepo = new InMemoryActivityRepository();
             detailsRepo = new InMemoryContentDetailsRepository();
             myTaskRepo = new InMemoryMyTaskRepository();
-        }
-
-        var workflowService = new WorkflowService(contentRepo, historyRepo, reviewRepo, memberRepo, uow);
-        var contentService = new ContentService(contentRepo, detailsRepo, historyRepo, memberRepo, uow, myTaskRepo);
-        var myTaskService = new MyTaskService(myTaskRepo, memberRepo, uow);
             platformRepo = new InMemoryPlatformRepository();
+            scriptRepo = new InMemoryContentScriptRepository();
         }
 
         var workflowService = new WorkflowService(contentRepo, historyRepo, reviewRepo, memberRepo, uow);
-        var contentService = new ContentService(contentRepo, detailsRepo, historyRepo, memberRepo, platformRepo, uow);
+        var contentService = new ContentService(contentRepo, detailsRepo, historyRepo, memberRepo, platformRepo, uow, myTaskRepo);
+        var myTaskService = new MyTaskService(myTaskRepo, memberRepo, uow);
+        // SCRUM-33: AI chưa có cài đặt thật nên dùng NotConfiguredAiService; thay bằng AIService thật khi có.
+        var scriptService = new ScriptService(scriptRepo, detailsRepo, platformRepo, memberRepo, myTaskRepo, uow, new NotConfiguredAiService());
 
-        // TODO: thay bằng màn Login + chọn Project thật (mục 18 UX spec: Login → Select Project).
-        // Tạm hardcode User #1 / Project #1 — khớp seed data ở cả schema.sql lẫn InMemoryDataStore.
+        // AuthenticationApplicationContext binds the authenticated user; project selection belongs to SCRUM-25.
         CurrentSession.CurrentUserId = 0;
         CurrentSession.CurrentUserName = string.Empty;
         CurrentSession.CurrentProjectId = 0;
@@ -92,13 +93,12 @@ static class Program
 
         if (args.Length > 0 && args[0] == "--test")
         {
-            using var testForm = new BoardForm(workflowService, boardRepo, reviewQueueRepo, activityRepo, memberRepo, contentService, myTaskService);
+            using var testForm = new BoardForm(workflowService, boardRepo, reviewQueueRepo, activityRepo, memberRepo, contentService, myTaskService, scriptService);
             // Explicit Board rendering harness only; this does not authenticate to the API.
             CurrentSession.CurrentUserId = 1;
             CurrentSession.CurrentUserName = "Demo Owner";
             CurrentSession.CurrentProjectId = 1;
             CurrentSession.CurrentProjectName = "Creator Team";
-            using var testForm = new BoardForm(workflowService, boardRepo, reviewQueueRepo, activityRepo, memberRepo, contentService);
             var handle = testForm.Handle;
             testForm.Size = new Size(1440, 900);
             testForm.PerformLayout();
@@ -111,14 +111,25 @@ static class Program
             return;
         }
 
-        Application.Run(new BoardForm(workflowService, boardRepo, reviewQueueRepo, activityRepo, memberRepo, contentService, myTaskService));
+        Application.Run(new BoardForm(workflowService, boardRepo, reviewQueueRepo, activityRepo, memberRepo, contentService, myTaskService, scriptService));
         try
         {
             using var api = ApiClient.Create(ApiClientConfiguration.Load());
             var session = new UserSession();
             var auth = new AuthApiFacade(api, session);
+            if (args.Length > 0 && args[0] == "--test")
+            {
+                // Diagnostic layout only: no authentication, project queries, or message loop.
+                using var testForm = new BoardForm(workflowService, boardRepo, reviewQueueRepo,
+                    activityRepo, memberRepo, contentService, myTaskService, scriptService, auth);
+                var handle = testForm.Handle;
+                testForm.Size = new Size(1440, 900);
+                testForm.PerformLayout();
+                Console.WriteLine("LAYOUT_OK: no-project Board shell created. Handle: " + handle);
+                return;
+            }
             using var context = new AuthenticationApplicationContext(auth, () =>
-                new BoardForm(workflowService, boardRepo, reviewQueueRepo, activityRepo, memberRepo, contentService, auth));
+                new BoardForm(workflowService, boardRepo, reviewQueueRepo, activityRepo, memberRepo, contentService, myTaskService, scriptService, auth));
             Application.Run(context);
         }
         catch (InvalidOperationException)

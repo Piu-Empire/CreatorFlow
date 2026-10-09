@@ -64,8 +64,9 @@ public partial class BoardForm : Form, IMessageFilter
         IActivityRepository activityRepository,
         IProjectMemberRepository memberRepository,
         ContentService contentService,
-        MyTaskService myTaskService)
-        ContentService contentService, AuthApiFacade? auth = null)
+        MyTaskService myTaskService,
+        ScriptService scriptService,
+        AuthApiFacade? auth = null)
     {
         InitializeComponent();
         _workflowService = workflowService;
@@ -78,7 +79,6 @@ public partial class BoardForm : Form, IMessageFilter
         _auth = auth;
         if (auth is not null)
         {
-            _topHeaderControl.AuthenticatedShell = true;
             _sidebarControl.SetAuthenticatedAccount(auth.Session.CurrentUser?.DisplayName ?? string.Empty,
                 auth.Session.CurrentUser?.Email ?? string.Empty, null);
             Shown += async (_, _) => await RefreshAuthenticatedAvatarAsync();
@@ -88,7 +88,7 @@ public partial class BoardForm : Form, IMessageFilter
         _pnlDrawerHost.Paint += PnlDrawerHost_Paint;
         BuildColumns();
 
-        _contentDetailPanel.Initialize(_workflowService, _activityRepository, _memberRepository, _contentService);
+        _contentDetailPanel.Initialize(_workflowService, _activityRepository, _memberRepository, _contentService, scriptService);
         _contentDetailPanel.ContentChanged += (_, _) => { ReloadBoard(); _toast.ShowToast(this, "Cap nhat thanh cong!"); };
         _contentDetailPanel.CloseRequested += (_, _) => CloseDrawer();
 
@@ -101,9 +101,11 @@ public partial class BoardForm : Form, IMessageFilter
         _modulePageHeader.PlatformFilterChanged += (_, _) => ApplyFilters();
 
         _sidebarControl.ReviewQueueRequested += (_, _) => OpenReviewQueue();
-        _sidebarControl.BoardRequested += (_, _) => ReloadBoard();
+        _sidebarControl.BoardRequested += (_, _) => { CloseProfile(); ReloadBoard(); };
         _sidebarControl.MyTasksRequested += (_, _) => OpenMyTasks();
         _sidebarControl.BoardRequested += (_, _) => { CloseProfile(); ReloadBoard(); };
+        UpdateProjectContext();
+        if (!HasProjectContext) ReloadBoard();
 
         Load += (_, _) =>
         {
@@ -165,20 +167,48 @@ public partial class BoardForm : Form, IMessageFilter
     // ==========================================================
     // Tải & lọc dữ liệu
     // ==========================================================
+    private bool HasProjectContext => CurrentSession.CurrentProjectId > 0 &&
+        (_auth is null || _auth.Session.IsAuthenticated);
+
+    private void UpdateProjectContext()
+    {
+        _topHeaderControl.SetProjectContext(HasProjectContext ? CurrentSession.CurrentProjectName : null,
+            HasProjectContext && _profile is null);
+        _sidebarControl.ProjectActionsEnabled = HasProjectContext;
+        _sidebarControl.Invalidate();
+    }
+
     private void ReloadBoard()
     {
-        if (_auth is not null && (!_auth.Session.IsAuthenticated || CurrentSession.CurrentProjectId <= 0))
+        UpdateProjectContext();
+        if (!HasProjectContext)
         {
+            _allCards.Clear();
+            _selectedContentId = null;
+            _selectedCardControl = null;
+            _sidebarControl.BacklogCount = _sidebarControl.MyWorkCount = _sidebarControl.ReviewQueueCount = 0;
             _modulePageHeader.Visible = false;
             _flowColumns.Visible = false;
             _pnlDrawerHost.Visible = false;
             if (_pnlBoardArea.Controls["noProjectContext"] is null)
-                _pnlBoardArea.Controls.Add(new Label { Name = "noProjectContext", Dock = DockStyle.Fill,
-                    Text = "Chưa có ngữ cảnh dự án. Bạn có thể quản lý Hồ sơ hoặc đăng xuất.",
-                    ForeColor = UITheme.Neutral600, BackColor = UITheme.Neutral50,
-                    TextAlign = ContentAlignment.MiddleCenter });
+                _pnlBoardArea.Controls.Add(new Label
+                {
+                    Name = "noProjectContext",
+                    Dock = DockStyle.Fill,
+                    Text = "Chưa chọn dự án. Bạn có thể mở Hồ sơ từ avatar bên trái để quản lý tài khoản hoặc đăng xuất.",
+                    ForeColor = UITheme.Neutral600,
+                    BackColor = UITheme.Neutral50,
+                    TextAlign = ContentAlignment.MiddleCenter
+                });
             return;
         }
+        if (_pnlBoardArea.Controls["noProjectContext"] is Control emptyState)
+        {
+            _pnlBoardArea.Controls.Remove(emptyState);
+            emptyState.Dispose();
+        }
+        _modulePageHeader.Visible = true;
+        _flowColumns.Visible = true;
         _allCards = _boardRepository.GetBoardCards(CurrentSession.CurrentProjectId);
         int overdueCount = _allCards.Count(c => c.IsOverdue);
         _topHeaderControl.UpdateStats(_allCards.Count, overdueCount);
@@ -253,6 +283,7 @@ public partial class BoardForm : Form, IMessageFilter
 
     private void SelectCard(KanbanCardControl cardCtrl)
     {
+        if (!HasProjectContext) return;
         // Đang mở thẻ khác và có thay đổi chưa lưu → hỏi trước khi chuyển (Clear() tự hiện hộp thoại xác nhận).
         if (_selectedContentId.HasValue && _selectedContentId != cardCtrl.Card.ContentId && _contentDetailPanel.HasUnsavedChanges)
         {
@@ -307,7 +338,7 @@ public partial class BoardForm : Form, IMessageFilter
 
     private void TryMoveNext(ContentBoardCard card)
     {
-        if (_auth is not null && (!_auth.Session.IsAuthenticated || CurrentSession.CurrentProjectId <= 0)) return;
+        if (!HasProjectContext) return;
         try
         {
             switch (card.Status)
@@ -347,10 +378,8 @@ public partial class BoardForm : Form, IMessageFilter
     // ==========================================================
     private void OpenCreateContentDialog(ContentStatus initialStatus = ContentStatus.Idea)
     {
+        if (!HasProjectContext || _profile is not null) return;
         var members = _contentService.GetAssignableMembers(CurrentSession.CurrentProjectId, CurrentSession.CurrentUserId);
-        using var dlg = new CreateContentDialog(members, initialStatus);
-        if (_auth is not null && (!_auth.Session.IsAuthenticated || CurrentSession.CurrentProjectId <= 0)) return;
-        var members = _contentService.GetMembers(CurrentSession.CurrentProjectId);
         using var dlg = new CreateContentDialog(members, _contentService.GetAvailablePlatforms(), initialStatus);
         if (dlg.ShowDialog(this) != DialogResult.OK) return;
 
@@ -374,6 +403,8 @@ public partial class BoardForm : Form, IMessageFilter
     /// <summary>Mở màn My Tasks; nếu người dùng bấm "Mở Content" thì mở drawer chi tiết Content đó trên Board.</summary>
     private void OpenMyTasks()
     {
+        if (!HasProjectContext) return;
+        CloseProfile();
         long? contentId;
         using (var tasksForm = new MyTasksForm(_myTaskService))
         {
@@ -388,6 +419,7 @@ public partial class BoardForm : Form, IMessageFilter
     /// <summary>Mở drawer chi tiết cho Content theo Id (kể cả khi thẻ đang bị ẩn bởi bộ lọc tìm kiếm/platform).</summary>
     private void OpenContentById(long contentId)
     {
+        if (!HasProjectContext) return;
         var card = _allCards.FirstOrDefault(c => c.ContentId == contentId);
         if (card is null)
         {
@@ -414,7 +446,7 @@ public partial class BoardForm : Form, IMessageFilter
 
     private void OpenReviewQueue()
     {
-        if (_auth is not null && (!_auth.Session.IsAuthenticated || CurrentSession.CurrentProjectId <= 0)) return;
+        if (!HasProjectContext) return;
         CloseProfile();
         using var queueForm = new Review.ReviewQueueForm(_reviewQueueRepository, _workflowService);
         queueForm.ShowDialog(this);
@@ -426,6 +458,7 @@ public partial class BoardForm : Form, IMessageFilter
         if (_auth is null || !_auth.Session.IsAuthenticated || _profile is not null) return;
         var profile = new ProfileControl(_auth) { Dock = DockStyle.Fill };
         _profile = profile;
+        UpdateProjectContext();
         profile.ProfileSaved += async saved =>
         {
             CurrentSession.CurrentUserName = saved.DisplayName;
@@ -450,6 +483,7 @@ public partial class BoardForm : Form, IMessageFilter
         profile.Dispose();
         _pnlBoardArea.Visible = true;
         _topHeaderControl.SetAuthenticatedPage("Board");
+        UpdateProjectContext();
     }
 
     private async Task RefreshAuthenticatedAvatarAsync()

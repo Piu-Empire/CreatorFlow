@@ -319,7 +319,7 @@ public sealed class ContentAssignmentTests
                 new InMemoryContentRepository(),
                 new InMemoryContentDetailsRepository(),
                 new InMemoryContentStatusHistoryRepository(),
-                members, uow, taskRepo);
+                members, new InMemoryPlatformRepository(), uow, taskRepo);
             var taskService = new MyTaskService(taskRepo, members, uow);
 
             contentService.AssignContent(newId,
@@ -375,7 +375,7 @@ public sealed class ContentAssignmentTests
                 new InMemoryContentRepository(),
                 new InMemoryContentDetailsRepository(),
                 new InMemoryContentStatusHistoryRepository(),
-                members, new InMemoryUnitOfWork(), taskRepo);
+                members, new InMemoryPlatformRepository(), new InMemoryUnitOfWork(), taskRepo);
 
             contentService.AssignContent(newId, new[] { Req(CreatorId), Req(OtherCreatorId) }, OwnerId);
             contentService.AssignContent(newId, new[] { Req(OtherCreatorId) }, OwnerId); // bỏ Creator #2
@@ -435,6 +435,7 @@ public sealed class ContentAssignmentTests
                 Details,
                 new FakeHistoryRepository(),
                 new FakeMemberRepository(),
+                new InMemoryPlatformRepository(),
                 Uow,
                 Tasks));
         }
@@ -499,6 +500,8 @@ public sealed class ContentAssignmentTests
         }
 
         public void Update(long contentId, ContentDraft draft) { }
+
+        public Content? GetDetail(long contentId) => null;
     }
 
     private sealed class FakeHistoryRepository : IContentStatusHistoryRepository

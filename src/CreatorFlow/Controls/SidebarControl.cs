@@ -23,6 +23,7 @@ public class SidebarControl : UserControl
     private bool _accountHovered;
     private bool _hasAuthenticatedAccount;
 
+    public bool ProjectActionsEnabled { get; set; }
     public int BacklogCount = 28;
     public int MyWorkCount = 0;
     public int ReviewQueueCount = 2;
@@ -169,7 +170,7 @@ public class SidebarControl : UserControl
         bool anyHover = false;
         foreach (var item in _items)
         {
-            bool hovered = GetItemRect(item).Contains(e.Location);
+            bool hovered = (ProjectActionsEnabled || item.Icon == NavIcon.Board) && GetItemRect(item).Contains(e.Location);
             anyHover |= hovered && item.Action != null;
             if (item.IsHovered != hovered) { item.IsHovered = hovered; needsRepaint = true; }
         }
@@ -190,7 +191,8 @@ public class SidebarControl : UserControl
         base.OnMouseClick(e);
         foreach (var item in _items)
         {
-            if (GetItemRect(item).Contains(e.Location)) { item.Action?.Invoke(); break; }
+            if ((ProjectActionsEnabled || item.Icon == NavIcon.Board) && GetItemRect(item).Contains(e.Location))
+            { item.Action?.Invoke(); break; }
         }
     }
 
@@ -224,13 +226,11 @@ public class SidebarControl : UserControl
         using (var avBrush = new SolidBrush(UITheme.White))
         using (var avPath = UITheme.CreateRoundedRectanglePath(av, 8))
             g.FillPath(avBrush, avPath);
-        TextRenderer.DrawText(g, "SA", UITheme.FontLabelBold, av, UITheme.Black,
+        TextRenderer.DrawText(g, "—", UITheme.FontLabelBold, av, UITheme.Black,
             TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
 
-        TextRenderer.DrawText(g, "Studio Alpha", UITheme.FontBodyBold, new Rectangle(av.Right + 10, card.Y + 11, card.Width - 90, 20), UITheme.White, tf);
-        TextRenderer.DrawText(g, "Q3 Release", UITheme.FontLabel, new Rectangle(av.Right + 10, card.Y + 31, card.Width - 90, 18), UITheme.SidebarTextMuted, tf);
-        UIIcons.Chevron(g, new Rectangle(card.Right - 34, card.Y + 12, 22, 18), ChevronDir.Up, UITheme.SidebarText, 1.6f);
-        UIIcons.Chevron(g, new Rectangle(card.Right - 34, card.Y + 28, 22, 18), ChevronDir.Down, UITheme.SidebarText, 1.6f);
+        TextRenderer.DrawText(g, "Chưa chọn dự án", UITheme.FontBodyBold, new Rectangle(av.Right + 10, card.Y + 11, card.Width - 70, 20), UITheme.White, tf);
+        TextRenderer.DrawText(g, "Chưa có ngữ cảnh dự án", UITheme.FontLabel, new Rectangle(av.Right + 10, card.Y + 31, card.Width - 70, 18), UITheme.SidebarTextMuted, tf);
         }
 
         // 3. Nhãn nhóm
@@ -259,14 +259,15 @@ public class SidebarControl : UserControl
                 g.FillRectangle(bar, rect.X, rect.Y + 8, 3, rect.Height - 16);
             }
 
-            Color fg = (item.IsActive || item.IsHovered) ? UITheme.White : UITheme.SidebarText;
+            Color fg = !ProjectActionsEnabled && item.Icon != NavIcon.Board ? UITheme.SidebarTextFaint :
+                (item.IsActive || item.IsHovered) ? UITheme.White : UITheme.SidebarText;
             var iconRect = new Rectangle(rect.X + 14, rect.Y + (ItemH - 22) / 2, 22, 22);
             DrawNavIcon(g, item.Icon, iconRect, fg);
 
             var font = item.IsActive ? UITheme.FontBodyBold : UITheme.FontNav;
             TextRenderer.DrawText(g, item.Title, font, new Rectangle(rect.X + 48, rect.Y, rect.Width - 100, rect.Height), fg, tf);
 
-            int badge = item.Badge?.Invoke() ?? 0;
+            int badge = ProjectActionsEnabled ? item.Badge?.Invoke() ?? 0 : 0;
             if (badge > 0)
             {
                 string t = badge.ToString();
