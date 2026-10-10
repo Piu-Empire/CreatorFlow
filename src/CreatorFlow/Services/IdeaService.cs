@@ -15,6 +15,9 @@ namespace CreatorFlow.Services;
 ///   - Tag được chuẩn hóa (bỏ '#', gộp khoảng trắng, loại trùng không phân biệt hoa/thường) và dùng lại đúng cách viết
 ///     của tag đã có trong Project.
 ///   - Ghi nhiều bảng (ideas + tags + idea_tags) luôn nằm trong một transaction.
+///   - Chuyển Idea thành Content (SCRUM-31): tạo Content ở trạng thái Idea mang tiêu đề/mô tả/tag, giữ liên kết nguồn
+///     (contents.source_idea_id), đặt Idea sang Converted và ghi lịch sử Content — tất cả trong một transaction.
+///     Idea gốc không bị xóa hay mất dữ liệu.
 /// </summary>
 public class IdeaService
 {
@@ -26,12 +29,18 @@ public class IdeaService
 
     private readonly IIdeaRepository _ideaRepo;
     private readonly IProjectMemberRepository _memberRepo;
+    private readonly IContentStatusHistoryRepository _historyRepo;
     private readonly IUnitOfWork _unitOfWork;
 
-    public IdeaService(IIdeaRepository ideaRepo, IProjectMemberRepository memberRepo, IUnitOfWork unitOfWork)
+    public IdeaService(
+        IIdeaRepository ideaRepo,
+        IProjectMemberRepository memberRepo,
+        IContentStatusHistoryRepository historyRepo,
+        IUnitOfWork unitOfWork)
     {
         _ideaRepo = ideaRepo;
         _memberRepo = memberRepo;
+        _historyRepo = historyRepo;
         _unitOfWork = unitOfWork;
     }
 
@@ -68,6 +77,9 @@ public class IdeaService
 
     public bool CanDelete(Idea idea, long userId) =>
         IdeaRules.CanDelete(_memberRepo.GetRole(idea.ProjectId, userId), idea, userId);
+
+    public bool CanConvert(Idea idea, long userId) =>
+        IdeaRules.CanConvert(_memberRepo.GetRole(idea.ProjectId, userId), idea, userId);
 
     // ---------- Validation ----------
 
@@ -155,6 +167,55 @@ public class IdeaService
         {
             _ideaRepo.Update(ideaId, draft);
             _unitOfWork.Commit();
+        }
+        catch
+        {
+            _unitOfWork.Rollback();
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Chuyển Idea thành Content mới (trạng thái Idea trên Production Board), trả về Id Content mới.
+    /// Content mang tiêu đề, mô tả và tag của Idea; ghi chú nội bộ của Idea ở lại Idea. Idea gốc được giữ lại,
+    /// chuyển sang Converted và truy ngược được từ Content qua source_idea_id và dòng lịch sử "Tạo từ IDEA-xxx".
+    /// </summary>
+    public long ConvertToContent(long ideaId, long userId)
+    {
+        var idea = GetIdeaOrThrow(ideaId);
+        var role = EnsureIsProjectMember(idea.ProjectId, userId);
+
+        if (!IdeaRules.CanEdit(role, idea, userId))
+            throw new UnauthorizedWorkflowActionException("Bạn chỉ được chuyển Idea do chính mình tạo thành Content.");
+
+        IdeaRules.ValidateConvertible(idea.Status);
+
+        // Giới hạn của Content chặt hơn của Idea (tiêu đề 200 < 250): báo rõ thay vì cắt bớt âm thầm.
+        if (idea.Title.Length > ContentService.MaxTitleLength)
+            throw new IdeaValidationException(
+                $"Tiêu đề Idea dài {idea.Title.Length} ký tự, vượt giới hạn {ContentService.MaxTitleLength} ký tự của Content. Hãy rút gọn tiêu đề rồi chuyển lại.");
+        if (idea.Description.Length > ContentService.MaxDescriptionLength)
+            throw new IdeaValidationException(
+                $"Mô tả Idea dài {idea.Description.Length} ký tự, vượt giới hạn {ContentService.MaxDescriptionLength} ký tự của Content. Hãy rút gọn mô tả rồi chuyển lại.");
+
+        _unitOfWork.Begin();
+        try
+        {
+            long contentId = _ideaRepo.ConvertToContent(ideaId, ContentService.DefaultContentType, userId)
+                ?? throw new IdeaValidationException("Idea này vừa được chuyển hoặc không còn ở trạng thái có thể chuyển. Hãy tải lại danh sách.");
+
+            _historyRepo.Add(new ContentStatusHistory
+            {
+                ContentId = contentId,
+                FromStatus = ContentStatus.Idea,
+                ToStatus = ContentStatus.Idea,
+                ChangedByUserId = userId,
+                ChangedAt = DateTime.UtcNow,
+                Note = $"Tạo từ {idea.Code} — {idea.Title}",
+            });
+
+            _unitOfWork.Commit();
+            return contentId;
         }
         catch
         {

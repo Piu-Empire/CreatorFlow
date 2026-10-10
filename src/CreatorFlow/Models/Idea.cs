@@ -22,6 +22,9 @@ public sealed class Idea
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 
+    /// <summary>Content đã được tạo từ Idea này (contents.source_idea_id). null = chưa chuyển.</summary>
+    public long? ConvertedContentId { get; set; }
+
     /// <summary>Mã hiển thị, ví dụ IDEA-001.</summary>
     public string Code => $"IDEA-{IdeaId:000}";
 }
