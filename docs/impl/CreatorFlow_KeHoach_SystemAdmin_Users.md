@@ -246,6 +246,7 @@
 * [ ] Bước 0 hoàn tất: migration `06` đã apply + `verify_auth_schema.sql` pass trên DB dùng để test. ⏳ Chưa làm được ở máy này (không có Docker/Postgres) — Phú chạy khi có DB.
 * [ ] Mỗi lần khóa/mở đều sinh đúng 1 dòng `audit_logs` (kiểm bằng TC-16). ⏳ Cần DB thật.
 * [ ] Vượt qua toàn bộ 27/27 test case trong Ma trận kiểm thử. ⏳ Phần không-DB đã xong (validate service, parse status, 403/404/400/503 qua unit test); phần cần DB/API/UI thật chờ môi trường.
+* [ ] Khôi phục sau test local theo mục 10 (xóa user fake + audit test + container + file tạm), ghi evidence vào PR.
 
 **Hardening P2 — ngoài phạm vi merge, làm khi có thời gian (ghi nhận, không chặn nghiệm thu):**
 * Rate limit cho group `/api/admin` (middleware `RateLimiter` của ASP.NET — hiện chưa có).
@@ -282,3 +283,22 @@ Mỗi lần khóa/mở, ngoài việc đổi trạng thái còn phải ghi một
 
 **7. Cái gì cố tình KHÔNG làm (để khỏi phình scope):**
 không thêm claim admin vào JWT (đụng tới login của cả hệ thống — story riêng), không cho đổi sang `DISABLED` qua màn hình này (tránh vô hiệu hóa nhầm không cứu được), không phân trang cursor hay thêm cột audit mới (cap số + nhét vào `description` là đủ cho quy mô này), không tự xóa warnings cũ của repo. Ba món để dành sau merge: rate limit (ưu tiên cổng login trước), bắt nhập lại mật khẩu khi khóa admin khác, và `SslMode=Require` nếu DB không nằm cùng máy API. Hai bug ngoài lề phát hiện khi đọc code (`TaskEndpoints` chưa được `Map` trong `Program.cs` nên routes chết; `BoardRequested` subscribe trùng 2 lần) cũng để story khác, chỉ ghi chú để Phú biết.
+
+---
+
+## 10. Kế Hoạch Khôi Phục Sau Test Local (Bắt Buộc, Không Được Giữ Fake)
+
+> Tài khoản fake (`admin.local@test.dev`, `creator.local@test.dev`, mật khẩu `Admin123!`) chỉ tồn tại để test màn hình admin trên **Postgres disposable local** (`creatorflow-local-pg`). Test xong phải xóa sạch. Tuyệt đối không chạy seed fake trên Neon/DEV chung, không commit file fake vào repo (file seed nằm ngoài repo tại `%TEMP%\opencode\seed_fake_local.sql`).
+
+**Checklist khôi phục (làm ngay sau khi test xong, trước khi xin review PR):**
+* [ ] Xóa 2 user fake: `DELETE FROM users WHERE email LIKE '%@test.dev';` rồi xác nhận `SELECT COUNT(*) FROM users WHERE email LIKE '%@test.dev';` = 0.
+* [ ] Xóa audit sinh ra lúc test (gắn với 2 user trên): `DELETE FROM audit_logs WHERE entity_type = 'users' AND entity_id NOT IN (SELECT user_id FROM users);`
+* [ ] Dừng + xóa container: `docker stop creatorflow-local-pg && docker rm creatorflow-local-pg` (data trong container mất theo — đúng ý đồ disposable).
+* [ ] Xóa file tạm ngoài repo: `%TEMP%\opencode\seed_fake_local.sql`, `%TEMP%\opencode\hashgen\`, `%TEMP%\opencode\genkeys.py`.
+* [ ] Xác nhận: `docker ps -a` không còn container trên; `git status` không có file fake nào lọt vào repo.
+* [ ] Người thực hiện + ngày giờ xóa: ghi 1 dòng vào PR (evidence đã dọn).
+
+**Rào chắn để fake không bao giờ lọt lên DEV:**
+* File seed fake không nằm trong `database/`, không được `git add` (đã kiểm: `git status -- database/` trống).
+* Mật khẩu fake (`Admin123!`) không trùng bất kỳ mật khẩu thật nào của team.
+* Nếu sau này cần test lại: dựng lại container mới từ đầu (5 phút), không "giữ lại cho tiện".
