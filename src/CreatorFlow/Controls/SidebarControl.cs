@@ -14,6 +14,7 @@ public class SidebarControl : UserControl
     public event EventHandler? ReviewQueueRequested;
     public event EventHandler? BoardRequested;
     public event EventHandler? MyTasksRequested;
+    public event EventHandler? IdeaBankRequested;
     public event EventHandler? ProfileRequested;
 
     private readonly Button _accountButton;
@@ -24,9 +25,9 @@ public class SidebarControl : UserControl
     private bool _hasAuthenticatedAccount;
 
     public bool ProjectActionsEnabled { get; set; }
-    public int BacklogCount = 28;
+    public int BacklogCount = 0;
     public int MyWorkCount = 0;
-    public int ReviewQueueCount = 2;
+    public int ReviewQueueCount = 0;
 
     private enum NavIcon { Summary, Board, List, Calendar, Chart, Check, Review, Sparkle, Gear }
 
@@ -53,10 +54,20 @@ public class SidebarControl : UserControl
         BackColor = UITheme.Black;
         DoubleBuffered = true;
         BuildNavItems();
-        _accountButton = new Button { Name = "authenticatedAccount", Text = string.Empty,
-            Bounds = new Rectangle(14, 68, Width - 28, 60), Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
-            FlatStyle = FlatStyle.Flat, BackColor = UITheme.Black, UseVisualStyleBackColor = false,
-            Cursor = Cursors.Hand, Visible = false, TabIndex = 0, AccessibleRole = AccessibleRole.PushButton };
+        _accountButton = new Button
+        {
+            Name = "authenticatedAccount",
+            Text = string.Empty,
+            Bounds = new Rectangle(14, 68, Width - 28, 60),
+            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
+            FlatStyle = FlatStyle.Flat,
+            BackColor = UITheme.Black,
+            UseVisualStyleBackColor = false,
+            Cursor = Cursors.Hand,
+            Visible = false,
+            TabIndex = 0,
+            AccessibleRole = AccessibleRole.PushButton
+        };
         _accountButton.FlatAppearance.BorderSize = 0;
         _accountButton.Paint += PaintAccount;
         _accountButton.MouseEnter += (_, _) => { _accountHovered = true; _accountButton.Invalidate(); };
@@ -140,7 +151,7 @@ public class SidebarControl : UserControl
         _groups.Add(("PROJECT", y)); y += 26;
         _items.Add(new NavItem { Title = "Summary", Icon = NavIcon.Summary, Y = y }); y += ItemStep;
         _items.Add(new NavItem { Title = "Board", Icon = NavIcon.Board, Y = y, IsActive = true, Action = () => BoardRequested?.Invoke(this, EventArgs.Empty) }); y += ItemStep;
-        _items.Add(new NavItem { Title = "Backlog", Icon = NavIcon.List, Y = y, Badge = () => BacklogCount }); y += ItemStep;
+        _items.Add(new NavItem { Title = "Backlog", Icon = NavIcon.List, Y = y, Badge = () => BacklogCount, Action = () => IdeaBankRequested?.Invoke(this, EventArgs.Empty) }); y += ItemStep;
         _items.Add(new NavItem { Title = "Calendar", Icon = NavIcon.Calendar, Y = y }); y += ItemStep;
         _items.Add(new NavItem { Title = "Reports", Icon = NavIcon.Chart, Y = y }); y += ItemStep;
 
@@ -213,24 +224,24 @@ public class SidebarControl : UserControl
         // 2. Project selector
         if (!_hasAuthenticatedAccount)
         {
-        var card = new Rectangle(14, 68, Width - 28, 60);
-        using (var cBrush = new SolidBrush(ColorTranslator.FromHtml("#171717")))
-        using (var cPen = new Pen(ColorTranslator.FromHtml("#262626"), 1f))
-        using (var cPath = UITheme.CreateRoundedRectanglePath(new Rectangle(card.X, card.Y, card.Width - 1, card.Height - 1), 10))
-        {
-            g.FillPath(cBrush, cPath);
-            g.DrawPath(cPen, cPath);
-        }
+            var card = new Rectangle(14, 68, Width - 28, 60);
+            using (var cBrush = new SolidBrush(ColorTranslator.FromHtml("#171717")))
+            using (var cPen = new Pen(ColorTranslator.FromHtml("#262626"), 1f))
+            using (var cPath = UITheme.CreateRoundedRectanglePath(new Rectangle(card.X, card.Y, card.Width - 1, card.Height - 1), 10))
+            {
+                g.FillPath(cBrush, cPath);
+                g.DrawPath(cPen, cPath);
+            }
 
-        var av = new Rectangle(card.X + 12, card.Y + 12, 36, 36);
-        using (var avBrush = new SolidBrush(UITheme.White))
-        using (var avPath = UITheme.CreateRoundedRectanglePath(av, 8))
-            g.FillPath(avBrush, avPath);
-        TextRenderer.DrawText(g, "—", UITheme.FontLabelBold, av, UITheme.Black,
-            TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+            var av = new Rectangle(card.X + 12, card.Y + 12, 36, 36);
+            using (var avBrush = new SolidBrush(UITheme.White))
+            using (var avPath = UITheme.CreateRoundedRectanglePath(av, 8))
+                g.FillPath(avBrush, avPath);
+            TextRenderer.DrawText(g, "—", UITheme.FontLabelBold, av, UITheme.Black,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
 
-        TextRenderer.DrawText(g, "Chưa chọn dự án", UITheme.FontBodyBold, new Rectangle(av.Right + 10, card.Y + 11, card.Width - 70, 20), UITheme.White, tf);
-        TextRenderer.DrawText(g, "Chưa có ngữ cảnh dự án", UITheme.FontLabel, new Rectangle(av.Right + 10, card.Y + 31, card.Width - 70, 18), UITheme.SidebarTextMuted, tf);
+            TextRenderer.DrawText(g, "Chưa chọn dự án", UITheme.FontBodyBold, new Rectangle(av.Right + 10, card.Y + 11, card.Width - 70, 20), UITheme.White, tf);
+            TextRenderer.DrawText(g, "Chưa có ngữ cảnh dự án", UITheme.FontLabel, new Rectangle(av.Right + 10, card.Y + 31, card.Width - 70, 18), UITheme.SidebarTextMuted, tf);
         }
 
         // 3. Nhãn nhóm
