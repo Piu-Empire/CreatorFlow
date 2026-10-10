@@ -17,6 +17,11 @@ public sealed class ApiClientConfiguration
             throw new InvalidOperationException("Api:BaseUrl must be an absolute HTTP/HTTPS URL without credentials, query or fragment.");
         }
 
+        if (uri.Scheme == Uri.UriSchemeHttp && !uri.IsLoopback)
+        {
+            throw new InvalidOperationException("Api:BaseUrl must use HTTPS outside localhost so JWTs never travel in cleartext.");
+        }
+
         if (!double.IsFinite(timeoutSeconds) || timeoutSeconds <= 0
             || timeoutSeconds > int.MaxValue / 1000d)
         {

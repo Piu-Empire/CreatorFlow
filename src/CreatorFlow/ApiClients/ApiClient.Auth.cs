@@ -84,14 +84,14 @@ public sealed partial class ApiClient
             if (root.TryGetProperty("code", out var codeValue) && codeValue.ValueKind == JsonValueKind.String)
             {
                 string? value = codeValue.GetString();
-                string[] allowed = ["validation", "email_in_use", "email_unavailable", "reset_unavailable", "invalid_credentials", "account_ineligible", "email_verification_required", "verification_request_failed", "invalid_verification", "reset_request_failed", "invalid_reset", "unauthorized", "avatar_not_found", "avatar_unavailable", "service_unavailable"];
+                string[] allowed = ["validation", "email_in_use", "email_unavailable", "reset_unavailable", "invalid_credentials", "account_ineligible", "email_verification_required", "verification_request_failed", "invalid_verification", "reset_request_failed", "invalid_reset", "unauthorized", "avatar_not_found", "avatar_unavailable", "service_unavailable", "forbidden", "not_found", "self_lock", "last_active_admin"];
                 if (value is not null && allowed.Contains(value))
                 {
                     code = value;
                     if (root.TryGetProperty("title", out var title) && title.ValueKind == JsonValueKind.String && title.GetString() is { Length: > 0 and <= 300 } safeTitle && !safeTitle.Contains('\n')) message = safeTitle;
                     if (root.TryGetProperty("errors", out var errors) && errors.ValueKind == JsonValueKind.Object)
                     {
-                        string[] fields = ["Email", "DisplayName", "Password", "ConfirmPassword", "CurrentPassword", "NewPassword", "AvatarUrl", "Code"];
+                        string[] fields = ["Email", "DisplayName", "Password", "ConfirmPassword", "CurrentPassword", "NewPassword", "AvatarUrl", "Code", "Search", "Status", "Limit", "Offset"];
                         foreach (string candidate in fields) if (errors.TryGetProperty(candidate, out _)) { field = candidate; break; }
                     }
                     if (root.TryGetProperty("requestId", out var id) && id.ValueKind == JsonValueKind.String && Guid.TryParse(id.GetString(), out var parsed)) requestId = parsed;

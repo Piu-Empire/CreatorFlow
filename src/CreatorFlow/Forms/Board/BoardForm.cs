@@ -33,6 +33,7 @@ public partial class BoardForm : Form, IMessageFilter
     private readonly MyTaskService _myTaskService;
     private readonly AuthApiFacade? _auth;
     private ProfileControl? _profile;
+    private AdminUserManagementControl? _admin;
     private readonly CancellationTokenSource _authLifetime = new();
     private int _avatarGeneration;
 
@@ -81,8 +82,10 @@ public partial class BoardForm : Form, IMessageFilter
         {
             _sidebarControl.SetAuthenticatedAccount(auth.Session.CurrentUser?.DisplayName ?? string.Empty,
                 auth.Session.CurrentUser?.Email ?? string.Empty, null);
+            _sidebarControl.SetSystemAdmin(auth.Session.CurrentUser?.IsSystemAdmin == true);
             Shown += async (_, _) => await RefreshAuthenticatedAvatarAsync();
             _sidebarControl.ProfileRequested += async (_, _) => await OpenProfileAsync();
+            _sidebarControl.AdminWorkspaceRequested += async (_, _) => await OpenAdminAsync();
         }
 
         _pnlDrawerHost.Paint += PnlDrawerHost_Paint;
@@ -101,9 +104,9 @@ public partial class BoardForm : Form, IMessageFilter
         _modulePageHeader.PlatformFilterChanged += (_, _) => ApplyFilters();
 
         _sidebarControl.ReviewQueueRequested += (_, _) => OpenReviewQueue();
-        _sidebarControl.BoardRequested += (_, _) => { CloseProfile(); ReloadBoard(); };
+        _sidebarControl.BoardRequested += (_, _) => { CloseProfile(); CloseAdmin(); ReloadBoard(); };
         _sidebarControl.MyTasksRequested += (_, _) => OpenMyTasks();
-        _sidebarControl.BoardRequested += (_, _) => { CloseProfile(); ReloadBoard(); };
+        _sidebarControl.BoardRequested += (_, _) => { CloseProfile(); CloseAdmin(); ReloadBoard(); };
         UpdateProjectContext();
         if (!HasProjectContext) ReloadBoard();
 
@@ -405,6 +408,7 @@ public partial class BoardForm : Form, IMessageFilter
     {
         if (!HasProjectContext) return;
         CloseProfile();
+        CloseAdmin();
         long? contentId;
         using (var tasksForm = new MyTasksForm(_myTaskService))
         {
@@ -448,6 +452,7 @@ public partial class BoardForm : Form, IMessageFilter
     {
         if (!HasProjectContext) return;
         CloseProfile();
+        CloseAdmin();
         using var queueForm = new Review.ReviewQueueForm(_reviewQueueRepository, _workflowService);
         queueForm.ShowDialog(this);
         ReloadBoard();
@@ -456,6 +461,7 @@ public partial class BoardForm : Form, IMessageFilter
     private async Task OpenProfileAsync()
     {
         if (_auth is null || !_auth.Session.IsAuthenticated || _profile is not null) return;
+        CloseAdmin();
         var profile = new ProfileControl(_auth) { Dock = DockStyle.Fill };
         _profile = profile;
         UpdateProjectContext();
@@ -481,6 +487,33 @@ public partial class BoardForm : Form, IMessageFilter
         _profile = null;
         _pnlMain.Controls.Remove(profile);
         profile.Dispose();
+        _pnlBoardArea.Visible = true;
+        _topHeaderControl.SetAuthenticatedPage("Board");
+        UpdateProjectContext();
+    }
+
+    private async Task OpenAdminAsync()
+    {
+        if (_auth is null || !_auth.Session.IsAuthenticated || _admin is not null) return;
+        if (_auth.Session.CurrentUser?.IsSystemAdmin != true) return;
+        CloseProfile();
+        var admin = new AdminUserManagementControl(_auth) { Dock = DockStyle.Fill };
+        _admin = admin;
+        _pnlDrawerHost.Visible = false;
+        _pnlBoardArea.Visible = false;
+        _pnlMain.Controls.Add(admin);
+        admin.BringToFront();
+        _topHeaderControl.SetAuthenticatedPage("Quản trị hệ thống");
+        await admin.LoadUsersAsync();
+    }
+
+    private void CloseAdmin()
+    {
+        if (_admin is null) return;
+        AdminUserManagementControl admin = _admin;
+        _admin = null;
+        _pnlMain.Controls.Remove(admin);
+        admin.Dispose();
         _pnlBoardArea.Visible = true;
         _topHeaderControl.SetAuthenticatedPage("Board");
         UpdateProjectContext();

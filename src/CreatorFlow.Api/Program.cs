@@ -4,6 +4,9 @@ using CreatorFlow.Api.Services;
 using CreatorFlow.Data;
 using CreatorFlow.Repositories;
 using CreatorFlow.Api.Authentication;
+using CreatorFlow.Api.Repositories.Admin;
+using CreatorFlow.Api.Services.Admin;
+using Microsoft.AspNetCore.Authorization;
 using CreatorFlow.Api.Configuration;
 using CreatorFlow.Api.Services.Auth;
 using CreatorFlow.Api.Repositories.Auth;
@@ -29,6 +32,12 @@ builder.Services.AddScoped(services => new PasswordResetService(services.GetRequ
     services.GetRequiredService<ILogger<PasswordResetService>>()));
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<UserService>();
+builder.Services.AddScoped<IAdminUserRepository, AdminUserRepository>();
+builder.Services.AddScoped<AdminUserService>();
+builder.Services.AddAuthorizationBuilder().AddPolicy("SystemAdminOnly", policy =>
+    policy.RequireAssertion(context =>
+        context.Resource is HttpContext http &&
+        http.RequestServices.GetRequiredService<CurrentAuthenticatedUser>().User is { IsSystemAdmin: true }));
 builder.Services.AddSingleton<IAvatarImageProcessor, AvatarImageProcessor>();
 
 builder.Services.AddSingleton<IDbConnectionFactory>(new NpgsqlConnectionFactory(connectionString));
@@ -63,6 +72,7 @@ app.UseAuthorization();
 app.MapHealthEndpoints();
 app.MapAuthEndpoints();
 app.MapUserEndpoints();
+app.MapAdminEndpoints();
 app.Run();
 
 public partial class Program { }
