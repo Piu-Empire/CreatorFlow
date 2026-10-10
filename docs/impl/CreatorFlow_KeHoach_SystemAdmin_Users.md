@@ -243,9 +243,9 @@
 * [x] Toàn bộ Solution biên dịch thành công, không errors và không warnings **mới** (API: 0/0; client chỉ còn warnings cũ có sẵn).
 * [x] 13 unit test mới cho service pass, toàn bộ 111 test không-DB pass, không regression.
 * [x] Review code (không cần chạy): mọi endpoint trong group `/api/admin` tự kế thừa policy — đã xác minh `AdminEndpoints.cs` dùng `MapGroup(...).RequireAuthorization("SystemAdminOnly")` (AUTH-03).
-* [ ] Bước 0 hoàn tất: migration `06` đã apply + `verify_auth_schema.sql` pass trên DB dùng để test. ⏳ Chưa làm được ở máy này (không có Docker/Postgres) — Phú chạy khi có DB.
-* [ ] Mỗi lần khóa/mở đều sinh đúng 1 dòng `audit_logs` (kiểm bằng TC-16). ⏳ Cần DB thật.
-* [ ] Vượt qua toàn bộ 27/27 test case trong Ma trận kiểm thử. ⏳ Phần không-DB đã xong (validate service, parse status, 403/404/400/503 qua unit test); phần cần DB/API/UI thật chờ môi trường.
+* [x] Bước 0 hoàn tất trên DB local disposable (01→04→05→06 + `verify_auth_schema.sql` = `auth_schema_verified`). E2E sống: khóa → token cũ 401 → login 403 → mở → login lại OK. ⚠️ Neon DEV chung vẫn phải verify lại trước merge.
+* [x] Mỗi lần khóa/mở đều sinh đúng 1 dòng `audit_logs` — đã thấy `USER_LOCK`/`USER_UNLOCK` thật trên DB local (TC-16).
+* [ ] Vượt qua toàn bộ 27/27 test case trong Ma trận kiểm thử. Đã xong: unit (validate, parse, 403/404/400/503) + sống API local (TC-06,07,08,09,16). Còn lại: click UI tay (TC-02,03,04,05,10,13,17), đồng thời (TC-23,24), DB chết (TC-25), client-https (TC-27).
 * [ ] Khôi phục sau test local theo mục 10 (xóa user fake + audit test + container + file tạm), ghi evidence vào PR.
 
 **Hardening P2 — ngoài phạm vi merge, làm khi có thời gian (ghi nhận, không chặn nghiệm thu):**
