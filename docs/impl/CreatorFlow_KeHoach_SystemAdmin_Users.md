@@ -181,15 +181,15 @@
 
 ### Bước 5: Thiết kế Giao diện WinForms (`AdminUserManagementControl`)
 * **Vị trí:** `src/CreatorFlow/Controls/AdminUserManagementControl.cs`
-* **Bố cục giao diện theo `UITheme` (Dark Minimalist):**
-  * **Header:** Tiêu đề "Quản trị hệ thống — Quản lý tài khoản".
-  * **Toolbar:**
-    * `TextBox txtSearch`: Placeholder "Tìm kiếm theo email hoặc tên hiển thị...".
-    * `ComboBox cboStatus`: Bộ lọc `["Tất cả", "ACTIVE", "LOCKED", "DISABLED"]`.
-    * `Button btnRefresh`: Làm mới danh sách.
-  * **DataGridView dgvUsers:**
+* **Bố cục giao diện theo Page Header chuẩn (style guide mục 26) + `UITheme`:**
+  * **Header card:** H1 + badge pill "System Admin" + dòng mô tả.
+  * **Toolbar (thứ tự cố định):** ô tìm kiếm bọc `RoundedPanel` (viền `#D4D4D4`, bo 8px) → `SegmentedControl` lọc `["Tất cả", "ACTIVE", "LOCKED", "DISABLED"]` (mục 18, thay ComboBox) → nút Làm mới (Primary).
+  * **DataGridView (mục 11):** header `#FAFAFA` chữ HOA, viền ô `#E5E5E5`, dòng chẵn `#FAFAFA`, hover `#F0F3FF`; pill vẽ bằng `UITheme.DrawBadge` (mục 9) cho cột Quyền/Trạng thái/Thao tác (Ghost).
+  * **States (mục 13):** empty + nút "Xóa bộ lọc" / loading / error + nút "Thử lại".
+  * **Pager (mục 22):** Trước/Sau + "Đang hiện X trong tổng Y", page size 20.
+  * Thành công → Toast của BoardForm (mục 16).
     * Cột dữ liệu: ID, Tên hiển thị, Email, Quyền (Badge System Admin), Trạng thái (Pill Xanh/Đỏ/Xám cho ACTIVE/LOCKED/DISABLED), Ngày đăng ký, Đăng nhập cuối.
-    * Cột thao tác: Button "Khóa" hoặc "Mở khóa". Tự động vô hiệu hóa nút khóa nếu là ID của chính tài khoản đang đăng nhập.
+    * Cột thao tác: pill "Khóa"/"Mở khóa"; dòng của chính mình và dòng DISABLED hiện "—" (không thao tác ở màn hình này).
   * **Hộp thoại xác nhận:** Bật `MessageBox` xác nhận hành động trước khi gửi lệnh tới API. Nếu target là System Admin khác, dialog phải có cảnh báo đỏ "Đây là tài khoản quản trị viên — hành động sẽ được ghi audit".
 
 ### Bước 6: Tích hợp vào Shell (`SidebarControl` & `BoardForm`)

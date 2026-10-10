@@ -497,7 +497,7 @@ public partial class BoardForm : Form, IMessageFilter
         if (_auth is null || !_auth.Session.IsAuthenticated || _admin is not null) return;
         if (_auth.Session.CurrentUser?.IsSystemAdmin != true) return;
         CloseProfile();
-        var admin = new AdminUserManagementControl(_auth) { Dock = DockStyle.Fill };
+        var admin = new AdminUserManagementControl(_auth, _toast) { Dock = DockStyle.Fill };
         _admin = admin;
         _pnlDrawerHost.Visible = false;
         _pnlBoardArea.Visible = false;
