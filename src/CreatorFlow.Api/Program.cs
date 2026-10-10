@@ -7,6 +7,10 @@ using CreatorFlow.Api.Authentication;
 using CreatorFlow.Api.Configuration;
 using CreatorFlow.Api.Services.Auth;
 using CreatorFlow.Api.Repositories.Auth;
+using CreatorFlow.Api.Repositories.Tasks;
+using CreatorFlow.Api.Services.Tasks;
+using CreatorFlow.Api.Repositories.Workflow;
+using CreatorFlow.Api.Services.Workflow;
 using Microsoft.AspNetCore.Http.Features;
 using System.Text.Json.Serialization;
 
@@ -29,6 +33,10 @@ builder.Services.AddScoped(services => new PasswordResetService(services.GetRequ
     services.GetRequiredService<ILogger<PasswordResetService>>()));
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<UserService>();
+builder.Services.AddScoped<ITaskRepository, TaskRepository>();
+builder.Services.AddScoped<TaskService>();
+builder.Services.AddScoped<IWorkflowRepository, WorkflowRepository>();
+builder.Services.AddScoped<WorkflowService>();
 builder.Services.AddSingleton<IAvatarImageProcessor, AvatarImageProcessor>();
 
 builder.Services.AddSingleton<IDbConnectionFactory>(new NpgsqlConnectionFactory(connectionString));
@@ -63,6 +71,8 @@ app.UseAuthorization();
 app.MapHealthEndpoints();
 app.MapAuthEndpoints();
 app.MapUserEndpoints();
+app.MapTaskEndpoints();
+app.MapWorkflowEndpoints();
 app.Run();
 
 public partial class Program { }
