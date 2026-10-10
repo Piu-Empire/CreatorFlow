@@ -23,6 +23,14 @@ public interface IIdeaRepository
     /// <summary>Cập nhật tiêu đề, mô tả, ghi chú, trạng thái và đồng bộ tag. Chạy trong transaction hiện hành.</summary>
     void Update(long ideaId, IdeaDraft draft);
 
+    /// <summary>
+    /// Chuyển Idea thành Content: tạo Content mới ở trạng thái Idea (mang tiêu đề, mô tả, tag; giữ liên kết source_idea_id)
+    /// và đặt Idea sang Converted. Idea gốc được giữ nguyên. Trả về Id Content mới, hoặc null nếu Idea không còn ở
+    /// trạng thái Draft/Backlog (đã chuyển rồi, đã lưu trữ hoặc không tồn tại) — khi đó không ghi gì.
+    /// Chạy trong transaction hiện hành.
+    /// </summary>
+    long? ConvertToContent(long ideaId, string contentType, long convertedByUserId);
+
     /// <summary>Xóa Idea (idea_tags xóa theo; Content đã tạo từ Idea này giữ lại, source_idea_id về NULL).</summary>
     void Delete(long ideaId);
 }

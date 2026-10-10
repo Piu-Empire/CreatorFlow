@@ -10,6 +10,7 @@ namespace CreatorFlow.Forms.IdeaBank;
 /// Màn Idea Bank (kho ý tưởng) của Project hiện hành:
 ///   - Danh sách Idea với trạng thái, tag, người tạo; chọn một dòng để xem mô tả + ghi chú ở khung dưới.
 ///   - Tìm kiếm theo từ khóa (có trễ ngắn để không truy vấn mỗi phím), lọc theo trạng thái và tag.
+///   - Chuyển Idea thành Content (SCRUM-31): Content mới nằm ở cột Idea của Production Board, Idea gốc được giữ lại.
 ///   - Thêm / sửa / xóa theo quyền: nút bị tắt khi người dùng không có quyền (IdeaService vẫn kiểm tra lại khi ghi).
 /// Layout tĩnh nằm trong IdeaBankForm.Designer.cs, file này chỉ chứa dữ liệu, sự kiện và logic.
 /// </summary>
@@ -153,6 +154,7 @@ public partial class IdeaBankForm : Form
         btnNew.Enabled = _ideaService is not null && _ideaService.CanCreate(ProjectId, UserId);
         btnEdit.Enabled = idea is not null && _ideaService.CanEdit(idea, UserId);
         btnDelete.Enabled = idea is not null && _ideaService.CanDelete(idea, UserId);
+        btnConvert.Enabled = idea is not null && _ideaService.CanConvert(idea, UserId);
 
         if (idea is null)
         {
@@ -163,7 +165,10 @@ public partial class IdeaBankForm : Form
         txtDetail.Text =
             $"{idea.Code} — {idea.Title}" + Environment.NewLine +
             "Mô tả: " + (idea.Description.Length == 0 ? "(chưa có)" : idea.Description) + Environment.NewLine +
-            "Ghi chú: " + (idea.Note.Length == 0 ? "(chưa có)" : idea.Note);
+            "Ghi chú: " + (idea.Note.Length == 0 ? "(chưa có)" : idea.Note) +
+            (idea.ConvertedContentId is long contentId
+                ? Environment.NewLine + $"Đã chuyển thành Content #{contentId}"
+                : string.Empty);
     }
 
     // ==========================================================
@@ -203,6 +208,20 @@ public partial class IdeaBankForm : Form
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
 
         Execute(() => _ideaService.Update(idea.IdeaId, dialog.Draft, UserId), "Da cap nhat y tuong");
+    }
+
+    private void btnConvert_Click(object? sender, EventArgs e)
+    {
+        var idea = SelectedIdea;
+        if (idea is null) return;
+
+        var confirm = MessageBox.Show(this,
+            $"Chuyển ý tưởng \"{idea.Title}\" thành Content?{Environment.NewLine}{Environment.NewLine}" +
+            "Content mới nằm ở cột Idea của Production Board. Ý tưởng gốc được giữ lại và đánh dấu \"Đã chuyển Content\".",
+            "Chuyển thành Content", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+        if (confirm != DialogResult.Yes) return;
+
+        Execute(() => _ideaService.ConvertToContent(idea.IdeaId, UserId), "Da chuyen thanh Content");
     }
 
     private void btnDelete_Click(object? sender, EventArgs e)

@@ -30,7 +30,7 @@ public sealed class IdeaServiceTests
     public void Setup()
     {
         _repo = new InMemoryIdeaRepository();
-        _service = new IdeaService(_repo, new InMemoryProjectMemberRepository(), new InMemoryUnitOfWork());
+        _service = new IdeaService(_repo, new InMemoryProjectMemberRepository(), new InMemoryContentStatusHistoryRepository(), new InMemoryUnitOfWork());
     }
 
     // ---------- Thêm + đọc lại ----------
@@ -392,7 +392,11 @@ public sealed class IdeaServiceTests
     private long Add(string title, string description, string note, IdeaStatus status, params string[] tags) =>
         _service.Create(ProjectId, new IdeaDraft
         {
-            Title = title, Description = description, Note = note, Status = status, Tags = tags.ToList(),
+            Title = title,
+            Description = description,
+            Note = note,
+            Status = status,
+            Tags = tags.ToList(),
         }, OwnerId);
 
     private List<Idea> Search(string text) =>

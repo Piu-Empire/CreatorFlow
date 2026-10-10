@@ -19,7 +19,8 @@ public class IdeaRepository : IIdeaRepository
 SELECT i.idea_id, i.project_id, i.title, COALESCE(i.description, ''), COALESCE(i.note, ''), i.status::text,
        i.created_by, u.display_name, i.created_at, i.updated_at,
        ARRAY(SELECT t.name FROM idea_tags it JOIN tags t ON t.tag_id = it.tag_id
-             WHERE it.idea_id = i.idea_id ORDER BY t.name)::text[] AS tags
+             WHERE it.idea_id = i.idea_id ORDER BY t.name)::text[] AS tags,
+       (SELECT c.content_id FROM contents c WHERE c.source_idea_id = i.idea_id ORDER BY c.content_id LIMIT 1) AS converted_content_id
 FROM ideas i
 JOIN users u ON u.user_id = i.created_by";
 
@@ -107,6 +108,63 @@ WHERE idea_id = @id"))
         SyncTags(ideaId, draft.Tags);
     }
 
+    public long? ConvertToContent(long ideaId, string contentType, long convertedByUserId)
+    {
+        long projectId;
+        string title;
+        string? description;
+
+        // Đặt Converted trước và chỉ khi Idea còn Draft/Backlog: hai người cùng chuyển một Idea thì chỉ một người thành công.
+        using (var mark = _session.CreateCommand(@"
+UPDATE ideas SET status = @converted::idea_status
+WHERE idea_id = @id AND status IN (@draft::idea_status, @backlog::idea_status)
+RETURNING project_id, title, description"))
+        {
+            mark.Parameters.AddWithValue("id", ideaId);
+            mark.Parameters.AddWithValue("converted", PostgresEnumMapper.ToDatabaseValue(IdeaStatus.Converted));
+            mark.Parameters.AddWithValue("draft", PostgresEnumMapper.ToDatabaseValue(IdeaStatus.Draft));
+            mark.Parameters.AddWithValue("backlog", PostgresEnumMapper.ToDatabaseValue(IdeaStatus.Backlog));
+
+            using var reader = mark.ExecuteReader();
+            if (!reader.Read())
+                return null;
+
+            projectId = reader.GetInt64(0);
+            title = reader.GetString(1);
+            description = reader.IsDBNull(2) ? null : reader.GetString(2);
+        }
+
+        long contentId;
+        using (var insert = _session.CreateCommand(@"
+INSERT INTO contents (project_id, source_idea_id, title, description, content_type, priority, status, created_by)
+VALUES (@projectId, @ideaId, @title, @description, @contentType, @priority::content_priority, @status::content_status, @createdBy)
+RETURNING content_id"))
+        {
+            insert.Parameters.AddWithValue("projectId", projectId);
+            insert.Parameters.AddWithValue("ideaId", ideaId);
+            insert.Parameters.AddWithValue("title", title);
+            insert.Parameters.Add("description", NpgsqlDbType.Text).Value = ToDbText(description);
+            insert.Parameters.Add("contentType", NpgsqlDbType.Varchar).Value = ToDbText(contentType);
+            insert.Parameters.AddWithValue("priority", PostgresEnumMapper.ToDatabaseValue(Priority.Medium));
+            insert.Parameters.AddWithValue("status", PostgresEnumMapper.ToDatabaseValue(ContentStatus.Idea));
+            insert.Parameters.AddWithValue("createdBy", convertedByUserId);
+            contentId = (long)insert.ExecuteScalar()!;
+        }
+
+        // Tag của Idea và Content dùng chung bảng tags của Project nên chỉ cần nối thêm content_tags.
+        using (var tags = _session.CreateCommand(@"
+INSERT INTO content_tags (content_id, tag_id)
+SELECT @contentId, it.tag_id FROM idea_tags it WHERE it.idea_id = @ideaId
+ON CONFLICT (content_id, tag_id) DO NOTHING"))
+        {
+            tags.Parameters.AddWithValue("contentId", contentId);
+            tags.Parameters.AddWithValue("ideaId", ideaId);
+            tags.ExecuteNonQuery();
+        }
+
+        return contentId;
+    }
+
     public void Delete(long ideaId)
     {
         using var cmd = _session.CreateCommand("DELETE FROM ideas WHERE idea_id = @id");
@@ -186,6 +244,7 @@ WHERE it.idea_id = @ideaId AND t.tag_id = it.tag_id AND t.name <> ALL(@names)"))
                 CreatedAt = reader.GetDateTime(8).ToLocalTime(),
                 UpdatedAt = reader.GetDateTime(9).ToLocalTime(),
                 Tags = reader.GetFieldValue<string[]>(10).ToList(),
+                ConvertedContentId = reader.IsDBNull(11) ? null : reader.GetInt64(11),
             });
         }
         return ideas;

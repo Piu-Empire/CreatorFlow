@@ -94,6 +94,34 @@ public class InMemoryIdeaRepository : IIdeaRepository
         RegisterTags(idea.ProjectId, idea.Tags);
     }
 
+    public long? ConvertToContent(long ideaId, string contentType, long convertedByUserId)
+    {
+        var idea = _ideas.FirstOrDefault(i => i.IdeaId == ideaId);
+        if (idea is null || idea.Status is not (IdeaStatus.Draft or IdeaStatus.Backlog))
+            return null;
+
+        long contentId = InMemoryDataStore.Contents.Count > 0 ? InMemoryDataStore.Contents.Max(c => c.Id) + 1 : 1;
+        InMemoryDataStore.Contents.Add(new InMemoryContentRecord
+        {
+            Id = contentId,
+            ProjectId = idea.ProjectId,
+            IdeaId = idea.IdeaId,
+            Title = idea.Title,
+            Description = idea.Description,
+            ContentType = contentType,
+            Status = ContentStatus.Idea,
+            Priority = Priority.Medium,
+            Tags = idea.Tags.ToList(),
+            CreatedByUserId = convertedByUserId,
+            UpdatedAt = DateTime.Now,
+        });
+
+        idea.Status = IdeaStatus.Converted;
+        idea.ConvertedContentId = contentId;
+        idea.UpdatedAt = DateTime.Now;
+        return contentId;
+    }
+
     public void Delete(long ideaId) => _ideas.RemoveAll(i => i.IdeaId == ideaId);
 
     private void AddSeed(string title, string description, string note, IdeaStatus status,
@@ -101,7 +129,11 @@ public class InMemoryIdeaRepository : IIdeaRepository
     {
         long id = Create(1, new IdeaDraft
         {
-            Title = title, Description = description, Note = note, Status = status, Tags = tags.ToList(),
+            Title = title,
+            Description = description,
+            Note = note,
+            Status = status,
+            Tags = tags.ToList(),
         }, createdBy);
         _ideas.First(i => i.IdeaId == id).UpdatedAt = updatedAt;
     }
@@ -122,8 +154,17 @@ public class InMemoryIdeaRepository : IIdeaRepository
 
     private static Idea Clone(Idea i) => new()
     {
-        IdeaId = i.IdeaId, ProjectId = i.ProjectId, Title = i.Title, Description = i.Description, Note = i.Note,
-        Status = i.Status, Tags = i.Tags.ToList(), CreatedByUserId = i.CreatedByUserId,
-        CreatedByName = i.CreatedByName, CreatedAt = i.CreatedAt, UpdatedAt = i.UpdatedAt,
+        IdeaId = i.IdeaId,
+        ProjectId = i.ProjectId,
+        Title = i.Title,
+        Description = i.Description,
+        Note = i.Note,
+        Status = i.Status,
+        Tags = i.Tags.ToList(),
+        CreatedByUserId = i.CreatedByUserId,
+        CreatedByName = i.CreatedByName,
+        CreatedAt = i.CreatedAt,
+        UpdatedAt = i.UpdatedAt,
+        ConvertedContentId = i.ConvertedContentId,
     };
 }

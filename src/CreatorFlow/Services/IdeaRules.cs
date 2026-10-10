@@ -10,6 +10,7 @@ namespace CreatorFlow.Services;
 ///   - Owner/Manager thêm, sửa, xóa mọi Idea; Creator thêm Idea mới và chỉ sửa/xóa Idea do chính mình tạo.
 ///   - Idea đã Converted (đã tạo Content) không xóa được và không đổi trạng thái thủ công;
 ///     trạng thái Converted chỉ được đặt bởi chức năng "Chuyển Idea thành Content", không chọn tay.
+///   - Chuyển Idea thành Content: người có quyền sửa Idea đó, và Idea đang ở Draft hoặc Backlog (Archived phải đưa về Draft/Backlog trước).
 /// </summary>
 public static class IdeaRules
 {
@@ -27,6 +28,19 @@ public static class IdeaRules
 
     public static bool CanDelete(ProjectRole? role, Idea idea, long userId) =>
         idea.Status != IdeaStatus.Converted && CanEdit(role, idea, userId);
+
+    /// <summary>Quyền chuyển Idea thành Content: như quyền sửa, và Idea phải đang chuyển được (Draft/Backlog).</summary>
+    public static bool CanConvert(ProjectRole? role, Idea idea, long userId) =>
+        (idea.Status is IdeaStatus.Draft or IdeaStatus.Backlog) && CanEdit(role, idea, userId);
+
+    /// <summary>Ném lỗi nếu Idea ở trạng thái không chuyển được thành Content.</summary>
+    public static void ValidateConvertible(IdeaStatus current)
+    {
+        if (current == IdeaStatus.Converted)
+            throw new IdeaValidationException("Idea này đã được chuyển thành Content.");
+        if (current == IdeaStatus.Archived)
+            throw new IdeaValidationException("Idea đã lưu trữ. Hãy chuyển về Nháp hoặc Backlog trước khi chuyển thành Content.");
+    }
 
     /// <summary>
     /// Kiểm tra việc đổi trạng thái thủ công. <paramref name="current"/> = null khi tạo mới.

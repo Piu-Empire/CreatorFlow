@@ -85,7 +85,7 @@ static class Program
         var workflowService = new WorkflowService(contentRepo, historyRepo, reviewRepo, memberRepo, uow);
         var contentService = new ContentService(contentRepo, detailsRepo, historyRepo, memberRepo, platformRepo, uow, myTaskRepo);
         var myTaskService = new MyTaskService(myTaskRepo, memberRepo, uow);
-        var ideaService = new IdeaService(ideaRepo, memberRepo, uow);
+        var ideaService = new IdeaService(ideaRepo, memberRepo, historyRepo, uow);
         // SCRUM-33: AI chưa có cài đặt thật nên dùng NotConfiguredAiService; thay bằng AIService thật khi có.
         var scriptService = new ScriptService(scriptRepo, detailsRepo, platformRepo, memberRepo, myTaskRepo, uow, new NotConfiguredAiService());
 

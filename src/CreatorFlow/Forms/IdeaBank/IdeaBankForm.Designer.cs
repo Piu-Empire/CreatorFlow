@@ -22,6 +22,7 @@ partial class IdeaBankForm
     private System.Windows.Forms.ColumnHeader colUpdated;
     private System.Windows.Forms.TextBox txtDetail;
     private System.Windows.Forms.Label lblCount;
+    private CreatorFlow.Controls.RoundedButton btnConvert;
     private CreatorFlow.Controls.RoundedButton btnEdit;
     private CreatorFlow.Controls.RoundedButton btnDelete;
     private CreatorFlow.Controls.RoundedButton btnClose;
@@ -53,6 +54,7 @@ partial class IdeaBankForm
         this.colUpdated = new System.Windows.Forms.ColumnHeader();
         this.txtDetail = new System.Windows.Forms.TextBox();
         this.lblCount = new System.Windows.Forms.Label();
+        this.btnConvert = new CreatorFlow.Controls.RoundedButton();
         this.btnEdit = new CreatorFlow.Controls.RoundedButton();
         this.btnDelete = new CreatorFlow.Controls.RoundedButton();
         this.btnClose = new CreatorFlow.Controls.RoundedButton();
@@ -186,6 +188,17 @@ partial class IdeaBankForm
         this.lblCount.Size = new System.Drawing.Size(360, 36);
         this.lblCount.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
         //
+        // btnConvert
+        //
+        this.btnConvert.Anchor = System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right;
+        this.btnConvert.Location = new System.Drawing.Point(420, 570);
+        this.btnConvert.Name = "btnConvert";
+        this.btnConvert.Size = new System.Drawing.Size(190, 40);
+        this.btnConvert.Style = RoundButtonStyle.Primary;
+        this.btnConvert.TabIndex = 10;
+        this.btnConvert.Text = "Chuyển thành Content";
+        this.btnConvert.Click += new System.EventHandler(this.btnConvert_Click);
+        //
         // btnEdit
         //
         this.btnEdit.Anchor = System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right;
@@ -235,6 +248,7 @@ partial class IdeaBankForm
         this.Controls.Add(this.listViewIdeas);
         this.Controls.Add(this.txtDetail);
         this.Controls.Add(this.lblCount);
+        this.Controls.Add(this.btnConvert);
         this.Controls.Add(this.btnEdit);
         this.Controls.Add(this.btnDelete);
         this.Controls.Add(this.btnClose);
