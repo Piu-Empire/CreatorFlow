@@ -1,5 +1,6 @@
 ﻿using CreatorFlow.Models.Enums;
 using CreatorFlow.Controls;
+using CreatorFlow.Forms.IdeaBank;
 using CreatorFlow.Forms.Tasks;
 using CreatorFlow.Models;
 using CreatorFlow.Repositories.Interfaces;
@@ -31,6 +32,7 @@ public partial class BoardForm : Form, IMessageFilter
     private readonly IProjectMemberRepository _memberRepository;
     private readonly ContentService _contentService;
     private readonly MyTaskService _myTaskService;
+    private readonly IdeaService _ideaService;
     private readonly AuthApiFacade? _auth;
     private ProfileControl? _profile;
     private readonly CancellationTokenSource _authLifetime = new();
@@ -55,6 +57,7 @@ public partial class BoardForm : Form, IMessageFilter
         _memberRepository = null!;
         _contentService = null!;
         _myTaskService = null!;
+        _ideaService = null!;
     }
 
     public BoardForm(
@@ -66,6 +69,7 @@ public partial class BoardForm : Form, IMessageFilter
         ContentService contentService,
         MyTaskService myTaskService,
         ScriptService scriptService,
+        IdeaService ideaService,
         AuthApiFacade? auth = null)
     {
         InitializeComponent();
@@ -73,6 +77,7 @@ public partial class BoardForm : Form, IMessageFilter
         _boardRepository = boardRepository;
         _contentService = contentService;
         _myTaskService = myTaskService;
+        _ideaService = ideaService;
         _reviewQueueRepository = reviewQueueRepository;
         _activityRepository = activityRepository;
         _memberRepository = memberRepository;
@@ -101,8 +106,8 @@ public partial class BoardForm : Form, IMessageFilter
         _modulePageHeader.PlatformFilterChanged += (_, _) => ApplyFilters();
 
         _sidebarControl.ReviewQueueRequested += (_, _) => OpenReviewQueue();
-        _sidebarControl.BoardRequested += (_, _) => { CloseProfile(); ReloadBoard(); };
         _sidebarControl.MyTasksRequested += (_, _) => OpenMyTasks();
+        _sidebarControl.IdeaBankRequested += (_, _) => OpenIdeaBank();
         _sidebarControl.BoardRequested += (_, _) => { CloseProfile(); ReloadBoard(); };
         UpdateProjectContext();
         if (!HasProjectContext) ReloadBoard();
@@ -215,6 +220,7 @@ public partial class BoardForm : Form, IMessageFilter
         var pendingReviews = _reviewQueueRepository.GetPendingReviews(CurrentSession.CurrentProjectId);
         _sidebarControl.ReviewQueueCount = pendingReviews.Count;
         _sidebarControl.MyWorkCount = _myTaskService.CountOpenTasks(CurrentSession.CurrentProjectId, CurrentSession.CurrentUserId);
+        _sidebarControl.BacklogCount = _ideaService.CountBacklog(CurrentSession.CurrentProjectId, CurrentSession.CurrentUserId);
         _sidebarControl.Invalidate();
         ApplyFilters();
 
@@ -414,6 +420,19 @@ public partial class BoardForm : Form, IMessageFilter
 
         ReloadBoard();
         if (contentId.HasValue) OpenContentById(contentId.Value);
+    }
+
+    /// <summary>Mở màn Idea Bank (kho ý tưởng) của Project hiện hành; đóng xong thì cập nhật lại badge Backlog.</summary>
+    private void OpenIdeaBank()
+    {
+        if (!HasProjectContext) return;
+        CloseProfile();
+        using (var ideaForm = new IdeaBankForm(_ideaService))
+        {
+            ideaForm.ShowDialog(this);
+        }
+
+        ReloadBoard();
     }
 
     /// <summary>Mở drawer chi tiết cho Content theo Id (kể cả khi thẻ đang bị ẩn bởi bộ lọc tìm kiếm/platform).</summary>
