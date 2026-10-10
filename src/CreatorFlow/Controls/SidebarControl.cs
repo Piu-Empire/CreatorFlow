@@ -16,6 +16,7 @@ public class SidebarControl : UserControl
     public event EventHandler? MyTasksRequested;
     public event EventHandler? ProfileRequested;
     public event EventHandler? AdminWorkspaceRequested;
+    public event EventHandler? AdminReportsRequested;
 
     private readonly Button _accountButton;
     private string _accountName = string.Empty;
@@ -39,7 +40,7 @@ public class SidebarControl : UserControl
         Invalidate();
     }
 
-    private enum NavIcon { Summary, Board, List, Calendar, Chart, Check, Review, Sparkle, Gear, Shield }
+    private enum NavIcon { Summary, Board, List, Calendar, Chart, Check, Review, Sparkle, Gear, Shield, Flag }
 
     private sealed class NavItem
     {
@@ -169,7 +170,9 @@ public class SidebarControl : UserControl
             y += ItemStep + 10;
             _groups.Add(("ADMIN", y)); y += 26;
             _items.Add(new NavItem { Title = "Quản trị người dùng", Icon = NavIcon.Shield, Y = y,
-                Action = () => AdminWorkspaceRequested?.Invoke(this, EventArgs.Empty) });
+                Action = () => AdminWorkspaceRequested?.Invoke(this, EventArgs.Empty) }); y += ItemStep;
+            _items.Add(new NavItem { Title = "Báo cáo vi phạm", Icon = NavIcon.Flag, Y = y,
+                Action = () => AdminReportsRequested?.Invoke(this, EventArgs.Empty) });
         }
 
         // Neo đáy: cách đáy 100px (phía trên dòng trạng thái)
@@ -332,10 +335,11 @@ public class SidebarControl : UserControl
             case NavIcon.Sparkle: UIIcons.Sparkle(g, r, c); break;
             case NavIcon.Gear: UIIcons.Gear(g, r, c); break;
             case NavIcon.Shield: UIIcons.Shield(g, r, c); break;
+            case NavIcon.Flag: UIIcons.Flag(g, r, c); break;
         }
     }
 
     /// <summary>Mục Board và mục Admin luôn thao tác được, các mục khác cần project.</summary>
     private bool IsItemEnabled(NavItem item) =>
-        ProjectActionsEnabled || item.Icon is NavIcon.Board or NavIcon.Shield;
+        ProjectActionsEnabled || item.Icon is NavIcon.Board or NavIcon.Shield or NavIcon.Flag;
 }

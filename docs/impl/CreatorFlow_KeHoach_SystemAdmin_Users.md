@@ -293,6 +293,7 @@ không thêm claim admin vào JWT (đụng tới login của cả hệ thống �
 **Checklist khôi phục (làm ngay sau khi test xong, trước khi xin review PR):**
 * [ ] Xóa 2 user fake: `DELETE FROM users WHERE email LIKE '%@test.dev';` rồi xác nhận `SELECT COUNT(*) FROM users WHERE email LIKE '%@test.dev';` = 0.
 * [ ] Xóa audit sinh ra lúc test (gắn với 2 user trên): `DELETE FROM audit_logs WHERE entity_type = 'users' AND entity_id NOT IN (SELECT user_id FROM users);`
+* [ ] Xóa reports fake (nếu đã test mảng Reports): `DELETE FROM reports;` (DB local chỉ chứa data fake).
 * [ ] Dừng + xóa container: `docker stop creatorflow-local-pg && docker rm creatorflow-local-pg` (data trong container mất theo — đúng ý đồ disposable).
 * [ ] Xóa file tạm ngoài repo: `%TEMP%\opencode\seed_fake_local.sql`, `%TEMP%\opencode\hashgen\`, `%TEMP%\opencode\genkeys.py`.
 * [ ] Xác nhận: `docker ps -a` không còn container trên; `git status` không có file fake nào lọt vào repo.

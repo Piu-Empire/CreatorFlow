@@ -15,5 +15,11 @@ public static class AdminEndpoints
         admin.MapPatch("/users/{userId:long}/status", async (long userId, UpdateUserStatusRequest request,
             HttpContext context, AdminUserService service, CancellationToken token) =>
             AuthEndpoints.ToHttp(await service.UpdateUserStatusAsync(userId, request, context.TraceIdentifier, token)));
+        admin.MapGet("/reports", async (string? search, string? status, int? limit, int? offset,
+            AdminReportService service, CancellationToken token) =>
+            AuthEndpoints.ToHttp(await service.GetReportsAsync(search, status, limit, offset, token)));
+        admin.MapPatch("/reports/{reportId:long}", async (long reportId, HandleReportRequest request,
+            HttpContext context, AdminReportService service, CancellationToken token) =>
+            AuthEndpoints.ToHttp(await service.HandleReportAsync(reportId, request, context.TraceIdentifier, token)));
     }
 }

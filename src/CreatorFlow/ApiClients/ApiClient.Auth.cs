@@ -84,7 +84,7 @@ public sealed partial class ApiClient
             if (root.TryGetProperty("code", out var codeValue) && codeValue.ValueKind == JsonValueKind.String)
             {
                 string? value = codeValue.GetString();
-                string[] allowed = ["validation", "email_in_use", "email_unavailable", "reset_unavailable", "invalid_credentials", "account_ineligible", "email_verification_required", "verification_request_failed", "invalid_verification", "reset_request_failed", "invalid_reset", "unauthorized", "avatar_not_found", "avatar_unavailable", "service_unavailable", "forbidden", "not_found", "self_lock", "last_active_admin"];
+                string[] allowed = ["validation", "email_in_use", "email_unavailable", "reset_unavailable", "invalid_credentials", "account_ineligible", "email_verification_required", "verification_request_failed", "invalid_verification", "reset_request_failed", "invalid_reset", "unauthorized", "avatar_not_found", "avatar_unavailable", "service_unavailable", "forbidden", "not_found", "self_lock", "last_active_admin", "self_report", "duplicate_report"];
                 if (value is not null && allowed.Contains(value))
                 {
                     code = value;

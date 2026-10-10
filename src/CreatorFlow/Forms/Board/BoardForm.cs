@@ -34,6 +34,7 @@ public partial class BoardForm : Form, IMessageFilter
     private readonly AuthApiFacade? _auth;
     private ProfileControl? _profile;
     private AdminUserManagementControl? _admin;
+    private AdminReportsControl? _reports;
     private readonly CancellationTokenSource _authLifetime = new();
     private int _avatarGeneration;
 
@@ -86,6 +87,7 @@ public partial class BoardForm : Form, IMessageFilter
             Shown += async (_, _) => await RefreshAuthenticatedAvatarAsync();
             _sidebarControl.ProfileRequested += async (_, _) => await OpenProfileAsync();
             _sidebarControl.AdminWorkspaceRequested += async (_, _) => await OpenAdminAsync();
+            _sidebarControl.AdminReportsRequested += async (_, _) => await OpenReportsAsync();
         }
 
         _pnlDrawerHost.Paint += PnlDrawerHost_Paint;
@@ -104,9 +106,9 @@ public partial class BoardForm : Form, IMessageFilter
         _modulePageHeader.PlatformFilterChanged += (_, _) => ApplyFilters();
 
         _sidebarControl.ReviewQueueRequested += (_, _) => OpenReviewQueue();
-        _sidebarControl.BoardRequested += (_, _) => { CloseProfile(); CloseAdmin(); ReloadBoard(); };
+        _sidebarControl.BoardRequested += (_, _) => { CloseProfile(); CloseAdmin(); CloseReports(); ReloadBoard(); };
         _sidebarControl.MyTasksRequested += (_, _) => OpenMyTasks();
-        _sidebarControl.BoardRequested += (_, _) => { CloseProfile(); CloseAdmin(); ReloadBoard(); };
+        _sidebarControl.BoardRequested += (_, _) => { CloseProfile(); CloseAdmin(); CloseReports(); ReloadBoard(); };
         UpdateProjectContext();
         if (!HasProjectContext) ReloadBoard();
 
@@ -409,6 +411,7 @@ public partial class BoardForm : Form, IMessageFilter
         if (!HasProjectContext) return;
         CloseProfile();
         CloseAdmin();
+        CloseReports();
         long? contentId;
         using (var tasksForm = new MyTasksForm(_myTaskService))
         {
@@ -453,6 +456,7 @@ public partial class BoardForm : Form, IMessageFilter
         if (!HasProjectContext) return;
         CloseProfile();
         CloseAdmin();
+        CloseReports();
         using var queueForm = new Review.ReviewQueueForm(_reviewQueueRepository, _workflowService);
         queueForm.ShowDialog(this);
         ReloadBoard();
@@ -462,6 +466,7 @@ public partial class BoardForm : Form, IMessageFilter
     {
         if (_auth is null || !_auth.Session.IsAuthenticated || _profile is not null) return;
         CloseAdmin();
+        CloseReports();
         var profile = new ProfileControl(_auth) { Dock = DockStyle.Fill };
         _profile = profile;
         UpdateProjectContext();
@@ -497,6 +502,7 @@ public partial class BoardForm : Form, IMessageFilter
         if (_auth is null || !_auth.Session.IsAuthenticated || _admin is not null) return;
         if (_auth.Session.CurrentUser?.IsSystemAdmin != true) return;
         CloseProfile();
+        CloseReports();
         var admin = new AdminUserManagementControl(_auth, _toast) { Dock = DockStyle.Fill };
         _admin = admin;
         _pnlDrawerHost.Visible = false;
@@ -514,6 +520,34 @@ public partial class BoardForm : Form, IMessageFilter
         _admin = null;
         _pnlMain.Controls.Remove(admin);
         admin.Dispose();
+        _pnlBoardArea.Visible = true;
+        _topHeaderControl.SetAuthenticatedPage("Board");
+        UpdateProjectContext();
+    }
+
+    private async Task OpenReportsAsync()
+    {
+        if (_auth is null || !_auth.Session.IsAuthenticated || _reports is not null) return;
+        if (_auth.Session.CurrentUser?.IsSystemAdmin != true) return;
+        CloseProfile();
+        CloseAdmin();
+        var reports = new AdminReportsControl(_auth, _toast) { Dock = DockStyle.Fill };
+        _reports = reports;
+        _pnlDrawerHost.Visible = false;
+        _pnlBoardArea.Visible = false;
+        _pnlMain.Controls.Add(reports);
+        reports.BringToFront();
+        _topHeaderControl.SetAuthenticatedPage("Báo cáo vi phạm");
+        await reports.LoadReportsAsync();
+    }
+
+    private void CloseReports()
+    {
+        if (_reports is null) return;
+        AdminReportsControl reports = _reports;
+        _reports = null;
+        _pnlMain.Controls.Remove(reports);
+        reports.Dispose();
         _pnlBoardArea.Visible = true;
         _topHeaderControl.SetAuthenticatedPage("Board");
         UpdateProjectContext();

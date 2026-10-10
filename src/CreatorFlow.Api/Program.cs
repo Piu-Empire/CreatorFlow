@@ -34,6 +34,8 @@ builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<IAdminUserRepository, AdminUserRepository>();
 builder.Services.AddScoped<AdminUserService>();
+builder.Services.AddScoped<IAdminReportRepository, AdminReportRepository>();
+builder.Services.AddScoped<AdminReportService>();
 builder.Services.AddAuthorizationBuilder().AddPolicy("SystemAdminOnly", policy =>
     policy.RequireAssertion(context =>
         context.Resource is HttpContext http &&
@@ -73,6 +75,7 @@ app.MapHealthEndpoints();
 app.MapAuthEndpoints();
 app.MapUserEndpoints();
 app.MapAdminEndpoints();
+app.MapReportEndpoints();
 app.Run();
 
 public partial class Program { }

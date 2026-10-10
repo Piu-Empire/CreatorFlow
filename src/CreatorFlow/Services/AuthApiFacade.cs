@@ -204,6 +204,38 @@ public sealed class AuthApiFacade(ApiClient api, UserSession session)
         catch (ApiBusinessException exception) { HandleUnauthorized(exception, credentials.Value.Generation); return AdminStatusResult.Failure(exception.Message); }
         catch (ApiException exception) { return AdminStatusResult.Failure(exception.Message); }
     }
+
+    /// <summary>Tải danh sách báo cáo cho System Admin (401 tự clear phiên, 403 giữ phiên).</summary>
+    public async Task<AdminReportsResult> GetAdminReportsAsync(string? search, string? status, int limit, int offset,
+        CancellationToken token = default)
+    {
+        var credentials = Credentials();
+        if (credentials is null) return AdminReportsResult.Failure("Vui lòng đăng nhập lại.");
+        try
+        {
+            var response = await api.GetAdminReportsAsync(search, status, limit, offset, credentials.Value.Token, token);
+            if (credentials.Value.Generation != session.Generation) return AdminReportsResult.Failure("Phiên đã kết thúc.");
+            return AdminReportsResult.Success(response);
+        }
+        catch (ApiBusinessException exception) { HandleUnauthorized(exception, credentials.Value.Generation); return AdminReportsResult.Failure(exception.Message); }
+        catch (ApiException exception) { return AdminReportsResult.Failure(exception.Message); }
+    }
+
+    /// <summary>Xử lý một báo cáo (401 tự clear phiên, 403 giữ phiên).</summary>
+    public async Task<AdminReportHandleResult> HandleReportAsync(long reportId, string status, string? note,
+        CancellationToken token = default)
+    {
+        var credentials = Credentials();
+        if (credentials is null) return AdminReportHandleResult.Failure("Vui lòng đăng nhập lại.");
+        try
+        {
+            var response = await api.HandleReportAsync(reportId, status, note, credentials.Value.Token, token);
+            if (credentials.Value.Generation != session.Generation) return AdminReportHandleResult.Failure("Phiên đã kết thúc.");
+            return AdminReportHandleResult.Success(response);
+        }
+        catch (ApiBusinessException exception) { HandleUnauthorized(exception, credentials.Value.Generation); return AdminReportHandleResult.Failure(exception.Message); }
+        catch (ApiException exception) { return AdminReportHandleResult.Failure(exception.Message); }
+    }
     private static UserProfile ToProfile(ProfileResponse profile)
     {
         if (!Enum.TryParse(profile.AccountStatus, true, out CreatorFlow.Models.Enums.AccountStatus status) || !Enum.IsDefined(status))

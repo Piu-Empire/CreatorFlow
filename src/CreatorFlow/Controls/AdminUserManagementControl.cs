@@ -20,8 +20,10 @@ public class AdminUserManagementControl : UserControl
     private readonly RoundedPanel _gridCard = new();
     private readonly DataGridView _grid = new();
     private readonly Panel _statePanel = new();
+    private readonly Panel _stateBox = new();
     private readonly Label _stateTitle = new();
     private readonly Label _stateSub = new();
+    private readonly Panel _stateBtnWrap = new();
     private readonly RoundedButton _stateButton = new();
     private readonly Panel _pager = new();
     private readonly Label _summaryLabel = new();
@@ -217,12 +219,22 @@ public class AdminUserManagementControl : UserControl
         _statePanel.Dock = DockStyle.Fill;
         _statePanel.BackColor = UITheme.White;
         _statePanel.Visible = false;
+        _stateBox.Size = new Size(460, 180);
+        _stateBox.BackColor = UITheme.White;
         _stateTitle.Font = UITheme.FontH3;
         _stateTitle.ForeColor = UITheme.Ink;
-        _stateTitle.AutoSize = true;
+        _stateTitle.Dock = DockStyle.Top;
+        _stateTitle.Height = 40;
+        _stateTitle.TextAlign = ContentAlignment.MiddleCenter;
         _stateSub.Font = UITheme.FontBody;
         _stateSub.ForeColor = UITheme.Neutral600;
-        _stateSub.AutoSize = true;
+        _stateSub.Dock = DockStyle.Top;
+        _stateSub.Height = 48;
+        _stateSub.TextAlign = ContentAlignment.TopCenter;
+        _stateBtnWrap.Dock = DockStyle.Top;
+        _stateBtnWrap.Height = 52;
+        _stateBtnWrap.BackColor = UITheme.White;
+        _stateButton.Anchor = AnchorStyles.None;
         _stateButton.Style = RoundButtonStyle.Secondary;
         _stateButton.Size = new Size(130, 36);
         _stateButton.Click += (_, _) =>
@@ -236,9 +248,11 @@ public class AdminUserManagementControl : UserControl
                 _ = LoadUsersAsync();
             }
         };
-        _statePanel.Controls.Add(_stateTitle);
-        _statePanel.Controls.Add(_stateSub);
-        _statePanel.Controls.Add(_stateButton);
+        _stateBtnWrap.Controls.Add(_stateButton);
+        _stateBox.Controls.Add(_stateBtnWrap);
+        _stateBox.Controls.Add(_stateSub);
+        _stateBox.Controls.Add(_stateTitle);
+        _statePanel.Controls.Add(_stateBox);
         _statePanel.Resize += (_, _) => ArrangeState();
 
         _gridCard.Controls.Add(_grid);
@@ -247,10 +261,12 @@ public class AdminUserManagementControl : UserControl
 
     private void ArrangeState()
     {
-        int centerX = _statePanel.Width / 2;
-        _stateTitle.Location = new Point(centerX - _stateTitle.Width / 2, _statePanel.Height / 2 - 52);
-        _stateSub.Location = new Point(centerX - _stateSub.Width / 2, _statePanel.Height / 2 - 20);
-        _stateButton.Location = new Point(centerX - _stateButton.Width / 2, _statePanel.Height / 2 + 12);
+        // Căn cả khối vào giữa panel: không đo chữ, không bao giờ văng ra ngoài.
+        _stateBox.Location = new Point(
+            Math.Max(0, (_statePanel.Width - _stateBox.Width) / 2),
+            Math.Max(0, (_statePanel.Height - _stateBox.Height) / 2));
+        _stateButton.Location = new Point(
+            Math.Max(0, (_stateBtnWrap.Width - _stateButton.Width) / 2), 6);
     }
 
     private void ShowState(string mode, string title, string sub, string? buttonText, string action)
@@ -495,26 +511,5 @@ public class AdminUserManagementControl : UserControl
         }
 
         base.Dispose(disposing);
-    }
-
-    /// <summary>Nhãn pill nhỏ dùng cho badge trong header.</summary>
-    private sealed class BadgeLabel : Control
-    {
-        private readonly Color _bg;
-        private readonly Color _fg;
-
-        public BadgeLabel(string text, Color bg, Color fg)
-        {
-            Text = text;
-            _bg = bg;
-            _fg = fg;
-            Font = UITheme.FontMicro;
-            BackColor = UITheme.White;
-            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
-            Size = new Size(TextRenderer.MeasureText(text, Font).Width + 20, 20);
-        }
-
-        protected override void OnPaint(PaintEventArgs e) =>
-            UITheme.DrawBadge(e.Graphics, Text, _bg, _fg, new Rectangle(0, 0, Width - 1, Height - 1));
     }
 }
