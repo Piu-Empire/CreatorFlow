@@ -117,3 +117,27 @@
 * Dữ liệu chung với Board: Calendar đọc qua provider `Func` + reload khi mở/khi Drawer đóng → không snapshot cũ, không query riêng.
 * Lưới Month vẽ tay 42 ô: 1 control custom-drawn duy nhất (CAL-16 khóa ở review), mỗi ô gọn (3 chip + `+n`), chi tiết nằm ở Drawer.
 * `OpenContentById` highlight thẻ trên Board (`FindCardControl` trả null khi Board ẩn — code đã null-check) → click từ Calendar vẫn mở Drawer bình thường, chỉ thiếu viền chọn trên Board (chấp nhận).
+
+## 10. Chia Việc Designer (lập trình trực quan)
+* Mục tiêu: người làm UI kéo-thả khung màn hình trong Visual Studio, code logic do dev viết — 2 bên không giẫm chân nhau.
+* Đã mở khóa Toolbox (commit này): `RoundedPanel` (FillColor/BorderColor/Radius), `RoundedButton` (Style/ShowPlusIcon/BorderRadius), `BadgeLabel` (Text/BgColor/FgColor, thêm dựng không tham số) — build solution 1 lần là hiện trong Toolbox. `SegmentedControl` chỉ kéo vị trí/kích thước, Items set bằng code 1 dòng.
+* **Bạn tạo:** UserControl `CalendarControl` trong `src/CreatorFlow/Controls/` (Add > User Control), dựng khung theo bảng dưới, giữ nguyên mọi `Name`.
+* **Quy tắc ranh giới:** bạn chỉ sửa `.Designer.cs` qua kéo-thả (vị trí/kích thước/Text), không đổi Name/không xóa control; dev chỉ viết `CalendarControl.cs` + `CalendarGridView.cs`, không sửa `.Designer.cs`. Font/màu chữ dev ép `UITheme` trong code — bạn đừng mất công chỉnh font/màu trên Designer.
+
+| Name | Loại (Toolbox) | Bố trí | Ghi chú |
+| :--- | :--- | :--- | :--- |
+| (root) | UserControl | BackColor `#FAFAFA`, Padding 24,20,24,20 | Font để mặc định, code ép sau |
+| pnlHeaderCard | RoundedPanel | Dock Top, Height 168, Fill White, Border `#E5E5E5`, Radius 12 | Card trắng theo mục 26 |
+| lblTitle | Label | (20,12), Text "Lịch Content" | Vị trí + chữ của bạn |
+| badgeKind | BadgeLabel | Cạnh phải lblTitle, Text "Lịch" | Màu set ở Properties |
+| lblDesc | Label | (20,52), Text mô tả 1 dòng | Vị trí + chữ của bạn |
+| flpToolbar | FlowLayoutPanel | (20,84), AutoSize | Chứa 3 món dưới |
+| pnlViewSwitch | Panel | (~200,36), để trống | Dev nhét Segmented vào |
+| btnToday | RoundedButton | Text "‹ Hôm nay ›", Style Secondary, 110×36 | Kéo từ Toolbox sau khi build |
+| segPlatform | SegmentedControl | (~300,36) | Vị trí của bạn, Items dev set |
+| pnlGridHost | Panel | Dock Fill, để trống | Dev nhét lưới vẽ tay vào |
+| pnlPager | Panel | Dock Bottom, Height 48 | Chứa 4 món dưới |
+| lblSummary | Label | Dock Left, Text "Đang hiện…" | Vị trí + chữ mẫu của bạn |
+| btnPrev / lblPage / btnNext | RoundedButton/Label/RoundedButton | Cạnh phải pnlPager | Text "Trước"/"Trang 1/1"/"Sau" |
+| pnlState | Panel | Dock Fill, Visible False, BackColor White | Overlay khi rỗng/lỗi |
+| lblStateTitle / lblStateSub / btnState | Label/Label/RoundedButton | Giữa pnlState | Text mẫu + nút "Thử lại" |
