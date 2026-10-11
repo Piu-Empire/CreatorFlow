@@ -7,6 +7,7 @@
 		<UseWindowsForms>true</UseWindowsForms>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<NoWarn>$(NoWarn);WFO1000</NoWarn>
+		<UserSecretsId>13c8fafa-879c-42ff-a6c6-cc479b53ba7e</UserSecretsId>
 	</PropertyGroup>
 
 	<!-- Bỏ bản sao cũ lồng bên trong (CreatorFlow\CreatorFlow\) để không bị build trùng -->
@@ -23,6 +24,7 @@
 	<ItemGroup>
 		<PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="10.0.12" />
 		<PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.12" />
+		<PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="6.0.1" />
 		<PackageReference Include="Npgsql" Version="10.0.3" />
 	</ItemGroup>
 

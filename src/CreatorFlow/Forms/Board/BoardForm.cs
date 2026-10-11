@@ -1,6 +1,7 @@
 ﻿using CreatorFlow.Models.Enums;
 using CreatorFlow.Controls;
 using CreatorFlow.Forms.IdeaBank;
+using CreatorFlow.Forms.ProjectSettings;
 using CreatorFlow.Forms.Tasks;
 using CreatorFlow.Models;
 using CreatorFlow.Repositories.Interfaces;
@@ -34,6 +35,7 @@ public partial class BoardForm : Form, IMessageFilter
     private readonly MyTaskService _myTaskService;
     private readonly IdeaService _ideaService;
     private readonly AuthApiFacade? _auth;
+    private readonly ProjectInvitationService? _invitationService;
     private ProfileControl? _profile;
     private readonly CancellationTokenSource _authLifetime = new();
     private int _avatarGeneration;
@@ -70,7 +72,8 @@ public partial class BoardForm : Form, IMessageFilter
         MyTaskService myTaskService,
         ScriptService scriptService,
         IdeaService ideaService,
-        AuthApiFacade? auth = null)
+        AuthApiFacade? auth = null,
+        ProjectInvitationService? invitationService = null)
     {
         InitializeComponent();
         _workflowService = workflowService;
@@ -82,6 +85,7 @@ public partial class BoardForm : Form, IMessageFilter
         _activityRepository = activityRepository;
         _memberRepository = memberRepository;
         _auth = auth;
+        _invitationService = invitationService;
         if (auth is not null)
         {
             _sidebarControl.SetAuthenticatedAccount(auth.Session.CurrentUser?.DisplayName ?? string.Empty,
@@ -108,6 +112,7 @@ public partial class BoardForm : Form, IMessageFilter
         _sidebarControl.ReviewQueueRequested += (_, _) => OpenReviewQueue();
         _sidebarControl.MyTasksRequested += (_, _) => OpenMyTasks();
         _sidebarControl.IdeaBankRequested += (_, _) => OpenIdeaBank();
+        _sidebarControl.ProjectSettingsRequested += (_, _) => OpenProjectSettings();
         _sidebarControl.BoardRequested += (_, _) => { CloseProfile(); ReloadBoard(); };
         UpdateProjectContext();
         if (!HasProjectContext) ReloadBoard();
@@ -433,6 +438,21 @@ public partial class BoardForm : Form, IMessageFilter
         }
 
         ReloadBoard();
+    }
+
+    /// <summary>Mở hộp thoại Mời thành viên (SCRUM-26) của Project hiện hành. Quyền Owner do API quyết định.</summary>
+    private void OpenProjectSettings()
+    {
+        if (!HasProjectContext) return;
+        CloseProfile();
+        if (_invitationService is null)
+        {
+            _toast.ShowToast(this, "Chua ket noi API de moi thanh vien");
+            return;
+        }
+
+        using var dialog = new InviteMemberDialog(_invitationService, CurrentSession.CurrentProjectId, CurrentSession.CurrentProjectName);
+        dialog.ShowDialog(this);
     }
 
     /// <summary>Mở drawer chi tiết cho Content theo Id (kể cả khi thẻ đang bị ẩn bởi bộ lọc tìm kiếm/platform).</summary>
