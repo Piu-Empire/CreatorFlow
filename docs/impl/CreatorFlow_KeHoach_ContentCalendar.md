@@ -120,9 +120,13 @@
 
 ## 10. Chia Việc Designer (lập trình trực quan)
 * Mục tiêu: người làm UI kéo-thả khung màn hình trong Visual Studio, code logic do dev viết — 2 bên không giẫm chân nhau.
-* Đã mở khóa Toolbox (commit này): `RoundedPanel` (FillColor/BorderColor/Radius), `RoundedButton` (Style/ShowPlusIcon/BorderRadius), `BadgeLabel` (Text/BgColor/FgColor, thêm dựng không tham số) — build solution 1 lần là hiện trong Toolbox. `SegmentedControl` chỉ kéo vị trí/kích thước, Items set bằng code 1 dòng.
-* **Bạn tạo:** UserControl `CalendarControl` trong `src/CreatorFlow/Controls/` (Add > User Control), dựng khung theo bảng dưới, giữ nguyên mọi `Name`.
-* **Quy tắc ranh giới:** bạn chỉ sửa `.Designer.cs` qua kéo-thả (vị trí/kích thước/Text), không đổi Name/không xóa control; dev chỉ viết `CalendarControl.cs` + `CalendarGridView.cs`, không sửa `.Designer.cs`. Font/màu chữ dev ép `UITheme` trong code — bạn đừng mất công chỉnh font/màu trên Designer.
+* Đã mở khóa Toolbox (commit trước): `RoundedPanel` (FillColor/BorderColor/Radius), `RoundedButton` (Style/ShowPlusIcon/BorderRadius), `BadgeLabel` (Text/BgColor/FgColor, thêm dựng không tham số) — build solution 1 lần là hiện trong Toolbox. `SegmentedControl` chỉ kéo vị trí/kích thước, Items set bằng code 1 dòng.
+* **Quy trình template-trước (chốt):**
+  1. Team tạo UserControl `CalendarControl` trong Designer TRƯỚC (khung, tên, vị trí theo bảng dưới).
+  2. Dev chỉ viết `CalendarControl.cs` (logic + style + nhét control động vào placeholder), **tuyệt đối không sửa `.Designer.cs`**.
+  3. Sau này team mở lại Designer vẫn kéo-thả sửa được mọi control mình đã tạo — vì code dev không xóa/không đổi tên/không dời control của team.
+  4. Ngoại lệ duy nhất: control dev tự thêm bằng code (lưới vẽ tay, items của Segmented) chỉ xuất hiện lúc chạy, không có trong Designer — muốn dời chúng thì dời **khung placeholder** chứa chúng.
+  5. Nếu team đổi tên/xóa control: build báo lỗi đúng dòng code dev tham chiếu tới — sửa tên theo, không đoán mò.
 
 | Name | Loại (Toolbox) | Bố trí | Ghi chú |
 | :--- | :--- | :--- | :--- |
