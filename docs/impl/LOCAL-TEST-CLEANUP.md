@@ -7,7 +7,7 @@ File này liệt kê TOÀN BỘ đồ tạm phục vụ test local. Trước khi
 
 | # | Vị trí | Nội dung tạm | Cách xóa |
 | :--- | :--- | :--- | :--- |
-| 1 | `CreatorFlow/Program.cs` | Khối đọc `Dev:CurrentProjectId`/`Dev:CurrentProjectName` + `using Microsoft.Extensions.Configuration` | Xóa cả khối + dòng using (kiểm tra using không còn dùng chỗ khác) |
+| 1 | `CreatorFlow/Forms/Board/BoardForm.cs` | Khối `TẠM-LOCAL` đọc `Dev:CurrentProjectId` trong ctor + `using Microsoft.Extensions.Configuration` | Xóa cả khối + dòng using (kiểm tra using không còn dùng chỗ khác) |
 | 2 | `Controls/CalendarControl.Designer.cs` | `segProject` (khai báo + khởi tạo + Add vào toolbar) | Xóa 3 chỗ |
 | 3 | `Controls/CalendarControl.cs` | Event `SampleProjectChanged` + khối setup `segProject` | Xóa 2 chỗ |
 | 4 | `Forms/Board/BoardForm.cs` | Handler `SampleProjectChanged` trong `OpenCalendar` | Xóa khối subscribe |

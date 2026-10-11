@@ -6,6 +6,7 @@ using CreatorFlow.Repositories.Interfaces;
 using CreatorFlow.Services;
 using CreatorFlow.Services.Exceptions;
 using CreatorFlow.Theme;
+using Microsoft.Extensions.Configuration;
 
 namespace CreatorFlow.Forms.Board;
 
@@ -80,6 +81,24 @@ public partial class BoardForm : Form, IMessageFilter
         _activityRepository = activityRepository;
         _memberRepository = memberRepository;
         _auth = auth;
+        // TẠM-LOCAL (xóa khi push, xem LOCAL-TEST-CLEANUP.md): tự chọn project mẫu vì
+        // LoginSucceeded luôn reset project về 0 mà SCRUM-25 chưa có UI chọn project.
+        // Đọc từ appsettings.Local.json (không commit) nên không ảnh hưởng máy khác.
+        if (CurrentSession.CurrentProjectId <= 0)
+        {
+            var devConfig = new ConfigurationBuilder().SetBasePath(AppContext.BaseDirectory)
+                .AddJsonFile("appsettings.json", optional: true)
+                .AddJsonFile("appsettings.Local.json", optional: true)
+                .Build();
+            if (int.TryParse(devConfig["Dev:CurrentProjectId"], out int devProjectId) && devProjectId > 0)
+            {
+                CurrentSession.CurrentProjectId = devProjectId;
+                CurrentSession.CurrentProjectName =
+                    string.IsNullOrWhiteSpace(devConfig["Dev:CurrentProjectName"])
+                        ? $"Project {devProjectId}" : devConfig["Dev:CurrentProjectName"]!.Trim();
+            }
+        }
+
         if (auth is not null)
         {
             _sidebarControl.SetAuthenticatedAccount(auth.Session.CurrentUser?.DisplayName ?? string.Empty,

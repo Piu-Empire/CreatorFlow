@@ -1,6 +1,5 @@
 using CreatorFlow.Data;
 using CreatorFlow.Forms.Board;
-using Microsoft.Extensions.Configuration;
 using CreatorFlow.Repositories.Implementations;
 using CreatorFlow.Repositories.InMemory;
 using CreatorFlow.Repositories.Interfaces;
@@ -91,21 +90,6 @@ static class Program
         CurrentSession.CurrentUserName = string.Empty;
         CurrentSession.CurrentProjectId = 0;
         CurrentSession.CurrentProjectName = string.Empty;
-
-        // TẠM THỜI cho test local (chờ UI chọn project của SCRUM-25): đọc project mặc định
-        // từ appsettings.Local.json ("Dev:CurrentProjectId"). File Local không commit nên
-        // không ảnh hưởng máy khác; xóa đoạn này khi có UI chọn project thật.
-        var devConfig = new ConfigurationBuilder().SetBasePath(AppContext.BaseDirectory)
-            .AddJsonFile("appsettings.json", optional: true)
-            .AddJsonFile("appsettings.Local.json", optional: true)
-            .Build();
-        if (int.TryParse(devConfig["Dev:CurrentProjectId"], out int devProjectId) && devProjectId > 0)
-        {
-            CurrentSession.CurrentProjectId = devProjectId;
-            CurrentSession.CurrentProjectName =
-                string.IsNullOrWhiteSpace(devConfig["Dev:CurrentProjectName"])
-                    ? $"Project {devProjectId}" : devConfig["Dev:CurrentProjectName"]!.Trim();
-        }
 
         if (args.Length > 0 && args[0] == "--test")
         {
