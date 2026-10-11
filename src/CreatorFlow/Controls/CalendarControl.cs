@@ -33,8 +33,8 @@ namespace CreatorFlow.Controls
         private DateTime _cursor = DateTime.Today;
         private string _stateAction = string.Empty;
 
-        /// <summary>Nguồn cards dùng chung với Board (BoardForm gán khi mở màn hình).</summary>
-        public Func<List<ContentBoardCard>>? CardProvider { get; set; }
+        /// <summary>Nguồn cards dùng chung với Board (BoardForm gán khi mở màn hình; null = chưa chọn project).</summary>
+        public Func<List<ContentBoardCard>?>? CardProvider { get; set; }
 
         /// <summary>BoardForm đăng ký để mở Drawer chi tiết khi click chip.</summary>
         public event Action<long>? ContentOpened;

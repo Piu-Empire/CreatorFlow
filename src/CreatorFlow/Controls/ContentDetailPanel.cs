@@ -602,7 +602,7 @@ public partial class ContentDetailPanel : UserControl
     }
 
     private List<string> SelectedPlatformNames() =>
-        _mnuPlatforms.Items.OfType<ToolStripMenuItem>().Where(i => i.Checked).Select(i => i.Text).ToList();
+        _mnuPlatforms.Items.OfType<ToolStripMenuItem>().Where(i => i.Checked).Select(i => i.Text ?? string.Empty).ToList();
 
     private void UpdatePlatformButtonText()
     {

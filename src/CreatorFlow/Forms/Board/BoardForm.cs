@@ -101,8 +101,6 @@ public partial class BoardForm : Form, IMessageFilter
 
         _topHeaderControl.NewContentClicked += (_, _) => OpenCreateContentDialog();
 
-        _modulePageHeader.RefreshClicked += (_, _) => { ReloadBoard(); _toast.ShowToast(this, "Da lam moi du lieu Board"); };
-        _modulePageHeader.ReviewQueueClicked += (_, _) => OpenReviewQueue();
         _modulePageHeader.CreateContentClicked += (_, _) => OpenCreateContentDialog();
         _modulePageHeader.SearchTextChanged += (_, _) => ApplyFilters();
         _modulePageHeader.PlatformFilterChanged += (_, _) => ApplyFilters();

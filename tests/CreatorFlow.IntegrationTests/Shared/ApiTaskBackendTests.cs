@@ -210,77 +210,7 @@ public sealed class ApiTaskBackendTests
         Assert.AreEqual(2L, rows.Single().AssigneeUserId);
     }
 
-    // ==================================================================
-    // MyTaskService / ContentService uỷ quyền cho Backend
-    // ==================================================================
-
-    [TestMethod]
-    public void MyTaskService_Remote_DelegatesEveryOperationToBackend()
-    {
-        var backend = new FakeMyTaskBackend();
-        var service = MyTaskService.CreateRemote(backend);
-
-        var tasks = service.GetMyTasks(1, 2);
-        service.UpdateProgress(10, 50, 2);
-        service.ChangeDeadline(10, 2, new DateTime(2026, 10, 20), 3);
-
-        Assert.AreEqual(2, tasks.Count);
-        Assert.AreEqual(1, service.CountOpenTasks(1, 2));                     // một task Assigned + một Completed → 1 task chưa xong
-        Assert.IsTrue(service.CanChangeDeadline(1, 2));
-        CollectionAssert.AreEqual(new[] { "progress:10:50", "deadline:10:2:2026-10-20" }, backend.Calls.Where(c => !c.StartsWith("tasks") && !c.StartsWith("can")).ToArray());
-    }
-
-    [TestMethod]
-    public void MyTaskService_Remote_StillRejectsBadProgressBeforeCallingApi()
-    {
-        var backend = new FakeMyTaskBackend();
-
-        Assert.ThrowsExactly<ContentValidationException>(() => MyTaskService.CreateRemote(backend).UpdateProgress(10, 101, 2));
-        Assert.AreEqual(0, backend.Calls.Count);
-    }
-
-    [TestMethod]
-    public void ContentService_WithBackend_AssignmentCallsGoToBackendNotLocalRepository()
-    {
-        var backend = new FakeAssignmentBackend();
-        var service = BuildContentService(backend, out _, out _);
-
-        var members = service.GetAssignableMembers(1, 2);
-        var rows = service.GetAssignments(10);
-        service.AssignContent(10, new[] { new AssignmentRequest(2, null) }, 3);
-
-        Assert.AreEqual(1, members.Count);
-        Assert.AreEqual(0, rows.Count);
-        CollectionAssert.AreEqual(new[] { "members:1", "assignments:10", "assign:10:2" }, backend.Calls.ToArray());
-    }
-
-    [TestMethod]
-    public void ContentService_WithBackend_CreateAssignsAfterCommitSoBackendSeesTheContent()
-    {
-        var order = new List<string>();
-        var backend = new FakeAssignmentBackend { Log = order };
-        var service = BuildContentService(backend, out var uow, out var details);
-        uow.Log = order;
-        details.Log = order;
-
-        long id = service.Create(1, ContentStatus.Idea,
-            new ContentDraft { Title = "Tiêu đề", Description = "Mô tả", AssigneeUserId = 2 }, 1);
-
-        Assert.AreEqual(555L, id);
-        CollectionAssert.AreEqual(new[] { "create-content", "commit", "assign:555:2" }, order.ToArray());
-    }
-
-    [TestMethod]
-    public void ContentService_WithBackend_CreateWithoutAssigneeDoesNotCallBackend()
-    {
-        var backend = new FakeAssignmentBackend();
-        var service = BuildContentService(backend, out _, out _);
-
-        service.Create(1, ContentStatus.Idea, new ContentDraft { Title = "Tiêu đề", Description = "Mô tả" }, 1);
-
-        Assert.AreEqual(0, backend.Calls.Count);
-    }
-
+    // LƯU Ý (11/10/2026): đã xóa 5 test MyTaskService/ContentService dùng backend-injected vì kiến trúc đó không còn trong src (mất MyTaskService.CreateRemote và tham số ContentService(assignmentBackend:)). Giữ test cho hành vi đã xóa = test mã chết. Chủ module Tasks viết lại khi cần.
     // ==================================================================
     // Board: Creator được giao lấy từ API
     // ==================================================================
@@ -328,17 +258,6 @@ public sealed class ApiTaskBackendTests
     private static string Problem(string code, string title) =>
         $"{{\"title\":\"{title}\",\"status\":400,\"code\":\"{code}\"}}";
 
-    private static ContentService BuildContentService(
-        IAssignmentBackend backend, out FakeUnitOfWork uow, out FakeDetailsRepository details)
-    {
-        uow = new FakeUnitOfWork();
-        details = new FakeDetailsRepository();
-        return new ContentService(
-            new InMemoryContentRepository(), details, new InMemoryContentStatusHistoryRepository(),
-            new InMemoryProjectMemberRepository(), new InMemoryPlatformRepository(), uow,
-            taskRepo: null, assignmentBackend: backend);
-    }
-
     private sealed class FakeHandler : HttpMessageHandler
     {
         private HttpStatusCode _status = HttpStatusCode.OK;
@@ -368,64 +287,6 @@ public sealed class ApiTaskBackendTests
 
     private sealed record RecordedRequest(string Method, string Path, string? Authorization, string? Body);
 
-    private sealed class FakeMyTaskBackend : IMyTaskBackend
-    {
-        public List<string> Calls { get; } = new();
-
-        public List<MyTaskItem> GetMyTasks(long projectId)
-        {
-            Calls.Add($"tasks:{projectId}");
-            return new List<MyTaskItem>
-            {
-                new() { ContentId = 10, Status = AssignmentStatus.Assigned },
-                new() { ContentId = 11, Status = AssignmentStatus.Completed },
-            };
-        }
-
-        public MyTaskItem UpdateProgress(long contentId, int percent)
-        {
-            Calls.Add($"progress:{contentId}:{percent}");
-            return new MyTaskItem { ContentId = contentId, ProgressPercent = percent };
-        }
-
-        public MyTaskItem ChangeDeadline(long contentId, long assigneeUserId, DateTime? deadline)
-        {
-            Calls.Add($"deadline:{contentId}:{assigneeUserId}:{deadline:yyyy-MM-dd}");
-            return new MyTaskItem { ContentId = contentId, Deadline = deadline };
-        }
-
-        public bool CanChangeDeadline(long projectId)
-        {
-            Calls.Add($"can:{projectId}");
-            return true;
-        }
-    }
-
-    private sealed class FakeAssignmentBackend : IAssignmentBackend
-    {
-        public List<string> Calls { get; } = new();
-        public List<string>? Log { get; init; }
-
-        public List<ProjectMemberInfo> GetAssignableMembers(long projectId)
-        {
-            Calls.Add($"members:{projectId}");
-            return new List<ProjectMemberInfo> { new() { UserId = 2, Name = "Creator A", Role = ProjectRole.Creator } };
-        }
-
-        public List<MyTaskItem> GetAssignments(long contentId)
-        {
-            Calls.Add($"assignments:{contentId}");
-            return new List<MyTaskItem>();
-        }
-
-        public void AssignContent(long contentId, IReadOnlyList<AssignmentRequest> assignments)
-        {
-            string entry = $"assign:{contentId}:{string.Join(",", assignments.Select(a => a.UserId))}";
-            Calls.Add(entry);
-            Log?.Add(entry);
-        }
-    }
-
     private sealed class FakeUnitOfWork : IUnitOfWork
     {
         public List<string>? Log { get; set; }
@@ -446,6 +307,8 @@ public sealed class ApiTaskBackendTests
         }
 
         public void Update(long contentId, ContentDraft draft) { }
+
+        public Content? GetDetail(long contentId) => null;
     }
 
     private sealed class FakeBoardRepository(params ContentBoardCard[] cards) : IBoardRepository
