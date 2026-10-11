@@ -12,8 +12,21 @@ public class CalendarGridView : Control
     private const int CellPad = 6;
     private const int MaxChipsPerCell = 3;
 
-    private readonly List<(Rectangle Rect, long ContentId)> _chipHits = new();
+    private const int UnscheduledRowH = 26;
+    private const int UnscheduledHeaderH = 30;
+
+    private readonly List<(Rectangle Rect, long ContentId, string Label)> _chipHits = new();
     private readonly List<(Rectangle Rect, DateTime Date)> _moreHits = new();
+    private readonly ToolTip _tip = new();
+
+    private static readonly string[] WeekdayNames = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
+
+    /// <summary>Chiều cao dải chưa xếp lịch theo đúng số dòng vẽ (không chiếm thừa).</summary>
+    private int FooterHeight =>
+        Unscheduled.Count == 0 ? 0 : UnscheduledHeaderH + Math.Min(3, Unscheduled.Count) * (UnscheduledRowH + 2);
+
+    /// <summary>Tên thứ theo lịch Việt Nam (tuần bắt đầu Thứ 2).</summary>
+    private static string WeekdayName(DateTime date) => WeekdayNames[((int)date.DayOfWeek + 6) % 7];
 
     public CalendarView View { get; set; } = CalendarView.Month;
 
@@ -36,12 +49,19 @@ public class CalendarGridView : Control
         Font = UITheme.FontBody;
     }
 
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing) _tip.Dispose();
+        base.Dispose(disposing);
+    }
+
     protected override void OnMouseMove(MouseEventArgs e)
     {
         base.OnMouseMove(e);
-        bool hot = _chipHits.Any(h => h.Rect.Contains(e.Location)) ||
-            _moreHits.Any(h => h.Rect.Contains(e.Location));
+        var chip = _chipHits.FirstOrDefault(h => h.Rect.Contains(e.Location));
+        bool hot = chip != default || _moreHits.Any(h => h.Rect.Contains(e.Location));
         Cursor = hot ? Cursors.Hand : Cursors.Default;
+        _tip.SetToolTip(this, chip != default ? chip.Label : string.Empty);
     }
 
     protected override void OnMouseClick(MouseEventArgs e)
@@ -66,7 +86,7 @@ public class CalendarGridView : Control
         g.Clear(UITheme.White);
         _chipHits.Clear();
         _moreHits.Clear();
-        _viewHeight = Height - (Unscheduled.Count == 0 ? 0 : UnscheduledFooterHeight);
+        _viewHeight = Height - FooterHeight;
         switch (View)
         {
             case CalendarView.Month: PaintMonth(g); break;
@@ -77,8 +97,6 @@ public class CalendarGridView : Control
         PaintUnscheduled(g, Height);
     }
 
-    private const int UnscheduledFooterHeight = 30 + 3 * (26 + 2);
-
     /// <summary>Chiều cao vùng vẽ lưới (trừ dải chưa xếp lịch).</summary>
     private int _viewHeight;
 
@@ -86,12 +104,11 @@ public class CalendarGridView : Control
 
     private void PaintMonth(Graphics g)
     {
-        string[] days = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
         int colW = Width / 7;
         for (int i = 0; i < 7; i++)
         {
             var r = new Rectangle(i * colW, 0, colW, HeaderH);
-            TextRenderer.DrawText(g, days[i], UITheme.FontLabelBold, r, UITheme.Neutral600,
+            TextRenderer.DrawText(g, WeekdayNames[i], UITheme.FontLabelBold, r, UITheme.Neutral600,
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine);
         }
 
@@ -123,8 +140,10 @@ public class CalendarGridView : Control
             using (var gridPen = new Pen(UITheme.Neutral200, 1f))
                 g.DrawRectangle(gridPen, col);
             DateTime date = days[i];
-            PaintDateNumber(g, date, new Rectangle(col.X + CellPad, 4, 60, 22), true);
-            PaintChips(g, Chips(date), new Rectangle(col.X + CellPad, HeaderH, col.Width - CellPad * 2, _viewHeight - HeaderH - 4), date);
+            TextRenderer.DrawText(g, WeekdayNames[i], UITheme.FontLabel, new Rectangle(col.X + CellPad, 2, col.Width - CellPad * 2, 16),
+                UITheme.Neutral600, TextFormatFlags.Left | TextFormatFlags.SingleLine);
+            PaintDateNumber(g, date, new Rectangle(col.X + CellPad, 18, 60, 22), true);
+            PaintChips(g, Chips(date), new Rectangle(col.X + CellPad, HeaderH + 12, col.Width - CellPad * 2, _viewHeight - HeaderH - 16), date);
         }
     }
 
@@ -133,7 +152,9 @@ public class CalendarGridView : Control
     private void PaintDay(Graphics g)
     {
         DateTime date = CursorDate.Date;
-        PaintDateNumber(g, date, new Rectangle(CellPad, 4, 200, 22), true);
+        TextRenderer.DrawText(g, WeekdayName(date), UITheme.FontLabel, new Rectangle(CellPad, 2, 200, 16),
+            UITheme.Neutral600, TextFormatFlags.Left | TextFormatFlags.SingleLine);
+        PaintDateNumber(g, date, new Rectangle(CellPad, 18, 200, 22), true);
         List<CalendarChip> chips = Chips(date);
         int y = HeaderH;
         foreach (CalendarChip chip in chips)
@@ -159,7 +180,7 @@ public class CalendarGridView : Control
     {
         if (Unscheduled.Count == 0) return;
         const int rowH = 26;
-        int top = bottom - UnscheduledFooterHeight;
+        int top = bottom - FooterHeight;
         using (var linePen = new Pen(UITheme.Neutral200, 1f))
             g.DrawLine(linePen, 0, top, Width, top);
         TextRenderer.DrawText(g, $"Chưa xếp lịch ({Unscheduled.Count})", UITheme.FontLabelBold,
@@ -188,7 +209,7 @@ public class CalendarGridView : Control
             UITheme.Neutral600,
             TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.SingleLine
                 | TextFormatFlags.NoPrefix);
-        _chipHits.Add((rect, card.ContentId));
+        _chipHits.Add((rect, card.ContentId, card.Code + " · " + card.Title));
     }
 
     // ---------- Khối dùng chung ----------
@@ -228,9 +249,10 @@ public class CalendarGridView : Control
             shown++;
         }
 
-        if (chips.Count > shown)
+        // Dòng "+n" chỉ vẽ khi còn chỗ trong ô, không bao giờ tràn sang ô dưới.
+        if (chips.Count > shown && y + 18 <= area.Bottom)
         {
-            var more = new Rectangle(area.X, y, 60, 20);
+            var more = new Rectangle(area.X, y, 60, 18);
             TextRenderer.DrawText(g, $"+{chips.Count - shown} nữa", UITheme.FontLabelBold, more,
                 UITheme.Neutral600, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine);
             _moreHits.Add((more, date));
@@ -257,6 +279,6 @@ public class CalendarGridView : Control
             chip.IsOverdue ? UITheme.Danger : UITheme.Ink,
             TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.SingleLine
                 | TextFormatFlags.NoPrefix);
-        _chipHits.Add((rect, chip.ContentId));
+        _chipHits.Add((rect, chip.ContentId, chip.Label));
     }
 }
