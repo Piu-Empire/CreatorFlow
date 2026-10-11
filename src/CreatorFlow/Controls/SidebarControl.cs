@@ -16,6 +16,7 @@ public class SidebarControl : UserControl
     public event EventHandler? MyTasksRequested;
     public event EventHandler? IdeaBankRequested;
     public event EventHandler? ProfileRequested;
+    public event EventHandler? ProjectSettingsRequested;
 
     private readonly Button _accountButton;
     private string _accountName = string.Empty;
@@ -165,7 +166,7 @@ public class SidebarControl : UserControl
         _items.Add(new NavItem { Title = "AI Assistant", Icon = NavIcon.Sparkle, Y = y, Badge = () => -1 });
 
         // Neo đáy: cách đáy 100px (phía trên dòng trạng thái)
-        _items.Add(new NavItem { Title = "Project Settings", Icon = NavIcon.Gear, Y = 100, AnchorBottom = true });
+        _items.Add(new NavItem { Title = "Project Settings", Icon = NavIcon.Gear, Y = 100, AnchorBottom = true, Action = () => ProjectSettingsRequested?.Invoke(this, EventArgs.Empty) });
     }
 
     private Rectangle GetItemRect(NavItem item)

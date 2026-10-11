@@ -100,11 +100,12 @@ static class Program
             using var api = ApiClient.Create(ApiClientConfiguration.Load());
             var session = new UserSession();
             var auth = new AuthApiFacade(api, session);
+            var invitations = new ProjectInvitationService(api, session);
             if (args.Length > 0 && args[0] == "--test")
             {
                 // Diagnostic layout only: no authentication, project queries, or message loop.
                 using var testForm = new BoardForm(workflowService, boardRepo, reviewQueueRepo,
-                    activityRepo, memberRepo, contentService, myTaskService, scriptService, ideaService, auth);
+                    activityRepo, memberRepo, contentService, myTaskService, scriptService, ideaService, auth, invitations);
                 var handle = testForm.Handle;
                 testForm.Size = new Size(1440, 900);
                 testForm.PerformLayout();
@@ -112,7 +113,7 @@ static class Program
                 return;
             }
             using var context = new AuthenticationApplicationContext(auth, () =>
-                new BoardForm(workflowService, boardRepo, reviewQueueRepo, activityRepo, memberRepo, contentService, myTaskService, scriptService, ideaService, auth));
+                new BoardForm(workflowService, boardRepo, reviewQueueRepo, activityRepo, memberRepo, contentService, myTaskService, scriptService, ideaService, auth, invitations));
             Application.Run(context);
         }
         catch (InvalidOperationException)
