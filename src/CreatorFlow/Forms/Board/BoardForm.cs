@@ -35,6 +35,7 @@ public partial class BoardForm : Form, IMessageFilter
     private ProfileControl? _profile;
     private AdminUserManagementControl? _admin;
     private AdminReportsControl? _reports;
+    private CalendarControl? _calendar;
     private readonly CancellationTokenSource _authLifetime = new();
     private int _avatarGeneration;
 
@@ -88,6 +89,7 @@ public partial class BoardForm : Form, IMessageFilter
             _sidebarControl.ProfileRequested += async (_, _) => await OpenProfileAsync();
             _sidebarControl.AdminWorkspaceRequested += async (_, _) => await OpenAdminAsync();
             _sidebarControl.AdminReportsRequested += async (_, _) => await OpenReportsAsync();
+            _sidebarControl.CalendarRequested += (_, _) => OpenCalendar();
         }
 
         _pnlDrawerHost.Paint += PnlDrawerHost_Paint;
@@ -106,9 +108,9 @@ public partial class BoardForm : Form, IMessageFilter
         _modulePageHeader.PlatformFilterChanged += (_, _) => ApplyFilters();
 
         _sidebarControl.ReviewQueueRequested += (_, _) => OpenReviewQueue();
-        _sidebarControl.BoardRequested += (_, _) => { CloseProfile(); CloseAdmin(); CloseReports(); ReloadBoard(); };
+        _sidebarControl.BoardRequested += (_, _) => { CloseProfile(); CloseAdmin(); CloseReports(); CloseCalendar(); ReloadBoard(); };
         _sidebarControl.MyTasksRequested += (_, _) => OpenMyTasks();
-        _sidebarControl.BoardRequested += (_, _) => { CloseProfile(); CloseAdmin(); CloseReports(); ReloadBoard(); };
+        _sidebarControl.BoardRequested += (_, _) => { CloseProfile(); CloseAdmin(); CloseReports(); CloseCalendar(); ReloadBoard(); };
         UpdateProjectContext();
         if (!HasProjectContext) ReloadBoard();
 
@@ -316,6 +318,7 @@ public partial class BoardForm : Form, IMessageFilter
         _selectedCardControl = null;
         _selectedContentId = null;
         _pnlDrawerHost.Visible = false;
+        _calendar?.RefreshData(); // Vẽ lại chip (deadline có thể vừa đổi trong Drawer).
     }
 
     private KanbanCardControl? FindCardControl(long contentId)
@@ -412,6 +415,7 @@ public partial class BoardForm : Form, IMessageFilter
         CloseProfile();
         CloseAdmin();
         CloseReports();
+        CloseCalendar();
         long? contentId;
         using (var tasksForm = new MyTasksForm(_myTaskService))
         {
@@ -457,6 +461,7 @@ public partial class BoardForm : Form, IMessageFilter
         CloseProfile();
         CloseAdmin();
         CloseReports();
+        CloseCalendar();
         using var queueForm = new Review.ReviewQueueForm(_reviewQueueRepository, _workflowService);
         queueForm.ShowDialog(this);
         ReloadBoard();
@@ -467,6 +472,7 @@ public partial class BoardForm : Form, IMessageFilter
         if (_auth is null || !_auth.Session.IsAuthenticated || _profile is not null) return;
         CloseAdmin();
         CloseReports();
+        CloseCalendar();
         var profile = new ProfileControl(_auth) { Dock = DockStyle.Fill };
         _profile = profile;
         UpdateProjectContext();
@@ -503,6 +509,7 @@ public partial class BoardForm : Form, IMessageFilter
         if (_auth.Session.CurrentUser?.IsSystemAdmin != true) return;
         CloseProfile();
         CloseReports();
+        CloseCalendar();
         var admin = new AdminUserManagementControl(_auth, _toast) { Dock = DockStyle.Fill };
         _admin = admin;
         _pnlDrawerHost.Visible = false;
@@ -531,6 +538,7 @@ public partial class BoardForm : Form, IMessageFilter
         if (_auth.Session.CurrentUser?.IsSystemAdmin != true) return;
         CloseProfile();
         CloseAdmin();
+        CloseCalendar();
         var reports = new AdminReportsControl(_auth, _toast) { Dock = DockStyle.Fill };
         _reports = reports;
         _pnlDrawerHost.Visible = false;
@@ -548,6 +556,36 @@ public partial class BoardForm : Form, IMessageFilter
         _reports = null;
         _pnlMain.Controls.Remove(reports);
         reports.Dispose();
+        _pnlBoardArea.Visible = true;
+        _topHeaderControl.SetAuthenticatedPage("Board");
+        UpdateProjectContext();
+    }
+
+    private void OpenCalendar()
+    {
+        if (_calendar is not null) return;
+        CloseProfile();
+        CloseAdmin();
+        CloseReports();
+        var calendar = new CalendarControl { Dock = DockStyle.Fill };
+        calendar.CardProvider = () => HasProjectContext ? _allCards : null;
+        calendar.ContentOpened += OpenContentById;
+        _calendar = calendar;
+        _pnlDrawerHost.Visible = false;
+        _pnlBoardArea.Visible = false;
+        _pnlMain.Controls.Add(calendar);
+        calendar.BringToFront();
+        _topHeaderControl.SetAuthenticatedPage("Lịch Content");
+        calendar.RefreshData();
+    }
+
+    private void CloseCalendar()
+    {
+        if (_calendar is null) return;
+        CalendarControl calendar = _calendar;
+        _calendar = null;
+        _pnlMain.Controls.Remove(calendar);
+        calendar.Dispose();
         _pnlBoardArea.Visible = true;
         _topHeaderControl.SetAuthenticatedPage("Board");
         UpdateProjectContext();

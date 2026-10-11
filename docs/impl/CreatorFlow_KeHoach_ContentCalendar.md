@@ -84,7 +84,7 @@
 
 ## 6. Các Bước
 1. **Model + repo (nửa buổi):** thêm property, SELECT, map InMemory; build.
-2. **Logic ngày thuần (nửa buổi):** `CalendarDateLogic` + unit test ngay (lưới tháng đủ 42 ô, chip 2 marker, overdue, unscheduled).
+2. **Logic ngày thuần + kiểm chứng (nửa buổi):** `CalendarDateLogic` (lưới 42 ô, chip 2 marker, overdue, unscheduled). LƯU Ý: project `IntegrationTests` đang vỡ sẵn ở HEAD (`ApiTaskBackendTests` dùng API đã bị xóa: `MyTaskService.CreateRemote`, ctor `ContentService`, thiếu `GetDetail`) — ngoài phạm vi nên không sửa; logic đã verify 11/11 qua runner tạm trỏ thẳng assembly client. Unit test chính thức chờ chủ module Tasks sửa file vỡ.
 3. **Khung màn hình (1 buổi):** header card + segmented + pager-less (lưới tự đủ) + states theo mục 13/26.
 4. **3 view (1–2 buổi):** Month grid → Week columns → Day list, chip vẽ tay (màu status, avatar xs nếu có assignee).
 5. **Đấu nối (nửa buổi):** sidebar event + BoardForm host + click callback + filter.
@@ -117,6 +117,7 @@
 * Dữ liệu chung với Board: Calendar đọc qua provider `Func` + reload khi mở/khi Drawer đóng → không snapshot cũ, không query riêng.
 * Lưới Month vẽ tay 42 ô: 1 control custom-drawn duy nhất (CAL-16 khóa ở review), mỗi ô gọn (3 chip + `+n`), chi tiết nằm ở Drawer.
 * `OpenContentById` highlight thẻ trên Board (`FindCardControl` trả null khi Board ẩn — code đã null-check) → click từ Calendar vẫn mở Drawer bình thường, chỉ thiếu viền chọn trên Board (chấp nhận).
+* Project `IntegrationTests` vỡ sẵn ở HEAD, không liên quan Calendar — không sửa trong story này (xem bước 2).
 
 ## 10. Chia Việc Designer (lập trình trực quan) — CHỐT ĐẢO VIỆC
 * **Bạn làm đúng 1 việc:** trong Visual Studio, chuột phải folder `Controls` → Add > User Control (Windows Forms) → đặt tên `CalendarControl.cs` → Add. Xong, không cần kéo-thả gì thêm.
@@ -134,7 +135,8 @@
 | flpToolbar | FlowLayoutPanel | (20,84), AutoSize | Chứa 3 món dưới |
 | pnlViewSwitch | Panel | (~200,36), để trống | Dev nhét Segmented vào |
 | btnToday | RoundedButton | Text "‹ Hôm nay ›", Style Secondary, 110×36 | Kéo từ Toolbox sau khi build |
-| segPlatform | SegmentedControl | (~300,36) | Vị trí của bạn, Items dev set |
+| segPlatform | SegmentedControl | (~300,36) | Vị trí của bạn, Items dev set (Tất cả + nền tảng) |
+| segStatus | SegmentedControl | trong flpToolbar sau segPlatform (~260,36) | Vị trí của bạn, Items dev set (Tất cả + 8 trạng thái) |
 | pnlGridHost | Panel | Dock Fill, để trống | Dev nhét lưới vẽ tay vào |
 | pnlPager | Panel | Dock Bottom, Height 48 | Chứa 4 món dưới |
 | lblSummary | Label | Dock Left, Text "Đang hiện…" | Vị trí + chữ mẫu của bạn |

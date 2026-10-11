@@ -17,6 +17,7 @@ public class SidebarControl : UserControl
     public event EventHandler? ProfileRequested;
     public event EventHandler? AdminWorkspaceRequested;
     public event EventHandler? AdminReportsRequested;
+    public event EventHandler? CalendarRequested;
 
     private readonly Button _accountButton;
     private string _accountName = string.Empty;
@@ -153,7 +154,7 @@ public class SidebarControl : UserControl
         _items.Add(new NavItem { Title = "Summary", Icon = NavIcon.Summary, Y = y }); y += ItemStep;
         _items.Add(new NavItem { Title = "Board", Icon = NavIcon.Board, Y = y, IsActive = true, Action = () => BoardRequested?.Invoke(this, EventArgs.Empty) }); y += ItemStep;
         _items.Add(new NavItem { Title = "Backlog", Icon = NavIcon.List, Y = y, Badge = () => BacklogCount }); y += ItemStep;
-        _items.Add(new NavItem { Title = "Calendar", Icon = NavIcon.Calendar, Y = y }); y += ItemStep;
+        _items.Add(new NavItem { Title = "Calendar", Icon = NavIcon.Calendar, Y = y, Action = () => CalendarRequested?.Invoke(this, EventArgs.Empty) }); y += ItemStep;
         _items.Add(new NavItem { Title = "Reports", Icon = NavIcon.Chart, Y = y }); y += ItemStep;
 
         y += 10;
@@ -339,7 +340,7 @@ public class SidebarControl : UserControl
         }
     }
 
-    /// <summary>Mục Board và mục Admin luôn thao tác được, các mục khác cần project.</summary>
+    /// <summary>Mục Board, Admin và Calendar luôn thao tác được, các mục khác cần project.</summary>
     private bool IsItemEnabled(NavItem item) =>
-        ProjectActionsEnabled || item.Icon is NavIcon.Board or NavIcon.Shield or NavIcon.Flag;
+        ProjectActionsEnabled || item.Icon is NavIcon.Board or NavIcon.Shield or NavIcon.Flag or NavIcon.Calendar;
 }
