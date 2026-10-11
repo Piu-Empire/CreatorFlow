@@ -6,12 +6,23 @@
 * **Người phụ trách:** Tính (Calendar/Analytics/AI theo `PhanCong_Timeline`).
 * **Nguyên tắc bao trùm:** Calendar là **view suy từ dữ liệu Content** (`UX` mục Calendar + nguyên tắc 6/20), không phải module dữ liệu mới.
 
-## 2. Căn Cứ Tài Liệu
-* `UX` mục Calendar: 3 chế độ `[ Month ] [ Week ] [ Day ]`, filter Creator/Platform/Status/Priority, click → Quick Preview → Open Content Detail.
-* `UX` nguyên tắc 6: Calendar dùng cùng dữ liệu Content; mục 17: mọi màn hình phải có empty/loading/error state.
-* Style guide: Page Header bắt buộc mọi module incl. Calendar (mục 26); click dòng Board/Calendar → mở Drawer (mục 15); Segmented lọc nhanh dùng được trên thanh công cụ Board/Calendar (mục 18); avatar cỡ xs trong thẻ Kanban/Calendar nhỏ (mục 21).
-* `KeHoachDuAn` mục Calendar: Day/Week/Month, production schedule, deadline, planned publish date, filter theo Project/Creator/Platform/Status.
-* `QuyTacLamViec`: Form chỉ gọi Service, không SQL trong UI; permission check ở Service (Calendar chỉ đọc nên không phát sinh check mới).
+## 2. Căn Cứ Tài Liệu (đã đối chiếu từng dòng)
+* `UX` mục Calendar (dòng 132–151): 3 chế độ `[ Month ] [ Week ] [ Day ]`, filter Creator/Platform/Status/Priority, click → Quick Preview → Open Content Detail.
+* `UX` nguyên tắc 6 (“Calendar và Reports dùng cùng dữ liệu Content”) và mục 17 (EMPTY / LOADING / ERROR STATE bắt buộc mọi màn hình).
+* Style guide: Page Header bắt buộc mọi module incl. Calendar (mục 26); click dòng Board/Calendar → mở Drawer (dòng 635); Segmented lọc nhanh dùng được trên thanh công cụ Board/Calendar (mục 18, biến thể nền trắng–nút đen); avatar cỡ xs trong thẻ Kanban/Calendar nhỏ (mục 21). **Style guide không có mẫu lưới tháng/tuần** — lưới lịch là custom drawing mới, xem §3.2.
+* `KeHoachDuAn` mục Calendar (dòng 105–109: Deadline, Planned Publish Date) + vai trò Manager/Creator “theo dõi Calendar” (dòng 42–54).
+* `QuyTacLamViec` dòng 5, 14–16: chuỗi `WinForms UI → Service → Repository…`, cấm SQL trong Form/UserControl, Form chỉ xử lý UI và gọi Service.
+* `PhanCong_Timeline` dòng 82–83, 127, 152, 174: Calendar thuộc Tính; mốc tuần 2 “Basic Calendar”, tuần 3 “Calendar dùng dữ liệu thật”.
+
+## 2b. Mẫu Có Sẵn Được Tái Dùng (không phát minh lại)
+| Mẫu | Ở đâu | Dùng cho Calendar |
+| :--- | :--- | :--- |
+| Hiển thị ngày + quá hạn | `MyTasksForm.FormatDeadline` (:546–556: `dd/MM/yyyy`, hậu tố “(trễ n ngày)”/“(hôm nay)”, màu `UITheme.OverdueText` khi quá hạn) | Format ngày trên chip + chữ đỏ quá hạn |
+| Logic quá hạn | `TaskRules.IsOverdue(deadline, isFinished, today)` (:83) + `DaysLate` (:87) | Gọi trực tiếp, `isFinished = status là Published/Archived` |
+| Khung màn hình + toolbar | `ModulePageHeaderControl` + `SegmentedControl` (ô đen-chữ trắng khi chọn) | Page Header + nút chuyển Tháng/Tuần/Ngày + lọc Platform |
+| Vẽ chip | `KanbanCardControl` (deadline `dd/MM`, badge, avatar) | Kiểu chip trên lưới (mã + tên rút gọn + chấm màu) |
+| Dữ liệu test có sẵn | `InMemoryDataStore` dòng 83: 1 content vừa có `Deadline` (+5 ngày) vừa có `PlannedPublishAt` (+8 ngày) | Fixture test CAL-03, không cần seed thêm |
+| Drawer chi tiết | `BoardForm.OpenContentById` (:427–452) + drawer dock cấp Form (`Designer.cs:101–109`) | Click chip mở đúng drawer này |
 
 ## 3. Acceptance Criteria
 
@@ -20,16 +31,17 @@
 * Nguồn dữ liệu duy nhất: `contents` qua đúng 1 call đã tồn tại `IBoardRepository.GetBoardCards(projectId)` — cùng nguồn Board đang dùng, tự tương thích cả 2 chế độ local Npgsql và InMemory (decorator API đi qua, không sửa).
 * Thay đổi dữ liệu duy nhất: thêm **1 cột vào SELECT có sẵn** (`c.planned_publish_at`) + **1 property** `PlannedPublishAt` vào `ContentBoardCard` (+ map ở 2 cài đặt Npgsql/InMemory). Lý do: card hiện chỉ có `Deadline`, thiếu mốc xuất bản thì AC "lịch đăng" không làm được.
 
-### 3.2. AC2: Đủ 3 chế độ + điều hướng
+### 3.2. AC2: Đủ 3 chế độ + điều hướng (quy tắc vẽ chốt cứng)
 * Segmented chuyển chế độ `[ Tháng | Tuần | Ngày ]` (tái dùng `SegmentedControl`), kèm nút `‹ Hôm nay ›`.
-* **Month:** lưới 7×6, mỗi ô ngày chứa tối đa 3 chip + dòng `+n nữa`; số hôm nay highlight; ngày ngoài tháng hiện mờ.
-* **Week:** 7 cột ngày (T2–CN), chip xếp dọc, cột hôm nay highlight.
-* **Day:** danh sách chip của đúng 1 ngày + khu vực "Cả ngày" (không giờ cụ thể — Content không có giờ, chỉ có ngày).
-* Chip hiển thị: mã + tiêu đề rút gọn + chấm màu trạng thái; quá hạn (deadline < hôm nay và chưa PUBLISHED) viền/chữ đỏ (tái dùng logic overdue của MyTasks).
+* **Cách vẽ:** 1 control custom-drawn duy nhất (GDI+, theo tiền lệ `SidebarControl`/`KanbanColumnControl) — **cấm** tạo 42 UserControl cho 42 ô (nặng, khó maintain). Không có mẫu lưới tháng/tuần trong style guide nên tuân thủ token màu/font/chip của guide thay vì copy mẫu.
+* **Month:** lưới 7×6 = 42 ô, tuần bắt đầu **Thứ 2**; mỗi ô chứa tối đa 3 chip + dòng `+n nữa` — click `+n` nhảy sang Day view của đúng ngày đó (không dùng tooltip thay điều hướng). Số hôm nay highlight (nền đen `UITheme.Black`, chữ trắng — đồng bộ nút Primary). Ngày ngoài tháng hiện mờ (`Neutral400`), không vẽ chip, không nhận click.
+* **Week:** 7 cột T2–CN, chip xếp dọc, cột hôm nay highlight.
+* **Day:** danh sách chip full-width của đúng 1 ngày, sắp xếp deadline trước, publish sau; khu vực "Cả ngày" (Content không có giờ, chỉ có ngày).
+* **Chip (định dạng chốt):** `[Hạn] CNT-012 · Tên rút gọn` cho deadline, `[Đăng] CNT-012 · Tên rút gọn` cho publish — tiền tố chữ thay icon để test không nhầm được. Chấm màu trạng thái đầu chip; quá hạn (`TaskRules.IsOverdue(deadline, status là Published/Archived, hôm nay)`) viền/chữ đỏ `OverdueText`, đúng format `MyTasksForm.FormatDeadline`.
 
 ### 3.3. AC3: Click mở Content
 * Click chip → mở **đúng Drawer chi tiết có sẵn** (`BoardForm.OpenContentById` + `ContentDetailPanel`), không vẽ detail riêng. Được phép vì drawer dock ở cấp Form, đè lên được màn Calendar host trong `_pnlMain` (đã xác minh `BoardForm.Designer.cs:101-109,122-125`).
-* Calendar nhận đúng instance `_allCards` BoardForm đã load (callback `Action<long>`), không query riêng → id luôn khớp, không lệch dữ liệu với Board.
+* Calendar nhận provider `Func<List<ContentBoardCard>>` trỏ về `_allCards` của BoardForm (không giữ snapshot, không query riêng) → id luôn khớp; reload khi mở màn hình và khi Drawer đóng (xong CAL-09).
 * Quick Preview riêng (UX) lùi sang P2 — P0 click thẳng mở Drawer (đã đủ AC "Click mở Content").
 
 ### 3.4. AC4: Lọc (giữ đúng thứ tự toolbar mục 26)
@@ -40,7 +52,7 @@
 * `deadline` = mốc **sản xuất** (marker chính, chấm màu theo status).
 * `planned_publish_at` = mốc **xuất bản** (marker phụ, viền/icon khác để phân biệt).
 * Content có cả 2 ngày → hiện ở **cả 2 ô** (2 chip phân biệt bằng marker).
-* Cả 2 null → không lên lưới, gom vào khu vực **"Chưa xếp lịch"** cuối màn hình (đúng luật empty-state UX).
+* Cả 2 null → không lên lưới, gom vào khu vực **"Chưa xếp lịch"** cố định cuối màn hình (scroll riêng, mỗi dòng mã + tên + chữ "chưa có ngày", click vẫn mở Drawer).
 * So sánh theo **ngày local của máy** (phần date của `DateTime`); không quy đổi múi giờ phức tạp ở P0.
 
 ### 3.6. AC6: Tích hợp shell
@@ -52,8 +64,8 @@
 [Sidebar: Calendar] ──CalendarRequested──► [BoardForm]
                                                 │ ẩn _pnlBoardArea, hiện CalendarControl
                                                 ▼
-                                   [CalendarControl] ◄── _allCards (dùng chung với Board)
-                                                │
+                                   [CalendarControl] ◄── provider Func → _allCards (dùng chung với Board)
+                                                │ reload khi mở + khi Drawer đóng
                                                 │ click chip(contentId) ──callback──► BoardForm.OpenContentById
                                                 ▼
                                    [Drawer ContentDetailPanel đè lên trên]
@@ -86,16 +98,22 @@
 | CAL-03 | Content có cả 2 ngày | Hiện 2 chip, marker phân biệt được |
 | CAL-04 | Content không ngày nào | Nằm khu "Chưa xếp lịch", không lên lưới |
 | CAL-05 | Deadline quá hạn, chưa PUBLISHED | Chip đỏ; đã PUBLISHED thì không đỏ |
-| CAL-06 | Chuyển Tháng/Tuần/Ngày + ‹ Hôm nay › | Đúng khoảng ngày, không mất filter |
+| CAL-06 | Chuyển Tháng/Tuần/Ngày + ‹ Hôm nay › | Đúng khoảng ngày, filter + vị trí cuộn giữ nguyên |
 | CAL-07 | Lọc Platform/Status | Chỉ chip khớp còn lại |
 | CAL-08 | Click chip | Drawer mở đúng ContentId |
 | CAL-09 | Sửa deadline trong Drawer rồi đóng | Chip nhảy sang ô mới (reload khi quay lại) |
 | CAL-10 | Chưa chọn project | Empty state, không crash |
 | CAL-11 | Mở Calendar rồi mở Board/Profile | Loại trừ lẫn nhau, không chồng màn hình |
+| CAL-12 | Tháng bất kỳ | Tuần luôn bắt đầu Thứ 2, đúng 42 ô |
+| CAL-13 | Click `+n nữa` trong ô đông | Nhảy sang Day view đúng ngày đó |
+| CAL-14 | Chip 2 marker | Đọc được chữ `[Hạn]` / `[Đăng]`, không đoán bằng màu |
+| CAL-15 | Overdue (unit, dùng fixture InMemory) | Gọi đúng `TaskRules.IsOverdue`, PUBLISHED/ARCHIVED không đỏ |
+| CAL-16 | Review code: cách vẽ lưới | 1 control custom-drawn, không tạo 42 UserControl |
 
 ## 8. Ngoài Phạm Vi (P2, ghi để khỏi phình)
 * Kéo-thả chip để dời deadline; Quick Preview riêng; nhắc việc/notification; lịch lặp lại (recurring); endpoint calendar server-side riêng; quy đổi múi giờ hiển thị.
 
-## 9. Rủi Ro Đã Thấy Trước
-* `OpenContentById` tra `_allCards` của Board — Calendar dùng chung instance nên khớp; nếu Board chưa load (lỗi mạng local) thì Calendar cũng empty theo — chấp nhận, đúng bản chất "cùng dữ liệu".
-* Lưới Month vẽ tay 42 ô: giữ mỗi ô gọn (3 chip + `+n`), không nhồi chi tiết — chi tiết nằm ở Drawer.
+## 9. Rủi Ro Đã Thấy Trước (và cách khóa)
+* Dữ liệu chung với Board: Calendar đọc qua provider `Func` + reload khi mở/khi Drawer đóng → không snapshot cũ, không query riêng.
+* Lưới Month vẽ tay 42 ô: 1 control custom-drawn duy nhất (CAL-16 khóa ở review), mỗi ô gọn (3 chip + `+n`), chi tiết nằm ở Drawer.
+* `OpenContentById` highlight thẻ trên Board (`FindCardControl` trả null khi Board ẩn — code đã null-check) → click từ Calendar vẫn mở Drawer bình thường, chỉ thiếu viền chọn trên Board (chấp nhận).
