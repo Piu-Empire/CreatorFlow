@@ -39,6 +39,9 @@ namespace CreatorFlow.Controls
         /// <summary>BoardForm đăng ký để mở Drawer chi tiết khi click chip.</summary>
         public event Action<long>? ContentOpened;
 
+        /// <summary>TẠM-LOCAL: BoardForm đăng ký để đổi project mẫu (xóa khi push).</summary>
+        public event Action<int>? SampleProjectChanged;
+
         public CalendarControl()
         {
             InitializeComponent();
@@ -64,14 +67,25 @@ namespace CreatorFlow.Controls
             };
             pnlViewSwitch.Controls.Add(_segView);
             flpToolbar.WrapContents = false;
+            // TẠM-LOCAL: nút project mẫu để test khi chưa có UI chọn project (xóa khi push).
+            segProject.Items.Clear();
+            segProject.Items.AddRange(["Demo 1", "Demo 2", "—"]);
+            segProject.Width = segProject.MeasureTotalWidth();
+            segProject.SelectedIndexChanged += (_, _) =>
+                SampleProjectChanged?.Invoke(segProject.SelectedIndex switch
+                {
+                    1 => 2,
+                    2 => 0,
+                    _ => 1,
+                });
             segPlatform.Items.Clear();
             segPlatform.Items.AddRange(PlatformItems);
             segPlatform.Width = segPlatform.MeasureTotalWidth();
             segPlatform.SelectedIndexChanged += (_, _) => RefreshData();
-            segStatus.Items.Clear();
-            segStatus.Items.AddRange(StatusItems.Select(i => i.Label));
-            segStatus.Width = segStatus.MeasureTotalWidth();
-            segStatus.SelectedIndexChanged += (_, _) => RefreshData();
+            cboStatus.Font = UITheme.FontBody;
+            cboStatus.Items.AddRange(StatusItems.Select(i => i.Label).ToArray());
+            cboStatus.SelectedIndex = 0;
+            cboStatus.SelectedIndexChanged += (_, _) => RefreshData();
             btnToday.Click += (_, _) => { _cursor = DateTime.Today; RefreshData(); };
             btnPrev.Click += (_, _) => Shift(-1);
             btnNext.Click += (_, _) => Shift(1);
@@ -80,7 +94,7 @@ namespace CreatorFlow.Controls
                 if (_stateAction == "clear")
                 {
                     segPlatform.SelectedIndex = 0;
-                    segStatus.SelectedIndex = 0;
+                    cboStatus.SelectedIndex = 0;
                 }
 
                 RefreshData();
@@ -92,8 +106,10 @@ namespace CreatorFlow.Controls
         private void ApplyTheme()
         {
             BackColor = UITheme.Neutral50;
-            lblTitle.Font = UITheme.FontPageTitle;
+            lblTitle.Font = UITheme.FontH2;
             lblTitle.ForeColor = UITheme.Ink;
+            badgeKind.Location = new Point(
+                20 + TextRenderer.MeasureText(lblTitle.Text, lblTitle.Font).Width + 12, 16);
             lblDesc.Font = UITheme.FontBody;
             lblDesc.ForeColor = UITheme.Neutral600;
             lblSummary.Font = UITheme.FontBody;
@@ -164,7 +180,7 @@ namespace CreatorFlow.Controls
         private List<ContentBoardCard> Filter(List<ContentBoardCard> cards)
         {
             string? platform = segPlatform.SelectedIndex <= 0 ? null : segPlatform.SelectedValue;
-            ContentStatus? status = segStatus.SelectedIndex <= 0 ? null : StatusItems[segStatus.SelectedIndex].Status;
+            ContentStatus? status = cboStatus.SelectedIndex <= 0 ? null : StatusItems[cboStatus.SelectedIndex].Status;
             return cards.Where(c =>
                     (platform is null || c.Platforms.Any(p => string.Equals(p, platform, StringComparison.OrdinalIgnoreCase))) &&
                     (status is null || c.Status == status))

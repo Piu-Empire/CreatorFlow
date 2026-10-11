@@ -514,6 +514,7 @@ public partial class BoardForm : Form, IMessageFilter
         _pnlBoardArea.Visible = false;
         _pnlMain.Controls.Add(admin);
         admin.BringToFront();
+        _sidebarControl.SetActiveMenu("Quản trị người dùng");
         _topHeaderControl.SetAuthenticatedPage("Quản trị hệ thống");
         await admin.LoadUsersAsync();
     }
@@ -525,6 +526,7 @@ public partial class BoardForm : Form, IMessageFilter
         _admin = null;
         _pnlMain.Controls.Remove(admin);
         admin.Dispose();
+        _sidebarControl.SetActiveMenu("Board");
         _pnlBoardArea.Visible = true;
         _topHeaderControl.SetAuthenticatedPage("Board");
         UpdateProjectContext();
@@ -543,6 +545,7 @@ public partial class BoardForm : Form, IMessageFilter
         _pnlBoardArea.Visible = false;
         _pnlMain.Controls.Add(reports);
         reports.BringToFront();
+        _sidebarControl.SetActiveMenu("Báo cáo vi phạm");
         _topHeaderControl.SetAuthenticatedPage("Báo cáo vi phạm");
         await reports.LoadReportsAsync();
     }
@@ -554,6 +557,7 @@ public partial class BoardForm : Form, IMessageFilter
         _reports = null;
         _pnlMain.Controls.Remove(reports);
         reports.Dispose();
+        _sidebarControl.SetActiveMenu("Board");
         _pnlBoardArea.Visible = true;
         _topHeaderControl.SetAuthenticatedPage("Board");
         UpdateProjectContext();
@@ -568,11 +572,20 @@ public partial class BoardForm : Form, IMessageFilter
         var calendar = new CalendarControl { Dock = DockStyle.Fill };
         calendar.CardProvider = () => HasProjectContext ? _allCards : null;
         calendar.ContentOpened += OpenContentById;
+        // TẠM-LOCAL: đổi project mẫu từ màn Calendar (xóa khi push, xem LOCAL-TEST-CLEANUP.md).
+        calendar.SampleProjectChanged += id =>
+        {
+            CurrentSession.CurrentProjectId = id;
+            CurrentSession.CurrentProjectName = id switch { 1 => "Demo", 2 => "Demo 2", _ => string.Empty };
+            ReloadBoard();
+            _calendar?.RefreshData();
+        };
         _calendar = calendar;
         _pnlDrawerHost.Visible = false;
         _pnlBoardArea.Visible = false;
         _pnlMain.Controls.Add(calendar);
         calendar.BringToFront();
+        _sidebarControl.SetActiveMenu("Calendar");
         _topHeaderControl.SetAuthenticatedPage("Lịch Content");
         calendar.RefreshData();
     }
@@ -584,6 +597,7 @@ public partial class BoardForm : Form, IMessageFilter
         _calendar = null;
         _pnlMain.Controls.Remove(calendar);
         calendar.Dispose();
+        _sidebarControl.SetActiveMenu("Board");
         _pnlBoardArea.Visible = true;
         _topHeaderControl.SetAuthenticatedPage("Board");
         UpdateProjectContext();

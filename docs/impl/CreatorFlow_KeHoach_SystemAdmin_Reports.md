@@ -46,3 +46,4 @@
 ## 5. Khôi Phục (bổ sung mục 10 của kế hoạch Users)
 * Fake reports trên DB local: `DELETE FROM reports;` (DB vứt đi, chỉ chứa data fake) + audit của chúng tự sạch theo checklist audit mồ côi.
 * Tuyệt đối không seed reports fake lên Neon/DEV; file seed (nếu có) để ngoài repo.
+* Dọn đồ tạm trước PR theo `LOCAL-TEST-CLEANUP.md` (riêng mảng Reports không có code tạm nào — chỉ dọn data).

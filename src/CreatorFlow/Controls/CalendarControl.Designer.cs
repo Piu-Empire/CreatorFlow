@@ -35,10 +35,11 @@
             this.badgeKind = new BadgeLabel();
             this.lblDesc = new System.Windows.Forms.Label();
             this.flpToolbar = new System.Windows.Forms.FlowLayoutPanel();
+            this.segProject = new SegmentedControl();
             this.pnlViewSwitch = new System.Windows.Forms.Panel();
             this.btnToday = new RoundedButton();
             this.segPlatform = new SegmentedControl();
-            this.segStatus = new SegmentedControl();
+            this.cboStatus = new System.Windows.Forms.ComboBox();
             this.pnlGridHost = new System.Windows.Forms.Panel();
             this.pnlState = new System.Windows.Forms.Panel();
             this.lblStateTitle = new System.Windows.Forms.Label();
@@ -103,10 +104,11 @@
             //
             this.flpToolbar.AutoSize = true;
             this.flpToolbar.AutoSizeMode = System.Windows.Forms.AutoSizeMode.GrowAndShrink;
+            this.flpToolbar.Controls.Add(this.segProject);
             this.flpToolbar.Controls.Add(this.pnlViewSwitch);
             this.flpToolbar.Controls.Add(this.btnToday);
             this.flpToolbar.Controls.Add(this.segPlatform);
-            this.flpToolbar.Controls.Add(this.segStatus);
+            this.flpToolbar.Controls.Add(this.cboStatus);
             this.flpToolbar.Location = new System.Drawing.Point(20, 84);
             this.flpToolbar.Name = "flpToolbar";
             this.flpToolbar.Size = new System.Drawing.Size(700, 42);
@@ -120,6 +122,14 @@
             this.pnlViewSwitch.Name = "pnlViewSwitch";
             this.pnlViewSwitch.Size = new System.Drawing.Size(220, 36);
             this.pnlViewSwitch.TabIndex = 0;
+            //
+            // segProject (TẠM-LOCAL: nút project mẫu để test, xóa khi push)
+            //
+            this.segProject.Location = new System.Drawing.Point(3, 3);
+            this.segProject.Margin = new System.Windows.Forms.Padding(0, 0, 12, 0);
+            this.segProject.Name = "segProject";
+            this.segProject.Size = new System.Drawing.Size(220, 36);
+            this.segProject.TabIndex = 4;
             //
             // btnToday
             //
@@ -139,13 +149,14 @@
             this.segPlatform.Size = new System.Drawing.Size(320, 36);
             this.segPlatform.TabIndex = 2;
             //
-            // segStatus
+            // cboStatus
             //
-            this.segStatus.Location = new System.Drawing.Point(689, 3);
-            this.segStatus.Margin = new System.Windows.Forms.Padding(0, 0, 0, 0);
-            this.segStatus.Name = "segStatus";
-            this.segStatus.Size = new System.Drawing.Size(560, 36);
-            this.segStatus.TabIndex = 3;
+            this.cboStatus.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
+            this.cboStatus.Location = new System.Drawing.Point(689, 3);
+            this.cboStatus.Margin = new System.Windows.Forms.Padding(0, 4, 0, 0);
+            this.cboStatus.Name = "cboStatus";
+            this.cboStatus.Size = new System.Drawing.Size(170, 28);
+            this.cboStatus.TabIndex = 3;
             //
             // pnlGridHost
             //
@@ -289,10 +300,11 @@
         private BadgeLabel badgeKind;
         private System.Windows.Forms.Label lblDesc;
         private System.Windows.Forms.FlowLayoutPanel flpToolbar;
+        private SegmentedControl segProject;
         private System.Windows.Forms.Panel pnlViewSwitch;
         private RoundedButton btnToday;
         private SegmentedControl segPlatform;
-        private SegmentedControl segStatus;
+        private System.Windows.Forms.ComboBox cboStatus;
         private System.Windows.Forms.Panel pnlGridHost;
         private System.Windows.Forms.Panel pnlState;
         private System.Windows.Forms.Label lblStateTitle;

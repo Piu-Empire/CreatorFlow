@@ -247,6 +247,7 @@
 * [x] Mỗi lần khóa/mở đều sinh đúng 1 dòng `audit_logs` — đã thấy `USER_LOCK`/`USER_UNLOCK` thật trên DB local (TC-16).
 * [ ] Vượt qua toàn bộ 27/27 test case trong Ma trận kiểm thử. Đã xong: unit (validate, parse, 403/404/400/503) + sống API local (TC-06,07,08,09,16). Còn lại: click UI tay (TC-02,03,04,05,10,13,17), đồng thời (TC-23,24), DB chết (TC-25), client-https (TC-27).
 * [ ] Khôi phục sau test local theo mục 10 (xóa user fake + audit test + container + file tạm), ghi evidence vào PR.
+* [ ] Dọn đồ tạm theo `LOCAL-TEST-CLEANUP.md` (khối `TẠM-LOCAL` trong code + khối `Dev` trong Local json + data fake), tick checklist §5.
 
 **Hardening P2 — ngoài phạm vi merge, làm khi có thời gian (ghi nhận, không chặn nghiệm thu):**
 * Rate limit cho group `/api/admin` (middleware `RateLimiter` của ASP.NET — hiện chưa có).

@@ -117,6 +117,7 @@
 * Dữ liệu chung với Board: Calendar đọc qua provider `Func` + reload khi mở/khi Drawer đóng → không snapshot cũ, không query riêng.
 * Lưới Month vẽ tay 42 ô: 1 control custom-drawn duy nhất (CAL-16 khóa ở review), mỗi ô gọn (3 chip + `+n`), chi tiết nằm ở Drawer.
 * `OpenContentById` highlight thẻ trên Board (`FindCardControl` trả null khi Board ẩn — code đã null-check) → click từ Calendar vẫn mở Drawer bình thường, chỉ thiếu viền chọn trên Board (chấp nhận).
+* Đồ tạm test local (bypass project, nút project mẫu): gom hết ở `LOCAL-TEST-CLEANUP.md` — dọn trước PR, không review chung với nghiệp vụ.
 * Project `IntegrationTests` vỡ sẵn ở HEAD, không liên quan Calendar — không sửa trong story này (xem bước 2).
 
 ## 10. Chia Việc Designer (lập trình trực quan) — CHỐT ĐẢO VIỆC

@@ -343,4 +343,11 @@ public class SidebarControl : UserControl
     /// <summary>Mục Board, Admin và Calendar luôn thao tác được, các mục khác cần project.</summary>
     private bool IsItemEnabled(NavItem item) =>
         ProjectActionsEnabled || item.Icon is NavIcon.Board or NavIcon.Shield or NavIcon.Flag or NavIcon.Calendar;
+
+    /// <summary>Đánh dấu mục đang mở (BoardForm gọi khi chuyển màn hình).</summary>
+    public void SetActiveMenu(string title)
+    {
+        foreach (NavItem item in _items) item.IsActive = item.Title == title;
+        Invalidate();
+    }
 }
