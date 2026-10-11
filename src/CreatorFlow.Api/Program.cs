@@ -11,6 +11,8 @@ using CreatorFlow.Api.Repositories.Tasks;
 using CreatorFlow.Api.Services.Tasks;
 using CreatorFlow.Api.Repositories.Workflow;
 using CreatorFlow.Api.Services.Workflow;
+using CreatorFlow.Api.Repositories.Invitations;
+using CreatorFlow.Api.Services.Invitations;
 using Microsoft.AspNetCore.Http.Features;
 using System.Text.Json.Serialization;
 
@@ -37,6 +39,8 @@ builder.Services.AddScoped<ITaskRepository, TaskRepository>();
 builder.Services.AddScoped<TaskService>();
 builder.Services.AddScoped<IWorkflowRepository, WorkflowRepository>();
 builder.Services.AddScoped<WorkflowService>();
+builder.Services.AddScoped<IInvitationRepository, InvitationRepository>();
+builder.Services.AddScoped<InvitationService>();
 builder.Services.AddSingleton<IAvatarImageProcessor, AvatarImageProcessor>();
 
 builder.Services.AddSingleton<IDbConnectionFactory>(new NpgsqlConnectionFactory(connectionString));
@@ -73,6 +77,7 @@ app.MapAuthEndpoints();
 app.MapUserEndpoints();
 app.MapTaskEndpoints();
 app.MapWorkflowEndpoints();
+app.MapInvitationEndpoints();
 app.Run();
 
 public partial class Program { }
