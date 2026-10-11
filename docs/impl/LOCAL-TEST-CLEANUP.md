@@ -22,6 +22,7 @@ Xác nhận sau xóa: `grep "TẠM-LOCAL" src/` (PowerShell: `Select-String`) **
 
 * User fake: `DELETE FROM users WHERE email LIKE '%@test.dev';` + xác nhận COUNT = 0.
 * Reports fake: `DELETE FROM reports;` (DB local chỉ chứa data fake).
+* Project/contents mẫu (`02_seed.sql` nếu đã chạy trên local): không cần xóa lẻ — xóa container là mất hết (disposable). Ghi nhận đã chạy để khỏi tưởng là data team.
 * Audit test: `DELETE FROM audit_logs WHERE entity_type = 'users' AND entity_id NOT IN (SELECT user_id FROM users);`
 * Container dùng xong: `docker stop creatorflow-local-pg && docker rm creatorflow-local-pg`.
 * File tạm ngoài repo: xóa `%TEMP%\opencode\seed_fake_local.sql`, `seed_sample_local.sql`, `hashgen\`, `genkeys.py`, `e2e_*.ps1` (giữ hay xóa tùy — chúng nằm ngoài repo, không ảnh hưởng push).
