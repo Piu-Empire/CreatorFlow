@@ -39,9 +39,6 @@ namespace CreatorFlow.Controls
         /// <summary>BoardForm đăng ký để mở Drawer chi tiết khi click chip.</summary>
         public event Action<long>? ContentOpened;
 
-        /// <summary>TẠM-LOCAL: BoardForm đăng ký để đổi project mẫu (xóa khi push).</summary>
-        public event Action<int>? SampleProjectChanged;
-
         public CalendarControl()
         {
             InitializeComponent();
@@ -67,17 +64,6 @@ namespace CreatorFlow.Controls
             };
             pnlViewSwitch.Controls.Add(_segView);
             flpToolbar.WrapContents = false;
-            // TẠM-LOCAL: nút project mẫu để test khi chưa có UI chọn project (xóa khi push).
-            segProject.Items.Clear();
-            segProject.Items.AddRange(["Demo 1", "Demo 2", "—"]);
-            segProject.Width = segProject.MeasureTotalWidth();
-            segProject.SelectedIndexChanged += (_, _) =>
-                SampleProjectChanged?.Invoke(segProject.SelectedIndex switch
-                {
-                    1 => 2,
-                    2 => 0,
-                    _ => 1,
-                });
             segPlatform.Items.Clear();
             segPlatform.Items.AddRange(PlatformItems);
             segPlatform.Width = segPlatform.MeasureTotalWidth();

@@ -6,6 +6,7 @@ using CreatorFlow.Repositories.Interfaces;
 using CreatorFlow.Services;
 using CreatorFlow.Services.AI;
 using CreatorFlow.ApiClients;
+using CreatorFlow.Services.Backends;
 using System.Runtime.Versioning;
 
 namespace CreatorFlow;
@@ -111,8 +112,9 @@ static class Program
             using var api = ApiClient.Create(ApiClientConfiguration.Load());
             var session = new UserSession();
             var auth = new AuthApiFacade(api, session);
+            var metricBackend = new ApiMetricBackend(api, session);
             using var context = new AuthenticationApplicationContext(auth, () =>
-                new BoardForm(workflowService, boardRepo, reviewQueueRepo, activityRepo, memberRepo, contentService, myTaskService, scriptService, auth));
+                new BoardForm(workflowService, boardRepo, reviewQueueRepo, activityRepo, memberRepo, contentService, myTaskService, scriptService, auth, metricBackend));
             Application.Run(context);
         }
         catch (InvalidOperationException)

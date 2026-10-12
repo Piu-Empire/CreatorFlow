@@ -35,7 +35,6 @@
             this.badgeKind = new BadgeLabel();
             this.lblDesc = new System.Windows.Forms.Label();
             this.flpToolbar = new System.Windows.Forms.FlowLayoutPanel();
-            this.segProject = new SegmentedControl();
             this.pnlViewSwitch = new System.Windows.Forms.Panel();
             this.btnToday = new RoundedButton();
             this.segPlatform = new SegmentedControl();
@@ -104,7 +103,6 @@
             //
             this.flpToolbar.AutoSize = true;
             this.flpToolbar.AutoSizeMode = System.Windows.Forms.AutoSizeMode.GrowAndShrink;
-            this.flpToolbar.Controls.Add(this.segProject);
             this.flpToolbar.Controls.Add(this.pnlViewSwitch);
             this.flpToolbar.Controls.Add(this.btnToday);
             this.flpToolbar.Controls.Add(this.segPlatform);
@@ -122,14 +120,6 @@
             this.pnlViewSwitch.Name = "pnlViewSwitch";
             this.pnlViewSwitch.Size = new System.Drawing.Size(220, 36);
             this.pnlViewSwitch.TabIndex = 0;
-            //
-            // segProject (TẠM-LOCAL: nút project mẫu để test, xóa khi push)
-            //
-            this.segProject.Location = new System.Drawing.Point(3, 3);
-            this.segProject.Margin = new System.Windows.Forms.Padding(0, 0, 12, 0);
-            this.segProject.Name = "segProject";
-            this.segProject.Size = new System.Drawing.Size(220, 36);
-            this.segProject.TabIndex = 4;
             //
             // btnToday
             //
@@ -300,7 +290,6 @@
         private BadgeLabel badgeKind;
         private System.Windows.Forms.Label lblDesc;
         private System.Windows.Forms.FlowLayoutPanel flpToolbar;
-        private SegmentedControl segProject;
         private System.Windows.Forms.Panel pnlViewSwitch;
         private RoundedButton btnToday;
         private SegmentedControl segPlatform;

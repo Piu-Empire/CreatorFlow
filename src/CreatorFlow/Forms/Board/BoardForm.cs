@@ -4,9 +4,9 @@ using CreatorFlow.Forms.Tasks;
 using CreatorFlow.Models;
 using CreatorFlow.Repositories.Interfaces;
 using CreatorFlow.Services;
+using CreatorFlow.Services.Backends;
 using CreatorFlow.Services.Exceptions;
 using CreatorFlow.Theme;
-using Microsoft.Extensions.Configuration;
 
 namespace CreatorFlow.Forms.Board;
 
@@ -70,7 +70,8 @@ public partial class BoardForm : Form, IMessageFilter
         ContentService contentService,
         MyTaskService myTaskService,
         ScriptService scriptService,
-        AuthApiFacade? auth = null)
+        AuthApiFacade? auth = null,
+        IMetricBackend? metrics = null)
     {
         InitializeComponent();
         _workflowService = workflowService;
@@ -81,23 +82,6 @@ public partial class BoardForm : Form, IMessageFilter
         _activityRepository = activityRepository;
         _memberRepository = memberRepository;
         _auth = auth;
-        // TẠM-LOCAL (xóa khi push, xem LOCAL-TEST-CLEANUP.md): tự chọn project mẫu vì
-        // LoginSucceeded luôn reset project về 0 mà SCRUM-25 chưa có UI chọn project.
-        // Đọc từ appsettings.Local.json (không commit) nên không ảnh hưởng máy khác.
-        if (CurrentSession.CurrentProjectId <= 0)
-        {
-            var devConfig = new ConfigurationBuilder().SetBasePath(AppContext.BaseDirectory)
-                .AddJsonFile("appsettings.json", optional: true)
-                .AddJsonFile("appsettings.Local.json", optional: true)
-                .Build();
-            if (int.TryParse(devConfig["Dev:CurrentProjectId"], out int devProjectId) && devProjectId > 0)
-            {
-                CurrentSession.CurrentProjectId = devProjectId;
-                CurrentSession.CurrentProjectName =
-                    string.IsNullOrWhiteSpace(devConfig["Dev:CurrentProjectName"])
-                        ? $"Project {devProjectId}" : devConfig["Dev:CurrentProjectName"]!.Trim();
-            }
-        }
 
         if (auth is not null)
         {
@@ -114,7 +98,7 @@ public partial class BoardForm : Form, IMessageFilter
         _pnlDrawerHost.Paint += PnlDrawerHost_Paint;
         BuildColumns();
 
-        _contentDetailPanel.Initialize(_workflowService, _activityRepository, _memberRepository, _contentService, scriptService);
+        _contentDetailPanel.Initialize(_workflowService, _activityRepository, _memberRepository, _contentService, scriptService, metrics);
         _contentDetailPanel.ContentChanged += (_, _) => { ReloadBoard(); _toast.ShowToast(this, "Cap nhat thanh cong!"); };
         _contentDetailPanel.CloseRequested += (_, _) => CloseDrawer();
 
@@ -591,14 +575,6 @@ public partial class BoardForm : Form, IMessageFilter
         var calendar = new CalendarControl { Dock = DockStyle.Fill };
         calendar.CardProvider = () => HasProjectContext ? _allCards : null;
         calendar.ContentOpened += OpenContentById;
-        // TẠM-LOCAL: đổi project mẫu từ màn Calendar (xóa khi push, xem LOCAL-TEST-CLEANUP.md).
-        calendar.SampleProjectChanged += id =>
-        {
-            CurrentSession.CurrentProjectId = id;
-            CurrentSession.CurrentProjectName = id switch { 1 => "Demo", 2 => "Demo 2", _ => string.Empty };
-            ReloadBoard();
-            _calendar?.RefreshData();
-        };
         _calendar = calendar;
         _pnlDrawerHost.Visible = false;
         _pnlBoardArea.Visible = false;

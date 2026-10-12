@@ -27,6 +27,18 @@ Xác nhận sau xóa: `grep "TẠM-LOCAL" src/` (PowerShell: `Select-String`) **
 * Container dùng xong: `docker stop creatorflow-local-pg && docker rm creatorflow-local-pg`.
 * File tạm ngoài repo: xóa `%TEMP%\opencode\seed_fake_local.sql`, `seed_sample_local.sql`, `hashgen\`, `genkeys.py`, `e2e_*.ps1` (giữ hay xóa tùy — chúng nằm ngoài repo, không ảnh hưởng push).
 
+### 3b. Data Metrics local (đợt test 12/10/2026, compose.dev disposable)
+
+* DB: `DELETE FROM content_metrics WHERE content_platform_id IN (SELECT content_platform_id FROM content_platforms WHERE content_id IN (SELECT content_id FROM contents WHERE title='Video test Metrics'));`
+* `DELETE FROM content_platforms WHERE content_id IN (SELECT content_id FROM contents WHERE title='Video test Metrics');`
+* `DELETE FROM contents WHERE title='Video test Metrics';`
+* `DELETE FROM project_members WHERE project_id IN (SELECT project_id FROM projects WHERE project_name='Metrics Demo Project');`
+* `DELETE FROM projects WHERE project_name='Metrics Demo Project';`
+* `DELETE FROM users WHERE email LIKE '%metrics@test.dev';` + xác nhận COUNT = 0.
+* Hoặc gọn: `docker compose --env-file deploy/docker/.env -f deploy/docker/compose.dev.yml down -v` (xóa cả volume disposable).
+* `.env`: `deploy/docker/.env` (gitignore, chỉ secret random local) — xóa khi dọn, tạo lại khi cần test.
+* File tạm ngoài repo: `%TEMP%\opencode\seed_metrics_local.sql`, `e2e_metrics.ps1`, `setup-metrics-db.ps1`, `gen-env.ps1`, `stage-metrics.ps1`, `zip-metrics.ps1`.
+
 ## 4. Những thứ GIỮ LẠI (không phải đồ tạm, đừng xóa nhầm)
 
 * `SetActiveMenu` (Sidebar) + icon Shield/Flag + `BadgeLabel` + mở khóa Toolbox Designer — cải tiến thật, dùng lâu dài.
