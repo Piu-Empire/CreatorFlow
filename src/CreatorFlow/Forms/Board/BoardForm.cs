@@ -1,6 +1,7 @@
 ﻿using CreatorFlow.Models.Enums;
 using CreatorFlow.Controls;
 using CreatorFlow.Forms.IdeaBank;
+using CreatorFlow.Forms.Invitations;
 using CreatorFlow.Forms.ProjectSettings;
 using CreatorFlow.Forms.Tasks;
 using CreatorFlow.Models;
@@ -36,6 +37,7 @@ public partial class BoardForm : Form, IMessageFilter
     private readonly IdeaService _ideaService;
     private readonly AuthApiFacade? _auth;
     private readonly ProjectInvitationService? _invitationService;
+    private readonly InvitationInboxService? _invitationInboxService;
     private ProfileControl? _profile;
     private readonly CancellationTokenSource _authLifetime = new();
     private int _avatarGeneration;
@@ -73,7 +75,8 @@ public partial class BoardForm : Form, IMessageFilter
         ScriptService scriptService,
         IdeaService ideaService,
         AuthApiFacade? auth = null,
-        ProjectInvitationService? invitationService = null)
+        ProjectInvitationService? invitationService = null,
+        InvitationInboxService? invitationInboxService = null)
     {
         InitializeComponent();
         _workflowService = workflowService;
@@ -86,6 +89,7 @@ public partial class BoardForm : Form, IMessageFilter
         _memberRepository = memberRepository;
         _auth = auth;
         _invitationService = invitationService;
+        _invitationInboxService = invitationInboxService;
         if (auth is not null)
         {
             _sidebarControl.SetAuthenticatedAccount(auth.Session.CurrentUser?.DisplayName ?? string.Empty,
@@ -113,6 +117,7 @@ public partial class BoardForm : Form, IMessageFilter
         _sidebarControl.MyTasksRequested += (_, _) => OpenMyTasks();
         _sidebarControl.IdeaBankRequested += (_, _) => OpenIdeaBank();
         _sidebarControl.ProjectSettingsRequested += (_, _) => OpenProjectSettings();
+        _sidebarControl.InvitationsRequested += (_, _) => OpenMyInvitations();
         _sidebarControl.BoardRequested += (_, _) => { CloseProfile(); ReloadBoard(); };
         UpdateProjectContext();
         if (!HasProjectContext) ReloadBoard();
@@ -452,6 +457,23 @@ public partial class BoardForm : Form, IMessageFilter
         }
 
         using var dialog = new InviteMemberDialog(_invitationService, CurrentSession.CurrentProjectId, CurrentSession.CurrentProjectName);
+        dialog.ShowDialog(this);
+    }
+
+    /// <summary>
+    /// Mở hộp thoại Lời mời của tôi: xem lời mời gửi tới tài khoản đang đăng nhập và chấp nhận / từ chối.
+    /// Không cần đang ở trong Project nào (người mới được mời thường chưa có Project). Hạn dùng, trạng thái và việc tạo thành viên do API quyết định.
+    /// </summary>
+    private void OpenMyInvitations()
+    {
+        CloseProfile();
+        if (_invitationInboxService is null)
+        {
+            _toast.ShowToast(this, "Chua ket noi API de xem loi moi");
+            return;
+        }
+
+        using var dialog = new MyInvitationsDialog(_invitationInboxService);
         dialog.ShowDialog(this);
     }
 

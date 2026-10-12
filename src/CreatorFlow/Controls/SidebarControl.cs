@@ -17,6 +17,7 @@ public class SidebarControl : UserControl
     public event EventHandler? IdeaBankRequested;
     public event EventHandler? ProfileRequested;
     public event EventHandler? ProjectSettingsRequested;
+    public event EventHandler? InvitationsRequested;
 
     private readonly Button _accountButton;
     private string _accountName = string.Empty;
@@ -38,6 +39,7 @@ public class SidebarControl : UserControl
         public NavIcon Icon;
         public int Y;                       // Toạ độ Y (từ trên, hoặc khoảng cách từ đáy nếu AnchorBottom)
         public bool AnchorBottom;
+        public bool AlwaysEnabled;          // true: bấm được cả khi chưa có Project (Board, Invitations)
         public bool IsActive;
         public bool IsHovered;
         public Action? Action;
@@ -151,7 +153,7 @@ public class SidebarControl : UserControl
         int y = 140;
         _groups.Add(("PROJECT", y)); y += 26;
         _items.Add(new NavItem { Title = "Summary", Icon = NavIcon.Summary, Y = y }); y += ItemStep;
-        _items.Add(new NavItem { Title = "Board", Icon = NavIcon.Board, Y = y, IsActive = true, Action = () => BoardRequested?.Invoke(this, EventArgs.Empty) }); y += ItemStep;
+        _items.Add(new NavItem { Title = "Board", Icon = NavIcon.Board, Y = y, IsActive = true, AlwaysEnabled = true, Action = () => BoardRequested?.Invoke(this, EventArgs.Empty) }); y += ItemStep;
         _items.Add(new NavItem { Title = "Backlog", Icon = NavIcon.List, Y = y, Badge = () => BacklogCount, Action = () => IdeaBankRequested?.Invoke(this, EventArgs.Empty) }); y += ItemStep;
         _items.Add(new NavItem { Title = "Calendar", Icon = NavIcon.Calendar, Y = y }); y += ItemStep;
         _items.Add(new NavItem { Title = "Reports", Icon = NavIcon.Chart, Y = y }); y += ItemStep;
@@ -165,7 +167,8 @@ public class SidebarControl : UserControl
         _groups.Add(("AI", y)); y += 26;
         _items.Add(new NavItem { Title = "AI Assistant", Icon = NavIcon.Sparkle, Y = y, Badge = () => -1 });
 
-        // Neo đáy: cách đáy 100px (phía trên dòng trạng thái)
+        // Neo đáy: cách đáy 100px (phía trên dòng trạng thái); Invitations nằm ngay phía trên Project Settings.
+        _items.Add(new NavItem { Title = "Invitations", Icon = NavIcon.List, Y = 144, AnchorBottom = true, AlwaysEnabled = true, Action = () => InvitationsRequested?.Invoke(this, EventArgs.Empty) });
         _items.Add(new NavItem { Title = "Project Settings", Icon = NavIcon.Gear, Y = 100, AnchorBottom = true, Action = () => ProjectSettingsRequested?.Invoke(this, EventArgs.Empty) });
     }
 
@@ -182,7 +185,7 @@ public class SidebarControl : UserControl
         bool anyHover = false;
         foreach (var item in _items)
         {
-            bool hovered = (ProjectActionsEnabled || item.Icon == NavIcon.Board) && GetItemRect(item).Contains(e.Location);
+            bool hovered = (ProjectActionsEnabled || item.AlwaysEnabled) && GetItemRect(item).Contains(e.Location);
             anyHover |= hovered && item.Action != null;
             if (item.IsHovered != hovered) { item.IsHovered = hovered; needsRepaint = true; }
         }
@@ -203,7 +206,7 @@ public class SidebarControl : UserControl
         base.OnMouseClick(e);
         foreach (var item in _items)
         {
-            if ((ProjectActionsEnabled || item.Icon == NavIcon.Board) && GetItemRect(item).Contains(e.Location))
+            if ((ProjectActionsEnabled || item.AlwaysEnabled) && GetItemRect(item).Contains(e.Location))
             { item.Action?.Invoke(); break; }
         }
     }
@@ -271,7 +274,7 @@ public class SidebarControl : UserControl
                 g.FillRectangle(bar, rect.X, rect.Y + 8, 3, rect.Height - 16);
             }
 
-            Color fg = !ProjectActionsEnabled && item.Icon != NavIcon.Board ? UITheme.SidebarTextFaint :
+            Color fg = !ProjectActionsEnabled && !item.AlwaysEnabled ? UITheme.SidebarTextFaint :
                 (item.IsActive || item.IsHovered) ? UITheme.White : UITheme.SidebarText;
             var iconRect = new Rectangle(rect.X + 14, rect.Y + (ItemH - 22) / 2, 22, 22);
             DrawNavIcon(g, item.Icon, iconRect, fg);

@@ -101,11 +101,12 @@ static class Program
             var session = new UserSession();
             var auth = new AuthApiFacade(api, session);
             var invitations = new ProjectInvitationService(api, session);
+            var invitationInbox = new InvitationInboxService(api, session);
             if (args.Length > 0 && args[0] == "--test")
             {
                 // Diagnostic layout only: no authentication, project queries, or message loop.
                 using var testForm = new BoardForm(workflowService, boardRepo, reviewQueueRepo,
-                    activityRepo, memberRepo, contentService, myTaskService, scriptService, ideaService, auth, invitations);
+                    activityRepo, memberRepo, contentService, myTaskService, scriptService, ideaService, auth, invitations, invitationInbox);
                 var handle = testForm.Handle;
                 testForm.Size = new Size(1440, 900);
                 testForm.PerformLayout();
@@ -113,7 +114,7 @@ static class Program
                 return;
             }
             using var context = new AuthenticationApplicationContext(auth, () =>
-                new BoardForm(workflowService, boardRepo, reviewQueueRepo, activityRepo, memberRepo, contentService, myTaskService, scriptService, ideaService, auth, invitations));
+                new BoardForm(workflowService, boardRepo, reviewQueueRepo, activityRepo, memberRepo, contentService, myTaskService, scriptService, ideaService, auth, invitations, invitationInbox));
             Application.Run(context);
         }
         catch (InvalidOperationException)

@@ -40,7 +40,7 @@ public sealed partial class ApiClient
         SendTasksAsync<MyTaskResponse>(HttpMethod.Put, $"api/contents/{contentId}/assignments/{assigneeUserId}/deadline", request, bearer, token);
 
     // Mã lỗi nghiệp vụ của nhóm endpoint này; thông điệp (title) do Backend đặt nên được giữ lại để hiển thị cho người dùng.
-    private static readonly string[] TaskErrorCodes = ["validation", "unauthorized", "forbidden", "not_found", "content_locked", "already_member", "invitation_pending"];
+    private static readonly string[] TaskErrorCodes = ["validation", "unauthorized", "forbidden", "not_found", "content_locked", "already_member", "invitation_pending", "invitation_not_pending", "invitation_expired"];
 
     private static ApiBusinessException CreateTaskError(HttpStatusCode status, byte[] body)
     {
