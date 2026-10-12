@@ -218,6 +218,39 @@ public static class UIIcons
         }
     }
 
+    /// <summary>Shield: khiên bảo vệ cho mục quản trị hệ thống.</summary>
+    public static void Shield(Graphics g, Rectangle r, Color c)
+    {
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        using var pen = NewPen(c, 1.8f);
+        var b = Inset(r, 2);
+        using var path = new GraphicsPath();
+        path.AddLines(new[]
+        {
+            Pt(b, 0.50f, 0.02f), Pt(b, 0.88f, 0.20f), Pt(b, 0.88f, 0.52f),
+            Pt(b, 0.50f, 0.98f), Pt(b, 0.12f, 0.52f), Pt(b, 0.12f, 0.20f),
+        });
+        path.CloseFigure();
+        g.DrawPath(pen, path);
+    }
+
+    /// <summary>Flag: cờ tố cáo cho mục xử lý báo cáo vi phạm.</summary>
+    public static void Flag(Graphics g, Rectangle r, Color c)
+    {
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        using var pen = NewPen(c, 1.8f);
+        var b = Inset(r, 2);
+        g.DrawLine(pen, Pt(b, 0.24f, 0.06f), Pt(b, 0.24f, 0.94f));
+        using var path = new GraphicsPath();
+        path.AddLines(new[]
+        {
+            Pt(b, 0.24f, 0.10f), Pt(b, 0.84f, 0.10f), Pt(b, 0.72f, 0.30f),
+            Pt(b, 0.84f, 0.50f), Pt(b, 0.24f, 0.50f),
+        });
+        path.CloseFigure();
+        g.DrawPath(pen, path);
+    }
+
     /// <summary>Logo: khung bo góc có tam giác play.</summary>
     public static void LogoMark(Graphics g, Rectangle r, Color bg, Color fg)
     {

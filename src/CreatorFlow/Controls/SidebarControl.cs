@@ -16,6 +16,9 @@ public class SidebarControl : UserControl
     public event EventHandler? MyTasksRequested;
     public event EventHandler? IdeaBankRequested;
     public event EventHandler? ProfileRequested;
+    public event EventHandler? AdminWorkspaceRequested;
+    public event EventHandler? AdminReportsRequested;
+    public event EventHandler? CalendarRequested;
     public event EventHandler? ProjectSettingsRequested;
     public event EventHandler? InvitationsRequested;
 
@@ -29,9 +32,19 @@ public class SidebarControl : UserControl
     public bool ProjectActionsEnabled { get; set; }
     public int BacklogCount = 0;
     public int MyWorkCount = 0;
+    private bool _isSystemAdmin;
     public int ReviewQueueCount = 0;
 
-    private enum NavIcon { Summary, Board, List, Calendar, Chart, Check, Review, Sparkle, Gear }
+    /// <summary>Bật/tắt nhóm menu quản trị hệ thống theo quyền admin.</summary>
+    public void SetSystemAdmin(bool value)
+    {
+        if (_isSystemAdmin == value) return;
+        _isSystemAdmin = value;
+        BuildNavItems();
+        Invalidate();
+    }
+
+    private enum NavIcon { Summary, Board, List, Calendar, Chart, Check, Review, Sparkle, Gear, Shield, Flag }
 
     private sealed class NavItem
     {
@@ -155,7 +168,7 @@ public class SidebarControl : UserControl
         _items.Add(new NavItem { Title = "Summary", Icon = NavIcon.Summary, Y = y }); y += ItemStep;
         _items.Add(new NavItem { Title = "Board", Icon = NavIcon.Board, Y = y, IsActive = true, AlwaysEnabled = true, Action = () => BoardRequested?.Invoke(this, EventArgs.Empty) }); y += ItemStep;
         _items.Add(new NavItem { Title = "Backlog", Icon = NavIcon.List, Y = y, Badge = () => BacklogCount, Action = () => IdeaBankRequested?.Invoke(this, EventArgs.Empty) }); y += ItemStep;
-        _items.Add(new NavItem { Title = "Calendar", Icon = NavIcon.Calendar, Y = y }); y += ItemStep;
+        _items.Add(new NavItem { Title = "Calendar", Icon = NavIcon.Calendar, Y = y, AlwaysEnabled = true, Action = () => CalendarRequested?.Invoke(this, EventArgs.Empty) }); y += ItemStep;
         _items.Add(new NavItem { Title = "Reports", Icon = NavIcon.Chart, Y = y }); y += ItemStep;
 
         y += 10;
@@ -166,6 +179,16 @@ public class SidebarControl : UserControl
         y += 10;
         _groups.Add(("AI", y)); y += 26;
         _items.Add(new NavItem { Title = "AI Assistant", Icon = NavIcon.Sparkle, Y = y, Badge = () => -1 });
+
+        if (_isSystemAdmin)
+        {
+            y += ItemStep + 10;
+            _groups.Add(("ADMIN", y)); y += 26;
+            _items.Add(new NavItem { Title = "Quản trị người dùng", Icon = NavIcon.Shield, Y = y, AlwaysEnabled = true,
+                Action = () => AdminWorkspaceRequested?.Invoke(this, EventArgs.Empty) }); y += ItemStep;
+            _items.Add(new NavItem { Title = "Báo cáo vi phạm", Icon = NavIcon.Flag, Y = y, AlwaysEnabled = true,
+                Action = () => AdminReportsRequested?.Invoke(this, EventArgs.Empty) });
+        }
 
         // Neo đáy: cách đáy 100px (phía trên dòng trạng thái); Invitations nằm ngay phía trên Project Settings.
         _items.Add(new NavItem { Title = "Invitations", Icon = NavIcon.List, Y = 144, AnchorBottom = true, AlwaysEnabled = true, Action = () => InvitationsRequested?.Invoke(this, EventArgs.Empty) });
@@ -185,7 +208,7 @@ public class SidebarControl : UserControl
         bool anyHover = false;
         foreach (var item in _items)
         {
-            bool hovered = (ProjectActionsEnabled || item.AlwaysEnabled) && GetItemRect(item).Contains(e.Location);
+            bool hovered = IsItemEnabled(item) && GetItemRect(item).Contains(e.Location);
             anyHover |= hovered && item.Action != null;
             if (item.IsHovered != hovered) { item.IsHovered = hovered; needsRepaint = true; }
         }
@@ -206,7 +229,7 @@ public class SidebarControl : UserControl
         base.OnMouseClick(e);
         foreach (var item in _items)
         {
-            if ((ProjectActionsEnabled || item.AlwaysEnabled) && GetItemRect(item).Contains(e.Location))
+            if (IsItemEnabled(item) && GetItemRect(item).Contains(e.Location))
             { item.Action?.Invoke(); break; }
         }
     }
@@ -274,7 +297,7 @@ public class SidebarControl : UserControl
                 g.FillRectangle(bar, rect.X, rect.Y + 8, 3, rect.Height - 16);
             }
 
-            Color fg = !ProjectActionsEnabled && !item.AlwaysEnabled ? UITheme.SidebarTextFaint :
+            Color fg = !IsItemEnabled(item) ? UITheme.SidebarTextFaint :
                 (item.IsActive || item.IsHovered) ? UITheme.White : UITheme.SidebarText;
             var iconRect = new Rectangle(rect.X + 14, rect.Y + (ItemH - 22) / 2, 22, 22);
             DrawNavIcon(g, item.Icon, iconRect, fg);
@@ -327,6 +350,18 @@ public class SidebarControl : UserControl
             case NavIcon.Review: UIIcons.ReviewQueue(g, r, c); break;
             case NavIcon.Sparkle: UIIcons.Sparkle(g, r, c); break;
             case NavIcon.Gear: UIIcons.Gear(g, r, c); break;
+            case NavIcon.Shield: UIIcons.Shield(g, r, c); break;
+            case NavIcon.Flag: UIIcons.Flag(g, r, c); break;
         }
+    }
+
+    /// <summary>Mục AlwaysEnabled thao tác được cả khi chưa có project, các mục khác cần project.</summary>
+    private bool IsItemEnabled(NavItem item) => ProjectActionsEnabled || item.AlwaysEnabled;
+
+    /// <summary>Đánh dấu mục đang mở (BoardForm gọi khi chuyển màn hình).</summary>
+    public void SetActiveMenu(string title)
+    {
+        foreach (NavItem item in _items) item.IsActive = item.Title == title;
+        Invalidate();
     }
 }

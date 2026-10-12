@@ -4,6 +4,7 @@ using CreatorFlow.Forms.Board;
 using CreatorFlow.Models;
 using CreatorFlow.Repositories.Interfaces;
 using CreatorFlow.Services;
+using CreatorFlow.Services.Backends;
 using CreatorFlow.Services.Exceptions;
 using CreatorFlow.Theme;
 
@@ -26,7 +27,7 @@ public partial class ContentDetailPanel : UserControl
 
     private ContentBoardCard? _current;
     private List<ProjectMemberInfo> _members = new();
-    private int _selectedTabIndex = 0; // 0: Overview, 1: Script, 2: Checklist, 3: Activity
+    private int _selectedTabIndex = 0; // 0: Overview, 1: Script, 2: Checklist, 3: Activity, 4: Metrics
     private bool _isDirty;
     private bool _deadlineEdited; // true khi người dùng thật sự đổi ô Deadline (tránh vô tình ghi deadline mặc định khi chỉ sửa tiêu đề)
     private bool _isLoading; // true trong lúc LoadContent() đang gán giá trị → bỏ qua sự kiện TextChanged/SelectedIndexChanged
@@ -84,6 +85,12 @@ public partial class ContentDetailPanel : UserControl
     // Tab 4: Activity
     private readonly Panel _pnlTabActivity;
     private readonly ActivityTimelineControl _activityTimeline;
+
+    // Tab 5: Metrics (theo ContentPlatform, qua IMetricBackend; null = chưa đấu nối API)
+    private IMetricBackend? _metricBackend;
+    private readonly Panel _pnlTabMetrics;
+    private readonly Panel _metricsHost;
+    private long? _metricsLoadedFor; // ContentId đã nạp Metrics; null = cần nạp lại khi mở tab
 
     // Empty state
     private readonly Panel _pnlEmptyState;
@@ -374,10 +381,16 @@ public partial class ContentDetailPanel : UserControl
         _activityTimeline = new ActivityTimelineControl { Dock = DockStyle.Fill };
         _pnlTabActivity.Controls.Add(_activityTimeline);
 
+        // ---- TAB 5: METRICS ----
+        _pnlTabMetrics = new Panel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = UITheme.White, Padding = new Padding(PadX, 20, PadX, 20), Visible = false };
+        _metricsHost = new Panel { Dock = DockStyle.Top, AutoSize = true, BackColor = UITheme.White };
+        _pnlTabMetrics.Controls.Add(_metricsHost);
+
         _pnlContent.Controls.Add(_pnlTabOverview);
         _pnlContent.Controls.Add(_pnlTabScript);
         _pnlContent.Controls.Add(_pnlTabChecklist);
         _pnlContent.Controls.Add(_pnlTabActivity);
+        _pnlContent.Controls.Add(_pnlTabMetrics);
 
         // 5. Empty state
         _pnlEmptyState = new Panel { Dock = DockStyle.Fill, BackColor = UITheme.White };
@@ -575,18 +588,19 @@ public partial class ContentDetailPanel : UserControl
     {
         int total = _chkChecklist?.Items.Count ?? 0;
         int done = _chkChecklist?.CheckedItems.Count ?? 0;
-        return new[] { "Overview", "Script", $"Checklist ({done}/{total})", "Activity" };
+        return new[] { "Overview", "Script", $"Checklist ({done}/{total})", "Activity", "Metrics" };
     }
 
     // ---------- API công khai ----------
 
-    public void Initialize(WorkflowService workflowService, IActivityRepository activityRepo, IProjectMemberRepository memberRepo, ContentService contentService, ScriptService scriptService)
+    public void Initialize(WorkflowService workflowService, IActivityRepository activityRepo, IProjectMemberRepository memberRepo, ContentService contentService, ScriptService scriptService, IMetricBackend? metricBackend = null)
     {
         _scriptEditor.Initialize(scriptService);
         _workflowService = workflowService;
         _activityRepo = activityRepo;
         _memberRepo = memberRepo;
         _contentService = contentService;
+        _metricBackend = metricBackend;
 
         _mnuPlatforms.Items.Clear();
         foreach (string name in contentService.GetAvailablePlatforms())
@@ -602,7 +616,7 @@ public partial class ContentDetailPanel : UserControl
     }
 
     private List<string> SelectedPlatformNames() =>
-        _mnuPlatforms.Items.OfType<ToolStripMenuItem>().Where(i => i.Checked).Select(i => i.Text).ToList();
+        _mnuPlatforms.Items.OfType<ToolStripMenuItem>().Where(i => i.Checked).Select(i => i.Text ?? string.Empty).ToList();
 
     private void UpdatePlatformButtonText()
     {
@@ -617,6 +631,8 @@ public partial class ContentDetailPanel : UserControl
 
         _isLoading = true;
         _current = card;
+        _metricsLoadedFor = null;
+        _metricsHost.Controls.Clear();
         _members = _memberRepo.GetMembers(card.ProjectId);
 
         _pnlEmptyState.Visible = false;
@@ -684,6 +700,7 @@ public partial class ContentDetailPanel : UserControl
         LayoutOverview();
         _pnlTabOverview.AutoScrollPosition = new Point(0, 0);
         RefreshActivity();
+        if (_selectedTabIndex == 4) LoadMetricsIfNeeded();
         _pnlTabBar.Invalidate();
 
         _isLoading = false;
@@ -809,7 +826,9 @@ public partial class ContentDetailPanel : UserControl
         _pnlTabScript.Visible = (tabIndex == 1);
         _pnlTabChecklist.Visible = (tabIndex == 2);
         _pnlTabActivity.Visible = (tabIndex == 3);
+        _pnlTabMetrics.Visible = (tabIndex == 4);
         _pnlTabBar.Invalidate();
+        if (tabIndex == 4) LoadMetricsIfNeeded();
     }
 
     private void RefreshActivity()
@@ -817,6 +836,175 @@ public partial class ContentDetailPanel : UserControl
         if (_current == null) return;
         _activityTimeline.LoadActivity(_activityRepo!.GetActivity(_current.ContentId));
     }
+
+    // ---------- Tab Metrics (theo ContentPlatform, qua API) ----------
+
+    /// <summary>Nạp Metrics khi mở tab lần đầu cho mỗi Content. Quyền/nút Lưu lấy từ cờ CanRecord của API, không tự suy ở client.</summary>
+    private void LoadMetricsIfNeeded()
+    {
+        if (_current == null || _metricsLoadedFor == _current.ContentId) return;
+        _metricsHost.Controls.Clear();
+        if (_metricBackend == null)
+        {
+            _metricsHost.Controls.Add(MakeMetricsInfo("Chưa kết nối API nên không tải được số liệu."));
+            return;
+        }
+        try
+        {
+            var rows = _metricBackend.GetContentMetrics(_current.ContentId).Platforms
+                .Select(ContentMetric.FromResponse).ToList();
+            if (rows.Count == 0)
+                _metricsHost.Controls.Add(MakeMetricsInfo("Content này chưa gắn platform nào."));
+            else
+                foreach (var row in rows) // Dock=Top: thêm trước hiện trước, giữ đúng thứ tự API
+                    _metricsHost.Controls.Add(MakeMetricRow(row));
+            _metricsLoadedFor = _current.ContentId;
+        }
+        catch (Exception ex)
+        {
+            _metricsHost.Controls.Add(MakeMetricsInfo("Không tải được số liệu: " + ex.Message));
+            MessageBox.Show(this, ex.Message, "Không tải được số liệu", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
+    private static Label MakeMetricsInfo(string text) => new Label
+    {
+        Text = text,
+        Font = UITheme.FontBody,
+        ForeColor = UITheme.Neutral600,
+        AutoSize = true,
+        Dock = DockStyle.Top,
+        Padding = new Padding(0, 8, 0, 8),
+        UseMnemonic = false,
+    };
+
+    private sealed class MetricRowState
+    {
+        public ContentMetric Metric = null!;
+        public TextBox TxtViews = null!;
+        public TextBox TxtLikes = null!;
+        public TextBox TxtComments = null!;
+        public TextBox TxtShares = null!;
+        public Label LblUpdated = null!;
+    }
+
+    /// <summary>Mỗi platform một hàng: tên + trạng thái, 4 ô số (trống = giữ nguyên), nút Lưu riêng, nhãn cập nhật lần cuối.</summary>
+    private Panel MakeMetricRow(ContentMetric metric)
+    {
+        var state = new MetricRowState { Metric = metric };
+        var row = new Panel { Dock = DockStyle.Top, Height = 172, BackColor = UITheme.White, Padding = new Padding(0, 10, 0, 10) };
+
+        var header = new Label
+        {
+            Text = $"{metric.PlatformName} · {metric.PublicationStatus}",
+            Font = UITheme.FontLabelBold,
+            ForeColor = UITheme.Neutral600,
+            AutoSize = false,
+            Height = 22,
+            Dock = DockStyle.Top,
+            UseMnemonic = false,
+        };
+        row.Controls.Add(header);
+
+        var grid = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            Height = 62,
+            ColumnCount = 4,
+            RowCount = 2,
+            BackColor = UITheme.White,
+        };
+        for (int i = 0; i < 4; i++) grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
+        grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 20F));
+        grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
+        string[] names = { "Views", "Likes", "Comments", "Shares" };
+        TextBox[] boxes = new TextBox[4];
+        for (int i = 0; i < 4; i++)
+        {
+            grid.Controls.Add(new Label
+            {
+                Text = names[i],
+                Font = UITheme.FontLabel,
+                ForeColor = UITheme.Neutral600,
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.BottomLeft,
+                UseMnemonic = false,
+            }, i, 0);
+            boxes[i] = new TextBox { Font = new Font("Segoe UI", 10F), Dock = DockStyle.Fill, Margin = new Padding(0, 0, 12, 0) };
+            grid.Controls.Add(boxes[i], i, 1);
+        }
+        state.TxtViews = boxes[0];
+        state.TxtLikes = boxes[1];
+        state.TxtComments = boxes[2];
+        state.TxtShares = boxes[3];
+        row.Controls.Add(grid);
+
+        var bottom = new Panel { Dock = DockStyle.Top, Height = 44, BackColor = UITheme.White };
+        var btnSave = new RoundedButton
+        {
+            Text = "Lưu",
+            Style = RoundButtonStyle.Primary,
+            Size = new Size(110, 36),
+            Location = new Point(0, 4),
+            Enabled = metric.CanRecord && _metricBackend != null,
+        };
+        btnSave.Click += (_, _) => OnMetricSave(state);
+        bottom.Controls.Add(btnSave);
+        state.LblUpdated = new Label
+        {
+            Font = UITheme.FontLabel,
+            ForeColor = UITheme.Neutral400,
+            AutoSize = false,
+            Location = new Point(122, 4),
+            Size = new Size(600, 36),
+            TextAlign = ContentAlignment.MiddleLeft,
+            UseMnemonic = false,
+        };
+        RefreshMetricLabel(state);
+        bottom.Controls.Add(state.LblUpdated);
+        row.Controls.Add(bottom);
+        // Dock=Top xếp theo reverse z-order: control thêm trước nằm trên (header → grid → bottom).
+        return row;
+    }
+
+    private static void RefreshMetricLabel(MetricRowState state)
+    {
+        string text = ContentMetric.UpdatedLabel(state.Metric);
+        if (!state.Metric.CanRecord && state.Metric.HasData)
+            text += " Chỉ Owner/Manager được nhập sau Published.";
+        else if (!state.Metric.CanRecord)
+            text = "Chưa có số liệu. Chỉ Owner/Manager được nhập sau Published.";
+        state.LblUpdated.Text = text;
+    }
+
+    private void OnMetricSave(MetricRowState state)
+    {
+        if (_current == null || _metricBackend == null) return;
+        if (!ContentMetric.TryParseField(state.TxtViews.Text, out long? views))
+        { WarnMetric("Views phải là số nguyên ≥ 0 (để trống = giữ nguyên)."); return; }
+        if (!ContentMetric.TryParseField(state.TxtLikes.Text, out long? likes))
+        { WarnMetric("Likes phải là số nguyên ≥ 0 (để trống = giữ nguyên)."); return; }
+        if (!ContentMetric.TryParseField(state.TxtComments.Text, out long? comments))
+        { WarnMetric("Comments phải là số nguyên ≥ 0 (để trống = giữ nguyên)."); return; }
+        if (!ContentMetric.TryParseField(state.TxtShares.Text, out long? shares))
+        { WarnMetric("Shares phải là số nguyên ≥ 0 (để trống = giữ nguyên)."); return; }
+        if (views is null && likes is null && comments is null && shares is null)
+        { WarnMetric("Cần nhập ít nhất một chỉ số."); return; }
+        try
+        {
+            var saved = _metricBackend.RecordMetric(_current.ContentId, state.Metric.PlatformId, views, likes, comments, shares);
+            state.Metric = ContentMetric.FromResponse(saved);
+            state.TxtViews.Text = state.TxtLikes.Text = state.TxtComments.Text = state.TxtShares.Text = "";
+            RefreshMetricLabel(state);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "Không lưu được số liệu", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
+    private void WarnMetric(string message) =>
+        MessageBox.Show(this, message, "Số liệu chưa hợp lệ", MessageBoxButtons.OK, MessageBoxIcon.Warning);
 
     // ---------- Logic Workflow (GIỮ NGUYÊN) ----------
 

@@ -39,7 +39,8 @@ SELECT
        WHERE ca.content_id = c.content_id
        ORDER BY ca.assigned_at DESC LIMIT 1) AS assignee_name,
     EXISTS (SELECT 1 FROM reviews r WHERE r.content_id = c.content_id AND r.status = 'PENDING') AS has_pending_review,
-    COALESCE(c.description, '') AS description
+    COALESCE(c.description, '') AS description,
+    c.planned_publish_at
 FROM contents c
 WHERE c.project_id = @projectId
 ORDER BY c.content_id";
@@ -69,6 +70,7 @@ ORDER BY c.content_id";
                 AssigneeName = reader.IsDBNull(9) ? null : reader.GetString(9),
                 HasPendingReview = reader.GetBoolean(10),
                 Description = reader.GetString(11),
+                PlannedPublishAt = reader.IsDBNull(12) ? null : reader.GetDateTime(12),
             });
         }
 
