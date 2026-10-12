@@ -41,6 +41,8 @@ builder.Services.AddScoped<IWorkflowRepository, WorkflowRepository>();
 builder.Services.AddScoped<WorkflowService>();
 builder.Services.AddScoped<IInvitationRepository, InvitationRepository>();
 builder.Services.AddScoped<InvitationService>();
+builder.Services.AddScoped<IMyInvitationRepository, MyInvitationRepository>();
+builder.Services.AddScoped<MyInvitationService>();
 builder.Services.AddSingleton<IAvatarImageProcessor, AvatarImageProcessor>();
 
 builder.Services.AddSingleton<IDbConnectionFactory>(new NpgsqlConnectionFactory(connectionString));
@@ -78,6 +80,7 @@ app.MapUserEndpoints();
 app.MapTaskEndpoints();
 app.MapWorkflowEndpoints();
 app.MapInvitationEndpoints();
+app.MapMyInvitationEndpoints();
 app.Run();
 
 public partial class Program { }
