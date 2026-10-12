@@ -83,6 +83,9 @@ namespace CreatorFlow.Controls
             segPlatform.Width = segPlatform.MeasureTotalWidth();
             segPlatform.SelectedIndexChanged += (_, _) => RefreshData();
             cboStatus.Font = UITheme.FontBody;
+            cboStatus.FlatStyle = FlatStyle.Flat;
+            cboStatus.BackColor = UITheme.White;
+            cboStatus.ForeColor = UITheme.Ink;
             cboStatus.Items.AddRange(StatusItems.Select(i => i.Label).ToArray());
             cboStatus.SelectedIndex = 0;
             cboStatus.SelectedIndexChanged += (_, _) => RefreshData();
@@ -152,6 +155,7 @@ namespace CreatorFlow.Controls
             _grid.Unscheduled = CalendarDateLogic.Unscheduled(filtered);
             _grid.Invalidate();
             RenderPeriod();
+            lblSummary.Text = $"{chips.Count} mốc trên lịch · {_grid.Unscheduled.Count} chưa xếp lịch";
             ShowState(null, string.Empty, string.Empty, null, string.Empty);
             if (chips.Count == 0 && _grid.Unscheduled.Count == 0)
                 ShowState("empty", "Chưa có content nào", "Thử đổi bộ lọc hoặc thêm content có deadline.", "Xóa bộ lọc", "clear");
@@ -206,7 +210,6 @@ namespace CreatorFlow.Controls
                 CalendarView.Week => $"Tuần {CalendarDateLogic.StartOfWeek(_cursor):dd/MM}–{CalendarDateLogic.StartOfWeek(_cursor).AddDays(6):dd/MM}",
                 _ => _cursor.ToString("dd/MM/yyyy"),
             };
-            lblSummary.Text = $"Chế độ {(_view == CalendarView.Month ? "tháng" : _view == CalendarView.Week ? "tuần" : "ngày")}";
         }
     }
 }

@@ -6,14 +6,18 @@ namespace CreatorFlow.Controls;
 /// <summary>Lưới lịch vẽ tay duy nhất cho cả 3 chế độ (không tạo control theo ô).</summary>
 public class CalendarGridView : Control
 {
-    private const int HeaderH = 30;
-    private const int ChipH = 24;
-    private const int ChipGap = 4;
-    private const int CellPad = 6;
     private const int MaxChipsPerCell = 3;
-
-    private const int UnscheduledRowH = 26;
-    private const int UnscheduledHeaderH = 30;
+    private int S(int px) => (int)Math.Round(px * DeviceDpi / 96f);
+    private int HeaderH => S(30);
+    private int ChipH => S(24);
+    private int ChipGap => S(4);
+    private int CellPad => S(6);
+    private int UnscheduledRowH => S(26);
+    private int UnscheduledHeaderH => S(30);
+    private static int Edge(int total, int parts, int i) => (int)((long)total * i / parts);
+    private Rectangle _hoverRect;
+    private string _tipText = string.Empty;
+    private int _unschedTop;
 
     private readonly List<(Rectangle Rect, long ContentId, string Label)> _chipHits = new();
     private readonly List<(Rectangle Rect, DateTime Date)> _moreHits = new();
@@ -59,9 +63,32 @@ public class CalendarGridView : Control
     {
         base.OnMouseMove(e);
         var chip = _chipHits.FirstOrDefault(h => h.Rect.Contains(e.Location));
-        bool hot = chip != default || _moreHits.Any(h => h.Rect.Contains(e.Location));
-        Cursor = hot ? Cursors.Hand : Cursors.Default;
-        _tip.SetToolTip(this, chip != default ? chip.Label : string.Empty);
+        bool more = _moreHits.Any(h => h.Rect.Contains(e.Location));
+        Cursor = chip != default || more ? Cursors.Hand : Cursors.Default;
+        string tip = chip != default ? chip.Label : string.Empty;
+        if (tip != _tipText) { _tipText = tip; _tip.SetToolTip(this, tip); }
+        Rectangle hover = chip != default ? chip.Rect : Rectangle.Empty;
+        if (hover != _hoverRect) { _hoverRect = hover; Invalidate(); }
+    }
+
+    protected override void OnMouseEnter(EventArgs e)
+    {
+        base.OnMouseEnter(e);
+        Focus(); // để nhận cuộn chuột
+    }
+
+    protected override void OnMouseLeave(EventArgs e)
+    {
+        base.OnMouseLeave(e);
+        if (_hoverRect != Rectangle.Empty) { _hoverRect = Rectangle.Empty; Invalidate(); }
+    }
+
+    protected override void OnMouseWheel(MouseEventArgs e)
+    {
+        base.OnMouseWheel(e);
+        if (Unscheduled.Count <= 3 || e.Y < Height - FooterHeight) return;
+        _unschedTop = Math.Clamp(_unschedTop + (e.Delta < 0 ? 1 : -1), 0, Unscheduled.Count - 3);
+        Invalidate();
     }
 
     protected override void OnMouseClick(MouseEventArgs e)
@@ -87,6 +114,7 @@ public class CalendarGridView : Control
         _chipHits.Clear();
         _moreHits.Clear();
         _viewHeight = Height - FooterHeight;
+        _unschedTop = Math.Clamp(_unschedTop, 0, Math.Max(0, Unscheduled.Count - 3));
         switch (View)
         {
             case CalendarView.Month: PaintMonth(g); break;
@@ -104,27 +132,33 @@ public class CalendarGridView : Control
 
     private void PaintMonth(Graphics g)
     {
-        int colW = Width / 7;
+        int gridH = _viewHeight - HeaderH;
+        using (var headBrush = new SolidBrush(UITheme.Neutral50))
+            g.FillRectangle(headBrush, 0, 0, Width, HeaderH);
         for (int i = 0; i < 7; i++)
         {
-            var r = new Rectangle(i * colW, 0, colW, HeaderH);
+            int x = Edge(Width, 7, i);
+            var r = new Rectangle(x, 0, Edge(Width, 7, i + 1) - x, HeaderH);
             TextRenderer.DrawText(g, WeekdayNames[i], UITheme.FontLabelBold, r, UITheme.Neutral600,
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine);
         }
 
         List<DateTime> cells = CalendarDateLogic.MonthGrid(CursorDate.Year, CursorDate.Month);
-        int rowH = Math.Max(60, (_viewHeight - HeaderH) / 6);
         using var gridPen = new Pen(UITheme.Neutral200, 1f);
+        using var offBrush = new SolidBrush(UITheme.Neutral50);
         for (int i = 0; i < 42; i++)
         {
             int col = i % 7, row = i / 7;
-            var cell = new Rectangle(col * colW, HeaderH + row * rowH, colW, rowH);
-            g.DrawRectangle(gridPen, cell);
+            int x = Edge(Width, 7, col);
+            int y = HeaderH + Edge(gridH, 6, row);
+            var cell = new Rectangle(x, y, Edge(Width, 7, col + 1) - x, HeaderH + Edge(gridH, 6, row + 1) - y);
             DateTime date = cells[i];
             bool inMonth = date.Month == CursorDate.Month;
-            PaintDateNumber(g, date, new Rectangle(cell.X + CellPad, cell.Y + 2, 30, 22), inMonth);
+            if (!inMonth) g.FillRectangle(offBrush, cell);
+            g.DrawRectangle(gridPen, cell.X, cell.Y, cell.Width - 1, cell.Height - 1);
+            PaintDateNumber(g, date, new Rectangle(cell.X + CellPad, cell.Y + S(2), S(30), S(22)), inMonth);
             if (!inMonth) continue;
-            PaintChips(g, Chips(date), new Rectangle(cell.X + CellPad, cell.Y + 26, cell.Width - CellPad * 2, rowH - 30), date);
+            PaintChips(g, Chips(date), new Rectangle(cell.X + CellPad, cell.Y + S(26), cell.Width - CellPad * 2, cell.Height - S(30)), date);
         }
     }
 
@@ -133,17 +167,22 @@ public class CalendarGridView : Control
     private void PaintWeek(Graphics g)
     {
         List<DateTime> days = CalendarDateLogic.WeekDays(CursorDate);
-        int colW = Width / 7;
+        using var gridPen = new Pen(UITheme.Neutral200, 1f);
+        using var todayBrush = new SolidBrush(UITheme.Neutral50);
         for (int i = 0; i < 7; i++)
         {
-            var col = new Rectangle(i * colW, 0, colW, _viewHeight);
-            using (var gridPen = new Pen(UITheme.Neutral200, 1f))
-                g.DrawRectangle(gridPen, col);
+            int x = Edge(Width, 7, i);
+            var col = new Rectangle(x, 0, Edge(Width, 7, i + 1) - x, _viewHeight);
             DateTime date = days[i];
-            TextRenderer.DrawText(g, WeekdayNames[i], UITheme.FontLabel, new Rectangle(col.X + CellPad, 2, col.Width - CellPad * 2, 16),
+            if (date.Date == DateTime.Today) g.FillRectangle(todayBrush, col);
+            g.DrawRectangle(gridPen, col.X, col.Y, col.Width - 1, col.Height - 1);
+            TextRenderer.DrawText(g, WeekdayNames[i], UITheme.FontLabel,
+                new Rectangle(col.X + CellPad, S(2), col.Width - CellPad * 2, S(16)),
                 UITheme.Neutral600, TextFormatFlags.Left | TextFormatFlags.SingleLine);
-            PaintDateNumber(g, date, new Rectangle(col.X + CellPad, 18, 60, 22), true);
-            PaintChips(g, Chips(date), new Rectangle(col.X + CellPad, HeaderH + 12, col.Width - CellPad * 2, _viewHeight - HeaderH - 16), date);
+            PaintDateNumber(g, date, new Rectangle(col.X + CellPad, S(18), S(60), S(22)), true);
+            PaintChips(g, Chips(date),
+                new Rectangle(col.X + CellPad, S(46), col.Width - CellPad * 2, _viewHeight - S(46) - CellPad),
+                date, int.MaxValue);
         }
     }
 
@@ -152,25 +191,28 @@ public class CalendarGridView : Control
     private void PaintDay(Graphics g)
     {
         DateTime date = CursorDate.Date;
-        TextRenderer.DrawText(g, WeekdayName(date), UITheme.FontLabel, new Rectangle(CellPad, 2, 200, 16),
+        TextRenderer.DrawText(g, WeekdayName(date), UITheme.FontLabel, new Rectangle(CellPad, S(2), S(200), S(16)),
             UITheme.Neutral600, TextFormatFlags.Left | TextFormatFlags.SingleLine);
-        PaintDateNumber(g, date, new Rectangle(CellPad, 18, 200, 22), true);
+        PaintDateNumber(g, date, new Rectangle(CellPad, S(18), S(200), S(22)), true);
+        TextRenderer.DrawText(g, "Cả ngày", UITheme.FontLabelBold,
+            new Rectangle(CellPad, S(46), Width - CellPad * 2, S(18)),
+            UITheme.Neutral600, TextFormatFlags.Left | TextFormatFlags.SingleLine);
+
         List<CalendarChip> chips = Chips(date);
-        int y = HeaderH;
+        int y = S(70);
+        int rowH = ChipH + S(8);
         foreach (CalendarChip chip in chips)
         {
-            var rect = new Rectangle(CellPad, y, Width - CellPad * 2, ChipH + 8);
-            if (rect.Bottom > _viewHeight - 4) break;
+            var rect = new Rectangle(CellPad, y, Width - CellPad * 2, rowH);
+            if (rect.Bottom > _viewHeight - S(4)) break;
             PaintChip(g, chip, rect);
-            y += ChipH + 8 + ChipGap;
+            y += rowH + ChipGap;
         }
 
         if (chips.Count == 0)
-        {
             TextRenderer.DrawText(g, "Không có content nào trong ngày này.", UITheme.FontBody,
-                new Rectangle(CellPad, y, Width - CellPad * 2, 30), UITheme.Neutral600,
+                new Rectangle(CellPad, y, Width - CellPad * 2, S(30)), UITheme.Neutral600,
                 TextFormatFlags.Left | TextFormatFlags.SingleLine);
-        }
     }
 
     // ---------- Dải "Chưa xếp lịch" (AC5) ----------
@@ -179,37 +221,38 @@ public class CalendarGridView : Control
     private void PaintUnscheduled(Graphics g, int bottom)
     {
         if (Unscheduled.Count == 0) return;
-        const int rowH = 26;
         int top = bottom - FooterHeight;
         using (var linePen = new Pen(UITheme.Neutral200, 1f))
             g.DrawLine(linePen, 0, top, Width, top);
-        TextRenderer.DrawText(g, $"Chưa xếp lịch ({Unscheduled.Count})", UITheme.FontLabelBold,
-            new Rectangle(CellPad, top + 4, Width - CellPad * 2, 22), UITheme.Neutral600,
+        string title = $"Chưa xếp lịch ({Unscheduled.Count})"
+            + (Unscheduled.Count > 3 ? " · cuộn chuột để xem thêm" : string.Empty);
+        TextRenderer.DrawText(g, title, UITheme.FontLabelBold,
+            new Rectangle(CellPad, top + S(4), Width - CellPad * 2, S(22)), UITheme.Neutral600,
             TextFormatFlags.Left | TextFormatFlags.SingleLine);
-        int y = top + 28;
-        foreach (Models.ContentBoardCard card in Unscheduled.Take(3))
+        int y = top + UnscheduledHeaderH - S(2);
+        foreach (Models.ContentBoardCard card in Unscheduled.Skip(_unschedTop).Take(3))
         {
-            var rect = new Rectangle(CellPad, y, Width - CellPad * 2, rowH);
-            PaintUnscheduledRow(g, card, rect);
-            y += rowH + 2;
+            PaintUnscheduledRow(g, card, new Rectangle(CellPad, y, Width - CellPad * 2, UnscheduledRowH));
+            y += UnscheduledRowH + 2;
         }
     }
 
     private void PaintUnscheduledRow(Graphics g, Models.ContentBoardCard card, Rectangle rect)
     {
-        using (var path = UITheme.CreateRoundedRectanglePath(rect, 6))
-        using (var fill = new SolidBrush(UITheme.Neutral100))
+        using (var path = UITheme.CreateRoundedRectanglePath(rect, S(6)))
+        using (var fill = new SolidBrush(rect == _hoverRect ? UITheme.Neutral200 : UITheme.Neutral100))
         using (var pen = new Pen(UITheme.Neutral200, 1f))
         {
             g.FillPath(fill, path);
             g.DrawPath(pen, path);
         }
 
-        TextRenderer.DrawText(g, card.Code + " · " + card.Title, UITheme.FontBody, rect,
-            UITheme.Neutral600,
-            TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.SingleLine
-                | TextFormatFlags.NoPrefix);
-        _chipHits.Add((rect, card.ContentId, card.Code + " · " + card.Title));
+        string text = card.Code + " · " + card.Title + " · chưa có ngày";
+        TextRenderer.DrawText(g, text, UITheme.FontBody,
+            new Rectangle(rect.X + S(8), rect.Y, rect.Width - S(12), rect.Height), UITheme.Neutral600,
+            TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis
+                | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix);
+        _chipHits.Add((rect, card.ContentId, text));
     }
 
     // ---------- Khối dùng chung ----------
@@ -221,11 +264,12 @@ public class CalendarGridView : Control
     {
         if (date.Date == DateTime.Today)
         {
-            using var path = UITheme.CreateRoundedRectanglePath(new Rectangle(rect.X, rect.Y + 1, 20, 20), 10);
+            int d = S(20);
+            var circle = new Rectangle(rect.X, rect.Y + 1, d, d);
+            using var path = UITheme.CreateRoundedRectanglePath(circle, d / 2);
             using var fill = new SolidBrush(UITheme.Black);
             g.FillPath(fill, path);
-            TextRenderer.DrawText(g, date.Day.ToString(), UITheme.FontLabelBold,
-                new Rectangle(rect.X, rect.Y + 1, 20, 20), UITheme.White,
+            TextRenderer.DrawText(g, date.Day.ToString(), UITheme.FontLabelBold, circle, UITheme.White,
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine);
             return;
         }
@@ -235,13 +279,13 @@ public class CalendarGridView : Control
             TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine);
     }
 
-    private void PaintChips(Graphics g, List<CalendarChip> chips, Rectangle area, DateTime date)
+    private void PaintChips(Graphics g, List<CalendarChip> chips, Rectangle area, DateTime date, int max = MaxChipsPerCell)
     {
         int y = area.Y;
         int shown = 0;
         foreach (CalendarChip chip in chips)
         {
-            if (shown >= MaxChipsPerCell) break;
+            if (shown >= max) break;
             var rect = new Rectangle(area.X, y, area.Width, ChipH);
             if (rect.Bottom > area.Bottom) break;
             PaintChip(g, chip, rect);
@@ -249,36 +293,49 @@ public class CalendarGridView : Control
             shown++;
         }
 
-        // Dòng "+n" chỉ vẽ khi còn chỗ trong ô, không bao giờ tràn sang ô dưới.
-        if (chips.Count > shown && y + 18 <= area.Bottom)
+        if (chips.Count > shown && y + S(18) <= area.Bottom)
         {
-            var more = new Rectangle(area.X, y, 60, 18);
-            TextRenderer.DrawText(g, $"+{chips.Count - shown} nữa", UITheme.FontLabelBold, more,
-                UITheme.Neutral600, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine);
+            string moreText = $"+{chips.Count - shown} nữa";
+            int w = TextRenderer.MeasureText(moreText, UITheme.FontLabelBold).Width + S(8);
+            var more = new Rectangle(area.X, y, w, S(18));
+            TextRenderer.DrawText(g, moreText, UITheme.FontLabelBold, more, UITheme.Neutral600,
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine);
             _moreHits.Add((more, date));
         }
     }
 
     private void PaintChip(Graphics g, CalendarChip chip, Rectangle rect)
     {
-        Color bg = chip.IsOverdue ? UITheme.DangerBg : UITheme.White;
+        Color bg = chip.IsOverdue ? UITheme.DangerBg : rect == _hoverRect ? UITheme.Neutral100 : UITheme.White;
         Color border = chip.IsOverdue ? UITheme.Danger : UITheme.Neutral200;
-        using (var path = UITheme.CreateRoundedRectanglePath(rect, 6))
+        using (var path = UITheme.CreateRoundedRectanglePath(rect, S(6)))
         using (var fill = new SolidBrush(bg))
         using (var pen = new Pen(border, 1f))
         {
+            if (chip.IsPublish) pen.DashStyle = DashStyle.Dash;
             g.FillPath(fill, path);
             g.DrawPath(pen, path);
         }
 
         Color dot = chip.IsOverdue ? UITheme.Danger : UITheme.GetStageColor(chip.Status);
-        using (var dotBrush = new SolidBrush(dot))
-            g.FillEllipse(dotBrush, rect.X + 8, rect.Y + (rect.Height - 8) / 2, 8, 8);
+        int d = S(8);
+        var dotRect = new Rectangle(rect.X + S(8), rect.Y + (rect.Height - d) / 2, d, d);
+        if (chip.IsPublish)
+        {
+            using var ring = new Pen(dot, 2f);
+            g.DrawEllipse(ring, dotRect.X + 1, dotRect.Y + 1, d - 2, d - 2);
+        }
+        else
+        {
+            using var dotBrush = new SolidBrush(dot);
+            g.FillEllipse(dotBrush, dotRect);
+        }
+
         TextRenderer.DrawText(g, chip.Label, chip.IsOverdue ? UITheme.FontBodyBold : UITheme.FontBody,
-            new Rectangle(rect.X + 22, rect.Y, rect.Width - 26, rect.Height),
+            new Rectangle(rect.X + S(22), rect.Y, rect.Width - S(26), rect.Height),
             chip.IsOverdue ? UITheme.Danger : UITheme.Ink,
-            TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.SingleLine
-                | TextFormatFlags.NoPrefix);
+            TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis
+                | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix);
         _chipHits.Add((rect, chip.ContentId, chip.Label));
     }
 }

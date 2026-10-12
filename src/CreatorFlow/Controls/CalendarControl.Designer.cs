@@ -271,7 +271,7 @@
             // CalendarControl
             //
             this.AutoScaleDimensions = new System.Drawing.SizeF(96F, 96F);
-            this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
+            this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Dpi;
             this.BackColor = System.Drawing.Color.FromArgb(250, 250, 250);
             this.Controls.Add(this.pnlGridHost);
             this.Controls.Add(this.pnlState);
