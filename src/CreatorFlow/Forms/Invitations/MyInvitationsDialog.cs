@@ -98,7 +98,7 @@ public partial class MyInvitationsDialog : Form
 
             ReplaceItem(updated);
             ShowMessage(accept
-                ? $"Đã chấp nhận lời mời. Bạn là {RoleText(updated.Role)} của Project \"{updated.ProjectName}\"."
+                ? $"Đã chấp nhận lời mời vào Project \"{updated.ProjectName}\"."
                 : $"Đã từ chối lời mời vào Project \"{updated.ProjectName}\".", MessageKind.Success);
         }
         catch (UnauthorizedWorkflowActionException ex)
