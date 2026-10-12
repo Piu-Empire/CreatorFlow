@@ -1,5 +1,8 @@
-﻿using CreatorFlow.Models.Enums;
+using CreatorFlow.Models.Enums;
 using CreatorFlow.Controls;
+using CreatorFlow.Forms.IdeaBank;
+using CreatorFlow.Forms.Invitations;
+using CreatorFlow.Forms.ProjectSettings;
 using CreatorFlow.Forms.Tasks;
 using CreatorFlow.Models;
 using CreatorFlow.Repositories.Interfaces;
@@ -32,7 +35,10 @@ public partial class BoardForm : Form, IMessageFilter
     private readonly IProjectMemberRepository _memberRepository;
     private readonly ContentService _contentService;
     private readonly MyTaskService _myTaskService;
+    private readonly IdeaService _ideaService;
     private readonly AuthApiFacade? _auth;
+    private readonly ProjectInvitationService? _invitationService;
+    private readonly InvitationInboxService? _invitationInboxService;
     private ProfileControl? _profile;
     private AdminUserManagementControl? _admin;
     private AdminReportsControl? _reports;
@@ -59,6 +65,7 @@ public partial class BoardForm : Form, IMessageFilter
         _memberRepository = null!;
         _contentService = null!;
         _myTaskService = null!;
+        _ideaService = null!;
     }
 
     public BoardForm(
@@ -70,19 +77,24 @@ public partial class BoardForm : Form, IMessageFilter
         ContentService contentService,
         MyTaskService myTaskService,
         ScriptService scriptService,
+        IdeaService ideaService,
         AuthApiFacade? auth = null,
-        IMetricBackend? metrics = null)
+        IMetricBackend? metrics = null,
+        ProjectInvitationService? invitationService = null,
+        InvitationInboxService? invitationInboxService = null)
     {
         InitializeComponent();
         _workflowService = workflowService;
         _boardRepository = boardRepository;
         _contentService = contentService;
         _myTaskService = myTaskService;
+        _ideaService = ideaService;
         _reviewQueueRepository = reviewQueueRepository;
         _activityRepository = activityRepository;
         _memberRepository = memberRepository;
         _auth = auth;
-
+        _invitationService = invitationService;
+        _invitationInboxService = invitationInboxService;
         if (auth is not null)
         {
             _sidebarControl.SetAuthenticatedAccount(auth.Session.CurrentUser?.DisplayName ?? string.Empty,
@@ -111,7 +123,9 @@ public partial class BoardForm : Form, IMessageFilter
         _sidebarControl.ReviewQueueRequested += (_, _) => OpenReviewQueue();
         _sidebarControl.BoardRequested += (_, _) => { CloseProfile(); CloseAdmin(); CloseReports(); CloseCalendar(); ReloadBoard(); };
         _sidebarControl.MyTasksRequested += (_, _) => OpenMyTasks();
-        _sidebarControl.BoardRequested += (_, _) => { CloseProfile(); CloseAdmin(); CloseReports(); CloseCalendar(); ReloadBoard(); };
+        _sidebarControl.IdeaBankRequested += (_, _) => OpenIdeaBank();
+        _sidebarControl.ProjectSettingsRequested += (_, _) => OpenProjectSettings();
+        _sidebarControl.InvitationsRequested += (_, _) => OpenMyInvitations();
         UpdateProjectContext();
         if (!HasProjectContext) ReloadBoard();
 
@@ -223,6 +237,7 @@ public partial class BoardForm : Form, IMessageFilter
         var pendingReviews = _reviewQueueRepository.GetPendingReviews(CurrentSession.CurrentProjectId);
         _sidebarControl.ReviewQueueCount = pendingReviews.Count;
         _sidebarControl.MyWorkCount = _myTaskService.CountOpenTasks(CurrentSession.CurrentProjectId, CurrentSession.CurrentUserId);
+        _sidebarControl.BacklogCount = _ideaService.CountBacklog(CurrentSession.CurrentProjectId, CurrentSession.CurrentUserId);
         _sidebarControl.Invalidate();
         ApplyFilters();
 
@@ -426,6 +441,51 @@ public partial class BoardForm : Form, IMessageFilter
 
         ReloadBoard();
         if (contentId.HasValue) OpenContentById(contentId.Value);
+    }
+
+    /// <summary>Mở màn Idea Bank (kho ý tưởng) của Project hiện hành; đóng xong thì cập nhật lại badge Backlog.</summary>
+    private void OpenIdeaBank()
+    {
+        if (!HasProjectContext) return;
+        CloseProfile();
+        using (var ideaForm = new IdeaBankForm(_ideaService))
+        {
+            ideaForm.ShowDialog(this);
+        }
+
+        ReloadBoard();
+    }
+
+    /// <summary>Mở hộp thoại Mời thành viên (SCRUM-26) của Project hiện hành. Quyền Owner do API quyết định.</summary>
+    private void OpenProjectSettings()
+    {
+        if (!HasProjectContext) return;
+        CloseProfile();
+        if (_invitationService is null)
+        {
+            _toast.ShowToast(this, "Chua ket noi API de moi thanh vien");
+            return;
+        }
+
+        using var dialog = new InviteMemberDialog(_invitationService, CurrentSession.CurrentProjectId, CurrentSession.CurrentProjectName);
+        dialog.ShowDialog(this);
+    }
+
+    /// <summary>
+    /// Mở hộp thoại Lời mời của tôi: xem lời mời gửi tới tài khoản đang đăng nhập và chấp nhận / từ chối.
+    /// Không cần đang ở trong Project nào (người mới được mời thường chưa có Project). Hạn dùng, trạng thái và việc tạo thành viên do API quyết định.
+    /// </summary>
+    private void OpenMyInvitations()
+    {
+        CloseProfile();
+        if (_invitationInboxService is null)
+        {
+            _toast.ShowToast(this, "Chưa kết nối API để xem lời mời");
+            return;
+        }
+
+        using var dialog = new MyInvitationsDialog(_invitationInboxService);
+        dialog.ShowDialog(this);
     }
 
     /// <summary>Mở drawer chi tiết cho Content theo Id (kể cả khi thẻ đang bị ẩn bởi bộ lọc tìm kiếm/platform).</summary>

@@ -307,7 +307,6 @@ public sealed class ApiTaskBackendTests
         }
 
         public void Update(long contentId, ContentDraft draft) { }
-
         public Content? GetDetail(long contentId) => null;
     }
 

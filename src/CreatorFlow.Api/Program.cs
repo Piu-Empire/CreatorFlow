@@ -13,6 +13,12 @@ using Microsoft.AspNetCore.Authorization;
 using CreatorFlow.Api.Configuration;
 using CreatorFlow.Api.Services.Auth;
 using CreatorFlow.Api.Repositories.Auth;
+using CreatorFlow.Api.Repositories.Tasks;
+using CreatorFlow.Api.Services.Tasks;
+using CreatorFlow.Api.Repositories.Workflow;
+using CreatorFlow.Api.Services.Workflow;
+using CreatorFlow.Api.Repositories.Invitations;
+using CreatorFlow.Api.Services.Invitations;
 using Microsoft.AspNetCore.Http.Features;
 using System.Text.Json.Serialization;
 
@@ -46,6 +52,14 @@ builder.Services.AddAuthorizationBuilder().AddPolicy("SystemAdminOnly", policy =
     policy.RequireAssertion(context =>
         context.Resource is HttpContext http &&
         http.RequestServices.GetRequiredService<CurrentAuthenticatedUser>().User is { IsSystemAdmin: true }));
+builder.Services.AddScoped<ITaskRepository, TaskRepository>();
+builder.Services.AddScoped<TaskService>();
+builder.Services.AddScoped<IWorkflowRepository, WorkflowRepository>();
+builder.Services.AddScoped<WorkflowService>();
+builder.Services.AddScoped<IInvitationRepository, InvitationRepository>();
+builder.Services.AddScoped<InvitationService>();
+builder.Services.AddScoped<IMyInvitationRepository, MyInvitationRepository>();
+builder.Services.AddScoped<MyInvitationService>();
 builder.Services.AddSingleton<IAvatarImageProcessor, AvatarImageProcessor>();
 
 builder.Services.AddSingleton<IDbConnectionFactory>(new NpgsqlConnectionFactory(connectionString));
@@ -83,6 +97,10 @@ app.MapUserEndpoints();
 app.MapAdminEndpoints();
 app.MapReportEndpoints();
 app.MapMetricEndpoints();
+app.MapTaskEndpoints();
+app.MapWorkflowEndpoints();
+app.MapInvitationEndpoints();
+app.MapMyInvitationEndpoints();
 app.Run();
 
 public partial class Program { }
