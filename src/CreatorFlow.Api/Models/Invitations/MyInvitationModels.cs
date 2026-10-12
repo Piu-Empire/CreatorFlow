@@ -28,6 +28,9 @@ public enum InvitationDecisionOutcome
 
     /// <summary>Lời mời còn ghi Pending nhưng đã quá hạn; đã được chuyển sang Expired.</summary>
     Expired,
+
+    /// <summary>Project của lời mời đã bị lưu trữ (ARCHIVED) nên không thể chấp nhận để vào Project; lời mời vẫn Pending (từ chối thì vẫn được).</summary>
+    ProjectArchived,
 }
 
 /// <param name="Invitation">Lời mời sau khi cập nhật; chỉ có khi Outcome = Decided.</param>

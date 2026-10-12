@@ -469,7 +469,7 @@ public partial class BoardForm : Form, IMessageFilter
         CloseProfile();
         if (_invitationInboxService is null)
         {
-            _toast.ShowToast(this, "Chua ket noi API de xem loi moi");
+            _toast.ShowToast(this, "Chưa kết nối API để xem lời mời");
             return;
         }
 

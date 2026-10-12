@@ -199,6 +199,35 @@ public sealed class MyInvitationServiceTests
         Assert.AreEqual(status, f.Repo.Invitations[0].Status);
     }
 
+    [TestMethod]
+    public async Task Accept_ProjectArchived_Returns409_AndCreatesNoMembership_AndInvitationStaysPending()
+    {
+        var f = new Fixture();
+        f.Repo.Seed(MineId, InviteeEmail, InvitationStatus.Pending);
+        f.Repo.ArchivedProjects.Add(ProjectId);
+
+        var result = await f.Service.AcceptAsync(MineId);
+
+        Assert.AreEqual(409, result.Status);
+        Assert.AreEqual("project_archived", result.ErrorCode);
+        Assert.AreEqual(0, f.Repo.Members.Count);
+        Assert.AreEqual(InvitationStatus.Pending, f.Repo.Invitations[0].Status);
+    }
+
+    [TestMethod]
+    public async Task Reject_ProjectArchived_StillSucceeds_AndCreatesNoMembership()
+    {
+        var f = new Fixture();
+        f.Repo.Seed(MineId, InviteeEmail, InvitationStatus.Pending);
+        f.Repo.ArchivedProjects.Add(ProjectId);
+
+        var result = await f.Service.RejectAsync(MineId);
+
+        Assert.IsTrue(result.Succeeded);
+        Assert.AreEqual("Rejected", result.Value!.Status);
+        Assert.AreEqual(0, f.Repo.Members.Count);
+    }
+
     // ================================================================== quy tắc thuần
 
     [TestMethod]
@@ -238,7 +267,7 @@ public sealed class MyInvitationServiceTests
 
     /// <summary>
     /// Repository giả lập đúng ngữ nghĩa transaction thật: khớp theo email (không phân biệt hoa/thường), NotFound / NotPending / Expired /
-    /// Decided, và thành viên là tập (project, user) nên thêm lần hai không tạo dòng mới (giống UNIQUE(project_id, user_id)).
+    /// Decided / ProjectArchived, và thành viên là tập (project, user) nên thêm lần hai không tạo dòng mới (giống UNIQUE(project_id, user_id)).
     /// </summary>
     private sealed class FakeMyInvitationRepository : IMyInvitationRepository
     {
@@ -246,6 +275,7 @@ public sealed class MyInvitationServiceTests
 
         public List<MyInvitation> Invitations { get; } = new();
         public HashSet<(long Project, long User)> Members { get; } = new();
+        public HashSet<long> ArchivedProjects { get; } = new();
         public int MembershipWrites { get; private set; }
 
         public void Seed(long id, string email, InvitationStatus status, DateTime? createdAt = null, DateTime? expiresAt = null)
@@ -277,6 +307,9 @@ public sealed class MyInvitationServiceTests
                 Invitations[index] = current with { Status = InvitationStatus.Expired };
                 return Task.FromResult(new InvitationDecisionResult(InvitationDecisionOutcome.Expired));
             }
+
+            if (decision == InvitationStatus.Accepted && ArchivedProjects.Contains(current.ProjectId))
+                return Task.FromResult(new InvitationDecisionResult(InvitationDecisionOutcome.ProjectArchived));
 
             if (decision == InvitationStatus.Accepted && Members.Add((current.ProjectId, userId))) MembershipWrites++;
 

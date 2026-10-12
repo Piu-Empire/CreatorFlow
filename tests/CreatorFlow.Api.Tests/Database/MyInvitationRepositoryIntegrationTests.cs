@@ -191,6 +191,34 @@ public sealed class MyInvitationRepositoryIntegrationTests
     }
 
     [TestMethod]
+    public async Task Accept_ProjectArchived_ReturnsProjectArchived_CreatesNoMembership_AndStaysPending()
+    {
+        await using var f = await Fixture.CreateAsync();
+        long id = await f.InsertInvitationAsync(f.InviteeEmail, "CREATOR", "PENDING", UtcNow().AddDays(7));
+        await f.ArchiveProjectAsync();
+
+        var result = await f.Repository.DecideAsync(id, f.InviteeId, f.InviteeEmail, InvitationStatus.Accepted, UtcNow());
+
+        Assert.AreEqual(InvitationDecisionOutcome.ProjectArchived, result.Outcome);
+        Assert.AreEqual(0L, await f.CountMembersAsync(f.InviteeId));
+        Assert.AreEqual("PENDING", await f.InvitationStatusAsync(id));
+    }
+
+    [TestMethod]
+    public async Task Reject_ProjectArchived_StillMarksRejected()
+    {
+        await using var f = await Fixture.CreateAsync();
+        long id = await f.InsertInvitationAsync(f.InviteeEmail, "CREATOR", "PENDING", UtcNow().AddDays(7));
+        await f.ArchiveProjectAsync();
+
+        var result = await f.Repository.DecideAsync(id, f.InviteeId, f.InviteeEmail, InvitationStatus.Rejected, UtcNow());
+
+        Assert.AreEqual(InvitationDecisionOutcome.Decided, result.Outcome);
+        Assert.AreEqual(InvitationStatus.Rejected, result.Invitation!.Status);
+        Assert.AreEqual("REJECTED", await f.InvitationStatusAsync(id));
+    }
+
+    [TestMethod]
     [DataRow("CANCELLED", InvitationStatus.Cancelled)]
     [DataRow("EXPIRED", InvitationStatus.Expired)]
     public async Task Accept_NotPending_ReportsCurrentStatus_AndCreatesNoMembership(string dbStatus, InvitationStatus expected)
@@ -277,6 +305,9 @@ public sealed class MyInvitationRepositoryIntegrationTests
             INSERT INTO project_members (project_id, user_id, role, is_active)
             VALUES (@p, @u, CAST(@role AS project_role), @active)
             """, ("p", ProjectId), ("u", userId), ("role", role), ("active", active));
+
+        public Task ArchiveProjectAsync() => ExecuteAsync(
+            "UPDATE projects SET status = 'ARCHIVED' WHERE project_id = @p", ("p", ProjectId));
 
         public Task<long> CountMembersAsync(long userId) => ScalarAsync<long>(
             "SELECT COUNT(*) FROM project_members WHERE project_id = @p AND user_id = @u", ("p", ProjectId), ("u", userId));

@@ -45,6 +45,8 @@ public sealed class MyInvitationService(IMyInvitationRepository repository, Curr
                 AuthOperationResult<MyInvitationResponse>.Fail("not_found", "Không tìm thấy lời mời này.", status: 404),
             InvitationDecisionOutcome.Expired =>
                 AuthOperationResult<MyInvitationResponse>.Fail("invitation_expired", "Lời mời đã hết hạn.", status: 409),
+            InvitationDecisionOutcome.ProjectArchived =>
+                AuthOperationResult<MyInvitationResponse>.Fail("project_archived", "Project này đã được lưu trữ nên không thể tham gia.", status: 409),
             InvitationDecisionOutcome.NotPending =>
                 AuthOperationResult<MyInvitationResponse>.Fail("invitation_not_pending", NotPendingMessage(result.CurrentStatus), status: 409),
             _ => AuthOperationResult<MyInvitationResponse>.Fail("not_found", "Không tìm thấy lời mời này.", status: 404),

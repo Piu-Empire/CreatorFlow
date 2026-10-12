@@ -11,7 +11,7 @@ public interface IMyInvitationRepository
     /// <summary>
     /// Trong MỘT transaction, khoá dòng lời mời (SELECT ... FOR UPDATE) rồi:
     /// không có lời mời gửi tới email này → NotFound; không còn Pending → NotPending; Pending quá hạn → đánh dấu Expired;
-    /// ngược lại chuyển sang <paramref name="decision"/> (Accepted hoặc Rejected). Chỉ khi chấp nhận mới tạo (hoặc kích hoạt lại) project_members.
+    /// chấp nhận vào Project đã lưu trữ → ProjectArchived (không ghi gì, lời mời vẫn Pending); ngược lại chuyển sang <paramref name="decision"/> (Accepted hoặc Rejected). Chỉ khi chấp nhận mới tạo (hoặc kích hoạt lại) project_members.
     /// Khoá dòng khiến hai lần chấp nhận đồng thời chỉ có một lần thành công, nên membership chỉ được tạo đúng một lần.
     /// </summary>
     Task<InvitationDecisionResult> DecideAsync(

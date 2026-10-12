@@ -52,12 +52,15 @@ public sealed class MyInvitationRepository(IDbConnectionFactory connectionFactor
             ProjectRole role = default;
             InvitationStatus status = default;
             DateTime expiresAt = default;
+            bool projectArchived = false;
 
+            // FOR UPDATE OF i: chỉ khoá dòng lời mời (không khoá dòng projects mà chỉ đọc status của nó).
             await using (var lockRow = new NpgsqlCommand("""
-                SELECT project_id, role::text, status::text, expires_at
-                FROM project_invitations
-                WHERE invitation_id = @invitation_id AND LOWER(invited_email) = LOWER(@email)
-                FOR UPDATE;
+                SELECT i.project_id, i.role::text, i.status::text, i.expires_at, p.status::text
+                FROM project_invitations i
+                JOIN projects p ON p.project_id = i.project_id
+                WHERE i.invitation_id = @invitation_id AND LOWER(i.invited_email) = LOWER(@email)
+                FOR UPDATE OF i;
                 """, connection, transaction))
             {
                 lockRow.Parameters.AddWithValue("invitation_id", NpgsqlDbType.Bigint, invitationId);
@@ -71,6 +74,7 @@ public sealed class MyInvitationRepository(IDbConnectionFactory connectionFactor
                     role = ParseEnum<ProjectRole>(reader.GetString(1));
                     status = ParseEnum<InvitationStatus>(reader.GetString(2));
                     expiresAt = reader.GetDateTime(3);
+                    projectArchived = string.Equals(reader.GetString(4), "ARCHIVED", StringComparison.OrdinalIgnoreCase);
                 }
             }
 
@@ -90,6 +94,11 @@ public sealed class MyInvitationRepository(IDbConnectionFactory connectionFactor
                 await transaction.CommitAsync(cancellationToken);
                 return new InvitationDecisionResult(InvitationDecisionOutcome.Expired);
             }
+
+            // 2b) Project đã lưu trữ: không nhận thêm thành viên. Chỉ chặn việc CHẤP NHẬN; từ chối vẫn được để người dùng dọn hộp thư.
+            //     Không ghi gì (lời mời giữ nguyên Pending), transaction bị huỷ khi Dispose.
+            if (decision == InvitationStatus.Accepted && projectArchived)
+                return new InvitationDecisionResult(InvitationDecisionOutcome.ProjectArchived);
 
             // 3) Chấp nhận → tạo membership. Đã là thành viên đang hoạt động thì giữ nguyên (không đổi role, không tạo dòng thứ hai);
             //    từng bị gỡ (is_active = false) thì kích hoạt lại với vai trò được mời.
@@ -122,24 +131,25 @@ public sealed class MyInvitationRepository(IDbConnectionFactory connectionFactor
                 await update.ExecuteNonQueryAsync(cancellationToken);
             }
 
+            // 5) Đọc lại lời mời NGAY TRONG transaction (dòng đang bị khoá nên chắc chắn còn tồn tại), rồi mới commit.
+            //    Nhờ vậy kết quả luôn có Invitation khi Decided, không còn khe hở "đã ghi nhưng đọc lại không thấy".
+            MyInvitation? decided = await GetByIdAsync(invitationId, connection, transaction, cancellationToken);
             await transaction.CommitAsync(cancellationToken);
+            return new InvitationDecisionResult(InvitationDecisionOutcome.Decided, decided);
         }
-
-        MyInvitation? decided = await GetByIdAsync(invitationId, cancellationToken);
-        return new InvitationDecisionResult(InvitationDecisionOutcome.Decided, decided);
     }
 
     // ------------------------------------------------------------------ helpers
 
-    private async Task<MyInvitation?> GetByIdAsync(long invitationId, CancellationToken cancellationToken)
+    private static async Task<MyInvitation?> GetByIdAsync(
+        long invitationId, NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken cancellationToken)
     {
         string sql = MyInvitationSelect + """
 
             WHERE i.invitation_id = @invitation_id;
             """;
 
-        await using NpgsqlConnection connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
-        await using var command = new NpgsqlCommand(sql, connection);
+        await using var command = new NpgsqlCommand(sql, connection, transaction);
         command.Parameters.AddWithValue("invitation_id", NpgsqlDbType.Bigint, invitationId);
         var rows = await ReadAllAsync(command, cancellationToken);
         return rows.Count == 0 ? null : rows[0];
