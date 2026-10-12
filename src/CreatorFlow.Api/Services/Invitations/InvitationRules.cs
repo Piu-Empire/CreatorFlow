@@ -28,6 +28,9 @@ public static class InvitationRules
             && role is ProjectRole.Manager or ProjectRole.Creator;
     }
 
+    /// <summary>Quyết định của người được mời: chấp nhận → Accepted, từ chối → Rejected.</summary>
+    public static InvitationStatus StatusFor(bool accept) => accept ? InvitationStatus.Accepted : InvitationStatus.Rejected;
+
     /// <summary>Pending nhưng đã quá hạn thì được coi là Expired (DB chỉ đổi status khi có lời mời mới cho cùng email).</summary>
     public static InvitationStatus EffectiveStatus(InvitationStatus status, DateTime expiresAtUtc, DateTime nowUtc) =>
         status == InvitationStatus.Pending && expiresAtUtc <= nowUtc ? InvitationStatus.Expired : status;
