@@ -6,6 +6,7 @@ using CreatorFlow.Repositories.Interfaces;
 using CreatorFlow.Services;
 using CreatorFlow.Services.AI;
 using CreatorFlow.ApiClients;
+using CreatorFlow.Services.Backends;
 using System.Runtime.Versioning;
 
 namespace CreatorFlow;
@@ -99,14 +100,14 @@ static class Program
         {
             using var api = ApiClient.Create(ApiClientConfiguration.Load());
             var session = new UserSession();
-            var auth = new AuthApiFacade(api, session);
+            var auth = new AuthApiFacade(api, session);            var metricBackend = new ApiMetricBackend(api, session);
             var invitations = new ProjectInvitationService(api, session);
             var invitationInbox = new InvitationInboxService(api, session);
             if (args.Length > 0 && args[0] == "--test")
             {
                 // Diagnostic layout only: no authentication, project queries, or message loop.
                 using var testForm = new BoardForm(workflowService, boardRepo, reviewQueueRepo,
-                    activityRepo, memberRepo, contentService, myTaskService, scriptService, ideaService, auth, invitations, invitationInbox);
+                    activityRepo, memberRepo, contentService, myTaskService, scriptService, ideaService, auth, metricBackend, invitations, invitationInbox);
                 var handle = testForm.Handle;
                 testForm.Size = new Size(1440, 900);
                 testForm.PerformLayout();
@@ -114,7 +115,7 @@ static class Program
                 return;
             }
             using var context = new AuthenticationApplicationContext(auth, () =>
-                new BoardForm(workflowService, boardRepo, reviewQueueRepo, activityRepo, memberRepo, contentService, myTaskService, scriptService, ideaService, auth, invitations, invitationInbox));
+                new BoardForm(workflowService, boardRepo, reviewQueueRepo, activityRepo, memberRepo, contentService, myTaskService, scriptService, ideaService, auth, metricBackend, invitations, invitationInbox));
             Application.Run(context);
         }
         catch (InvalidOperationException)

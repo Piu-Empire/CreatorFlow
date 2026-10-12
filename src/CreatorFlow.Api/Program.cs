@@ -4,6 +4,12 @@ using CreatorFlow.Api.Services;
 using CreatorFlow.Data;
 using CreatorFlow.Repositories;
 using CreatorFlow.Api.Authentication;
+using CreatorFlow.Api.Repositories.Admin;
+using CreatorFlow.Api.Repositories.Metrics;
+using CreatorFlow.Api.Repositories.Tasks;
+using CreatorFlow.Api.Services.Admin;
+using CreatorFlow.Api.Services.Metrics;
+using Microsoft.AspNetCore.Authorization;
 using CreatorFlow.Api.Configuration;
 using CreatorFlow.Api.Services.Auth;
 using CreatorFlow.Api.Repositories.Auth;
@@ -35,6 +41,17 @@ builder.Services.AddScoped(services => new PasswordResetService(services.GetRequ
     services.GetRequiredService<ILogger<PasswordResetService>>()));
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<UserService>();
+builder.Services.AddScoped<IAdminUserRepository, AdminUserRepository>();
+builder.Services.AddScoped<AdminUserService>();
+builder.Services.AddScoped<IAdminReportRepository, AdminReportRepository>();
+builder.Services.AddScoped<AdminReportService>();
+builder.Services.AddScoped<ITaskRepository, TaskRepository>(); // BƯỚC 0a: thiếu, MetricService cần GetRoleAsync/GetContentAsync
+builder.Services.AddScoped<IMetricRepository, MetricRepository>();
+builder.Services.AddScoped<MetricService>();
+builder.Services.AddAuthorizationBuilder().AddPolicy("SystemAdminOnly", policy =>
+    policy.RequireAssertion(context =>
+        context.Resource is HttpContext http &&
+        http.RequestServices.GetRequiredService<CurrentAuthenticatedUser>().User is { IsSystemAdmin: true }));
 builder.Services.AddScoped<ITaskRepository, TaskRepository>();
 builder.Services.AddScoped<TaskService>();
 builder.Services.AddScoped<IWorkflowRepository, WorkflowRepository>();
@@ -77,6 +94,9 @@ app.UseAuthorization();
 app.MapHealthEndpoints();
 app.MapAuthEndpoints();
 app.MapUserEndpoints();
+app.MapAdminEndpoints();
+app.MapReportEndpoints();
+app.MapMetricEndpoints();
 app.MapTaskEndpoints();
 app.MapWorkflowEndpoints();
 app.MapInvitationEndpoints();
