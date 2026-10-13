@@ -2,6 +2,7 @@
 using CreatorFlow.Models;
 using CreatorFlow.Models.Enums;
 using CreatorFlow.Services;
+using CreatorFlow.Services.Backends;
 using CreatorFlow.Services.Exceptions;
 
 namespace CreatorFlow.Forms.IdeaBank;
@@ -19,7 +20,7 @@ public partial class IdeaBankForm : Form
     private const string AllStatusLabel = "Tất cả trạng thái";
     private const string AllTagLabel = "Tất cả tag";
 
-    private readonly IdeaService _ideaService;
+    private readonly IIdeaBackend _ideaService;
     private readonly ToastNotification? _toast;
     private readonly System.Windows.Forms.Timer _searchTimer = new() { Interval = 300 };
     private List<Idea> _ideas = new();
@@ -33,7 +34,7 @@ public partial class IdeaBankForm : Form
         _ideaService = null!;
     }
 
-    public IdeaBankForm(IdeaService ideaService)
+    public IdeaBankForm(IIdeaBackend ideaService)
     {
         InitializeComponent();
         _ideaService = ideaService;
@@ -103,7 +104,7 @@ public partial class IdeaBankForm : Form
     private List<string> SafeGetProjectTags()
     {
         try { return _ideaService.GetProjectTags(ProjectId, UserId); }
-        catch (UnauthorizedWorkflowActionException) { return new List<string>(); }
+        catch (Exception ex) when (ex is UnauthorizedWorkflowActionException or IdeaValidationException) { return new List<string>(); }
     }
 
     private void ReloadIdeas()
@@ -119,6 +120,12 @@ public partial class IdeaBankForm : Form
         {
             _ideas = new List<Idea>();
             MessageBox.Show(this, ex.Message, "Không đủ quyền", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        catch (IdeaValidationException ex)
+        {
+            // Lỗi từ API (mất kết nối, quá thời gian chờ...): hiện thông báo thay vì làm sập form.
+            _ideas = new List<Idea>();
+            MessageBox.Show(this, ex.Message, "Không tải được ý tưởng", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
 
         listViewIdeas.BeginUpdate();

@@ -36,6 +36,8 @@ public partial class BoardForm : Form, IMessageFilter
     private readonly ContentService _contentService;
     private readonly MyTaskService _myTaskService;
     private readonly IdeaService _ideaService;
+    private readonly IIdeaBackend? _ideaBackend;
+    private readonly IBoardBackend? _boardBackend;
     private readonly IMyTaskBackend? _taskBackend;
     private readonly AuthApiFacade? _auth;
     private readonly ProjectInvitationService? _invitationService;
@@ -84,7 +86,9 @@ public partial class BoardForm : Form, IMessageFilter
         ProjectInvitationService? invitationService = null,
         InvitationInboxService? invitationInboxService = null,
         ProjectApiFacade? projects = null,
-        IMyTaskBackend? taskBackend = null)
+        IMyTaskBackend? taskBackend = null,
+        IIdeaBackend? ideaBackend = null,
+        IBoardBackend? boardBackend = null)
     {
         InitializeComponent();
         _workflowService = workflowService;
@@ -99,6 +103,8 @@ public partial class BoardForm : Form, IMessageFilter
         _invitationService = invitationService;
         _invitationInboxService = invitationInboxService;
         _taskBackend = taskBackend;
+        _ideaBackend = ideaBackend;
+        _boardBackend = boardBackend;
         InitializeProjects(projects);
         if (auth is not null)
         {
@@ -306,6 +312,12 @@ public partial class BoardForm : Form, IMessageFilter
     // ==========================================================
     private void OnCardClicked(object? sender, ContentBoardCard card)
     {
+        if (_projects is not null)
+        {
+            // Đã đăng nhập: Board mới chỉ hiển thị thẻ qua API; drawer chi tiết sẽ nối API ở bước sau.
+            if (_boardBackend is not null) _toast.ShowToast(this, "Chi tiết Content chưa kết nối API");
+            return;
+        }
         if (sender is KanbanCardControl cardCtrl)
             SelectCard(cardCtrl);
     }
@@ -368,7 +380,12 @@ public partial class BoardForm : Form, IMessageFilter
 
     private void TryMoveNext(ContentBoardCard card)
     {
-        if (!HasProjectContext || _projects is not null) return;
+        if (!HasProjectContext) return;
+        if (_projects is not null)
+        {
+            if (_boardBackend is not null) _toast.ShowToast(this, "Chuyển trạng thái chưa kết nối API");
+            return;
+        }
         try
         {
             switch (card.Status)
@@ -458,7 +475,15 @@ public partial class BoardForm : Form, IMessageFilter
     private void OpenIdeaBank()
     {
         if (!HasProjectContext) return;
-        if (_projects is not null) { ShowUnavailableModule("Idea Bank"); return; }
+        if (_projects is not null)
+        {
+            // Đã đăng nhập: Idea Bank chạy qua API. Chưa có backend API thì giữ thông báo "chưa kết nối" như cũ.
+            if (_ideaBackend is null) { ShowUnavailableModule("Idea Bank"); return; }
+            if (!CanLeaveProjectPage()) return;
+            using var apiIdeaForm = new IdeaBankForm(_ideaBackend);
+            apiIdeaForm.ShowDialog(this);
+            return;
+        }
         CloseProfile();
         using (var ideaForm = new IdeaBankForm(_ideaService))
         {

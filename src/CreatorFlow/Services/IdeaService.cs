@@ -2,6 +2,7 @@
 using CreatorFlow.Models;
 using CreatorFlow.Models.Enums;
 using CreatorFlow.Repositories.Interfaces;
+using CreatorFlow.Services.Backends;
 using CreatorFlow.Services.Exceptions;
 
 namespace CreatorFlow.Services;
@@ -19,7 +20,7 @@ namespace CreatorFlow.Services;
 ///     (contents.source_idea_id), đặt Idea sang Converted và ghi lịch sử Content — tất cả trong một transaction.
 ///     Idea gốc không bị xóa hay mất dữ liệu.
 /// </summary>
-public class IdeaService
+public class IdeaService : IIdeaBackend
 {
     public const int MaxTitleLength = 250;
     public const int MaxDescriptionLength = 2000;

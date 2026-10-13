@@ -1,6 +1,7 @@
 using System.Net.Mail;
 using CreatorFlow.Contracts.Invitations;
 using CreatorFlow.Services;
+using CreatorFlow.Services.Backends;
 using CreatorFlow.Services.Exceptions;
 using CreatorFlow.Theme;
 
@@ -16,7 +17,7 @@ public partial class InviteMemberDialog : Form
 {
     private enum MessageKind { Info, Success, Error }
 
-    private readonly ProjectInvitationService _service;
+    private readonly IInvitationBackend _service;
     private readonly long _projectId;
     private bool _canInvite = true;
 
@@ -28,7 +29,7 @@ public partial class InviteMemberDialog : Form
         _service = null!;
     }
 
-    public InviteMemberDialog(ProjectInvitationService service, long projectId, string projectName)
+    public InviteMemberDialog(IInvitationBackend service, long projectId, string projectName)
     {
         InitializeComponent();
         _service = service;
@@ -76,6 +77,12 @@ public partial class InviteMemberDialog : Form
         {
             if (IsDisposed) return;
             ShowMessage(ex.Message, MessageKind.Error);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Lỗi ngoài dự kiến: hiện thông báo thay vì làm sập ứng dụng (handler chạy async void).
+            if (IsDisposed) return;
+            ShowMessage("Không tải được danh sách lời mời: " + ex.Message, MessageKind.Error);
         }
         finally
         {
@@ -131,6 +138,11 @@ public partial class InviteMemberDialog : Form
         {
             if (IsDisposed) return;
             ShowMessage(ex.Message, MessageKind.Error);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            if (IsDisposed) return;
+            ShowMessage("Không gửi được lời mời: " + ex.Message, MessageKind.Error);
         }
         finally
         {

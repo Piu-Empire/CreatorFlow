@@ -260,21 +260,77 @@ public partial class BoardForm
         _pnlBoardArea.Visible = true;
         if (_pnlBoardArea.Controls["serverProjectState"] is not Label state)
         {
-            state = new Label { Name = "serverProjectState", Dock = DockStyle.Top, Height = 64,
-                Padding = new Padding(0, 8, 32, 8), TextAlign = ContentAlignment.MiddleLeft,
-                Font = UITheme.FontBody, ForeColor = UITheme.Neutral600, BackColor = UITheme.Neutral50 };
+            state = new Label
+            {
+                Name = "serverProjectState",
+                Dock = DockStyle.Top,
+                Height = 64,
+                Padding = new Padding(0, 8, 32, 8),
+                TextAlign = ContentAlignment.MiddleLeft,
+                Font = UITheme.FontBody,
+                ForeColor = UITheme.Neutral600,
+                BackColor = UITheme.Neutral50
+            };
             _pnlBoardArea.Controls.Add(state);
             _pnlBoardArea.Controls.SetChildIndex(state, 1);
         }
+        state.Visible = true;
         state.Text = current
-            ? "Board chưa kết nối nguồn nội dung cho Project này. Bạn vẫn có thể mở My Tasks và Lời mời."
+            ? (_boardBackend is not null
+                ? "Đang tải Board…"
+                : "Board chưa kết nối nguồn nội dung cho Project này. Bạn vẫn có thể mở My Tasks và Lời mời.")
             : "Chưa chọn Project. Hãy tạo hoặc chọn Project để bắt đầu.";
         _topHeaderControl.SetAuthenticatedPage("Board");
+        if (current && _boardBackend is not null) _ = LoadServerBoardAsync();
+    }
+
+    private int _boardLoadSequence;
+
+    /// <summary>
+    /// Tải các thẻ Content của Project hiện hành qua API rồi vẽ lên Board. Bỏ kết quả nếu trong lúc chờ người dùng đã
+    /// đổi Project / đăng xuất / mở trang khác (so sánh generation), để không vẽ nhầm dữ liệu của Project cũ.
+    /// </summary>
+    private async Task LoadServerBoardAsync()
+    {
+        if (_projects?.Context.Current is not { } project || _boardBackend is null) return;
+        int version = ++_boardLoadSequence;
+        long generation = _projects.Context.Generation;
+        long? authGeneration = _auth?.Session.Generation;
+        bool Valid() => !IsDisposed && version == _boardLoadSequence && generation == _projects.Context.Generation &&
+            authGeneration == _auth?.Session.Generation && _projectPage is null && _profile is null && _admin is null && _reports is null && _calendar is null;
+
+        List<CreatorFlow.Models.ContentBoardCard>? cards = null;
+        string? error = null;
+        try { cards = await _boardBackend.GetBoardCardsAsync(project.ProjectId, _authLifetime.Token); }
+        catch (OperationCanceledException) { return; }
+        catch (Exception ex) when (ex is CreatorFlow.Services.Exceptions.ContentValidationException or CreatorFlow.Services.Exceptions.UnauthorizedWorkflowActionException or InvalidOperationException)
+        { error = ex.Message; }
+        if (!Valid()) return;
+
+        var state = _pnlBoardArea.Controls["serverProjectState"] as Label;
+        if (cards is null)
+        {
+            if (state is not null) state.Text = "Không tải được Board: " + error;
+            return;
+        }
+
+        _allCards = cards;
+        foreach (var column in _columns.Values) column.SourceAvailable = true;
+        _topHeaderControl.UpdateStats(_allCards.Count, _allCards.Count(c => c.IsOverdue));
+        long me = CurrentSession.CurrentUserId;
+        _sidebarControl.ReviewQueueCount = _allCards.Count(c => c.HasPendingReview);
+        _sidebarControl.MyWorkCount = _allCards.Count(c => c.Assignees.Any(a => a.UserId == me && a.Status != CreatorFlow.Models.Enums.AssignmentStatus.Completed));
+        if (state is not null) state.Visible = false;
+        ApplyFilters();
+        if (_ideaBackend is not null) _sidebarControl.BacklogCount = _ideaBackend.CountBacklog(project.ProjectId, me);
+        _sidebarControl.Invalidate();
     }
     private async void ShowUnavailableModule(string module)
     {
         if (_projects?.Context.Current is null || !CanLeaveProjectPage()) return;
         if (!await ValidateProjectAsync() || IsDisposed || _projects.Context.Current is null) return;
+        // Board đã có dữ liệu qua API: giữ nguyên Board và chỉ báo module này chưa nối API.
+        if (_boardBackend is not null) { _toast.ShowToast(this, $"{module} chưa kết nối API"); return; }
         CloseProjectPage(); CloseProfile(); RenderServerWorkspace();
         _topHeaderControl.SetAuthenticatedPage(module);
         if (_pnlBoardArea.Controls["serverProjectState"] is Label state)
