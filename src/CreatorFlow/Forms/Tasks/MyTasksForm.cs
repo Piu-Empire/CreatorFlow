@@ -1,7 +1,8 @@
-﻿using CreatorFlow.Controls;
+using CreatorFlow.Controls;
 using CreatorFlow.Models;
 using CreatorFlow.Models.Enums;
 using CreatorFlow.Services;
+using CreatorFlow.Services.Backends;
 using CreatorFlow.Services.Exceptions;
 using CreatorFlow.Theme;
 
@@ -50,6 +51,10 @@ public partial class MyTasksForm : Form
     private static readonly Color RowHover = ColorTranslator.FromHtml("#F0F3FF");
 
     private readonly MyTaskService _taskService;
+    private readonly IMyTaskBackend? _backend;
+    private readonly Func<bool>? _contextValid;
+    private readonly long _projectId = CurrentSession.CurrentProjectId;
+    private readonly long _userId = CurrentSession.CurrentUserId;
     private readonly ToastNotification? _toast;
     private List<MyTaskItem> _allTasks = new();
     private List<MyTaskItem> _visibleTasks = new();
@@ -82,10 +87,24 @@ public partial class MyTasksForm : Form
         Load += (_, _) =>
         {
             ResizeColumns();
-            _canChangeDeadline = _taskService.CanChangeDeadline(CurrentSession.CurrentProjectId, CurrentSession.CurrentUserId);
+            if (!CheckContext()) return;
             ResetHint();
             ReloadTasks();
         };
+    }
+
+    public MyTasksForm(IMyTaskBackend backend, Func<bool>? contextValid = null) : this((MyTaskService)null!)
+    {
+        _backend = backend;
+        _contextValid = contextValid;
+    }
+
+    private bool CheckContext()
+    {
+        if (_contextValid?.Invoke() != false) return true;
+        _allTasks.Clear(); _visibleTasks.Clear();
+        Close();
+        return false;
     }
 
     private void InitFilters()
@@ -108,10 +127,31 @@ public partial class MyTasksForm : Form
     // ==========================================================
     private void ReloadTasks()
     {
-        if (_taskService is null) return;
+        if ((_taskService is null && _backend is null) || !CheckContext()) return;
 
-        _allTasks = _taskService.GetMyTasks(CurrentSession.CurrentProjectId, CurrentSession.CurrentUserId);
-        ApplyFilter();
+        try
+        {
+            if (_backend is not null)
+                _canChangeDeadline = _backend.CanChangeDeadline(_projectId);
+            else if (_taskService is not null)
+                _canChangeDeadline = _taskService.CanChangeDeadline(_projectId, _userId);
+            if (!CheckContext()) return;
+            if (_backend is not null)
+                _allTasks = _backend.GetMyTasks(_projectId);
+            else if (_taskService is not null)
+                _allTasks = _taskService.GetMyTasks(_projectId, _userId);
+            if (!CheckContext()) return;
+            ApplyFilter(); ResetHint();
+        }
+        catch (Exception error) when (error is ContentValidationException or UnauthorizedWorkflowActionException or InvalidOperationException)
+        {
+            if (!CheckContext()) return;
+            _allTasks.Clear(); ApplyFilter();
+            _emptyTitle = "Không tải được công việc";
+            _emptySub = "Chọn Làm mới để thử lại.";
+            lblSummary.Text = "Dữ liệu chưa tải được";
+            ShowError(error.Message); pnlEmpty.Invalidate();
+        }
     }
 
     private void ApplyFilter()
@@ -178,7 +218,7 @@ public partial class MyTasksForm : Form
         dtpDeadline.Enabled = hasTask && _canChangeDeadline;
         btnSaveDeadline.Enabled = hasTask && _canChangeDeadline;
 
-        if (task is null) return;
+        if (task is null || !CheckContext()) return;
 
         nudProgress.Value = Math.Clamp(task.ProgressPercent, 0, 100);
         if (task.Deadline.HasValue)
@@ -285,7 +325,7 @@ public partial class MyTasksForm : Form
     private void btnSaveProgress_Click(object? sender, EventArgs e)
     {
         var task = SelectedTask;
-        if (task is null) return;
+        if (task is null || !CheckContext()) return;
 
         int percent = (int)nudProgress.Value;
         bool wasOverdue = task.IsOverdue;
@@ -293,7 +333,8 @@ public partial class MyTasksForm : Form
 
         try
         {
-            var updated = _taskService.UpdateProgress(task.ContentId, percent, CurrentSession.CurrentUserId);
+            var updated = _backend?.UpdateProgress(task.ContentId, percent) ?? _taskService.UpdateProgress(task.ContentId, percent, _userId);
+            if (!CheckContext()) return;
             ReloadTasks();
 
             ShowSuccess(updated.Status == AssignmentStatus.Completed && wasOverdue
@@ -302,24 +343,25 @@ public partial class MyTasksForm : Form
         }
         catch (ContentValidationException ex)
         {
-            ShowError(ex.Message);
+            if (CheckContext()) ShowError(ex.Message);
         }
         catch (UnauthorizedWorkflowActionException ex)
         {
-            ShowError(ex.Message);
+            if (CheckContext()) ShowError(ex.Message);
         }
     }
 
     private void btnSaveDeadline_Click(object? sender, EventArgs e)
     {
         var task = SelectedTask;
-        if (task is null) return;
+        if (task is null || !CheckContext()) return;
 
         DateTime? newDeadline = dtpDeadline.Checked ? dtpDeadline.Value.Date : null;
 
         try
         {
-            var updated = _taskService.ChangeDeadline(task.ContentId, task.AssigneeUserId, newDeadline, CurrentSession.CurrentUserId);
+            var updated = _backend?.ChangeDeadline(task.ContentId, task.AssigneeUserId, newDeadline) ?? _taskService.ChangeDeadline(task.ContentId, task.AssigneeUserId, newDeadline, _userId);
+            if (!CheckContext()) return;
             ReloadTasks();
 
             ShowSuccess(updated.Deadline.HasValue
@@ -328,18 +370,18 @@ public partial class MyTasksForm : Form
         }
         catch (ContentValidationException ex)
         {
-            ShowError(ex.Message);
+            if (CheckContext()) ShowError(ex.Message);
         }
         catch (UnauthorizedWorkflowActionException ex)
         {
-            ShowError(ex.Message);
+            if (CheckContext()) ShowError(ex.Message);
         }
     }
 
     private void OpenSelectedContent()
     {
         var task = SelectedTask;
-        if (task is null) return;
+        if (task is null || !CheckContext()) return;
 
         RequestedContentId = task.ContentId;
         DialogResult = DialogResult.OK; // đóng form (ShowDialog) — BoardForm đọc RequestedContentId để mở Content

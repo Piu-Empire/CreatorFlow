@@ -100,6 +100,8 @@ static class Program
         {
             using var api = ApiClient.Create(ApiClientConfiguration.Load());
             var session = new UserSession();
+            using var projects = new ProjectApiFacade(api, session);
+            var taskBackend = new ApiMyTaskBackend(api, session);
             var auth = new AuthApiFacade(api, session);            var metricBackend = new ApiMetricBackend(api, session);
             var invitations = new ProjectInvitationService(api, session);
             var invitationInbox = new InvitationInboxService(api, session);
@@ -115,7 +117,7 @@ static class Program
                 return;
             }
             using var context = new AuthenticationApplicationContext(auth, () =>
-                new BoardForm(workflowService, boardRepo, reviewQueueRepo, activityRepo, memberRepo, contentService, myTaskService, scriptService, ideaService, auth, metricBackend, invitations, invitationInbox));
+                new BoardForm(workflowService, boardRepo, reviewQueueRepo, activityRepo, memberRepo, contentService, myTaskService, scriptService, ideaService, auth, metricBackend, invitations, invitationInbox, projects: projects, taskBackend: taskBackend), projects, invitationInbox);
             Application.Run(context);
         }
         catch (InvalidOperationException)
