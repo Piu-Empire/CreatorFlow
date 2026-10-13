@@ -1,4 +1,4 @@
-﻿using CreatorFlow.Models;
+using CreatorFlow.Models;
 using CreatorFlow.Models.Enums;
 using CreatorFlow.Theme;
 
@@ -35,6 +35,7 @@ namespace CreatorFlow.Controls
 
         /// <summary>Nguồn cards dùng chung với Board (BoardForm gán khi mở màn hình; null = chưa chọn project).</summary>
         public Func<List<ContentBoardCard>?>? CardProvider { get; set; }
+        public string? UnavailableReason { get; set; }
 
         /// <summary>BoardForm đăng ký để mở Drawer chi tiết khi click chip.</summary>
         public event Action<long>? ContentOpened;
@@ -116,6 +117,11 @@ namespace CreatorFlow.Controls
         /// <summary>Tải lại từ provider (BoardForm gọi khi mở màn hình và khi Drawer đóng).</summary>
         public void RefreshData()
         {
+            if (UnavailableReason is { } unavailable)
+            {
+                ShowState("empty", "Nguồn dữ liệu chưa khả dụng", unavailable, null, string.Empty);
+                return;
+            }
             List<ContentBoardCard>? cards;
             try
             {

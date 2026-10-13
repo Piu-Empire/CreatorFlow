@@ -36,6 +36,7 @@ public partial class BoardForm : Form, IMessageFilter
     private readonly ContentService _contentService;
     private readonly MyTaskService _myTaskService;
     private readonly IdeaService _ideaService;
+    private readonly IMyTaskBackend? _taskBackend;
     private readonly AuthApiFacade? _auth;
     private readonly ProjectInvitationService? _invitationService;
     private readonly InvitationInboxService? _invitationInboxService;
@@ -81,7 +82,9 @@ public partial class BoardForm : Form, IMessageFilter
         AuthApiFacade? auth = null,
         IMetricBackend? metrics = null,
         ProjectInvitationService? invitationService = null,
-        InvitationInboxService? invitationInboxService = null)
+        InvitationInboxService? invitationInboxService = null,
+        ProjectApiFacade? projects = null,
+        IMyTaskBackend? taskBackend = null)
     {
         InitializeComponent();
         _workflowService = workflowService;
@@ -95,13 +98,14 @@ public partial class BoardForm : Form, IMessageFilter
         _auth = auth;
         _invitationService = invitationService;
         _invitationInboxService = invitationInboxService;
+        _taskBackend = taskBackend;
+        InitializeProjects(projects);
         if (auth is not null)
         {
-            _sidebarControl.SetAuthenticatedAccount(auth.Session.CurrentUser?.DisplayName ?? string.Empty,
-                auth.Session.CurrentUser?.Email ?? string.Empty, null);
+            _topHeaderControl.SetAuthenticatedAccount(auth.Session.CurrentUser?.DisplayName ?? string.Empty, null);
             _sidebarControl.SetSystemAdmin(auth.Session.CurrentUser?.IsSystemAdmin == true);
             Shown += async (_, _) => await RefreshAuthenticatedAvatarAsync();
-            _sidebarControl.ProfileRequested += async (_, _) => await OpenProfileAsync();
+            _topHeaderControl.ProfileRequested += async (_, _) => await OpenProfileAsync();
             _sidebarControl.AdminWorkspaceRequested += async (_, _) => await OpenAdminAsync();
             _sidebarControl.AdminReportsRequested += async (_, _) => await OpenReportsAsync();
             _sidebarControl.CalendarRequested += (_, _) => OpenCalendar();
@@ -110,7 +114,7 @@ public partial class BoardForm : Form, IMessageFilter
         _pnlDrawerHost.Paint += PnlDrawerHost_Paint;
         BuildColumns();
 
-        _contentDetailPanel.Initialize(_workflowService, _activityRepository, _memberRepository, _contentService, scriptService, metrics);
+        _contentDetailPanel.Initialize(_workflowService, _activityRepository, _memberRepository, _contentService, scriptService, metrics, loadLocalPlatforms: projects is null);
         _contentDetailPanel.ContentChanged += (_, _) => { ReloadBoard(); _toast.ShowToast(this, "Cap nhat thanh cong!"); };
         _contentDetailPanel.CloseRequested += (_, _) => CloseDrawer();
 
@@ -121,10 +125,10 @@ public partial class BoardForm : Form, IMessageFilter
         _modulePageHeader.PlatformFilterChanged += (_, _) => ApplyFilters();
 
         _sidebarControl.ReviewQueueRequested += (_, _) => OpenReviewQueue();
-        _sidebarControl.BoardRequested += (_, _) => { CloseProfile(); CloseAdmin(); CloseReports(); CloseCalendar(); ReloadBoard(); };
+        _sidebarControl.BoardRequested += async (_, _) => { if (!CanLeaveProjectPage()) return; if (_projects is not null && !await ValidateProjectAsync()) return; CloseProjectPage(); CloseProfile(); CloseAdmin(); CloseReports(); CloseCalendar(); ReloadBoard(); };
         _sidebarControl.MyTasksRequested += (_, _) => OpenMyTasks();
         _sidebarControl.IdeaBankRequested += (_, _) => OpenIdeaBank();
-        _sidebarControl.ProjectSettingsRequested += (_, _) => OpenProjectSettings();
+        if (projects is null) _sidebarControl.ProjectSettingsRequested += (_, _) => OpenProjectSettings();
         _sidebarControl.InvitationsRequested += (_, _) => OpenMyInvitations();
         UpdateProjectContext();
         if (!HasProjectContext) ReloadBoard();
@@ -195,7 +199,8 @@ public partial class BoardForm : Form, IMessageFilter
     private void UpdateProjectContext()
     {
         _topHeaderControl.SetProjectContext(HasProjectContext ? CurrentSession.CurrentProjectName : null,
-            HasProjectContext && _profile is null);
+            HasProjectContext && _profile is null && _projects is null);
+        _sidebarControl.SetProjectName(HasProjectContext ? CurrentSession.CurrentProjectName : null);
         _sidebarControl.ProjectActionsEnabled = HasProjectContext;
         _sidebarControl.Invalidate();
     }
@@ -203,6 +208,7 @@ public partial class BoardForm : Form, IMessageFilter
     private void ReloadBoard()
     {
         UpdateProjectContext();
+        if (_projects is not null) { RenderServerWorkspace(); return; }
         if (!HasProjectContext)
         {
             _allCards.Clear();
@@ -306,7 +312,7 @@ public partial class BoardForm : Form, IMessageFilter
 
     private void SelectCard(KanbanCardControl cardCtrl)
     {
-        if (!HasProjectContext) return;
+        if (!HasProjectContext || _projects is not null) return;
         // Đang mở thẻ khác và có thay đổi chưa lưu → hỏi trước khi chuyển (Clear() tự hiện hộp thoại xác nhận).
         if (_selectedContentId.HasValue && _selectedContentId != cardCtrl.Card.ContentId && _contentDetailPanel.HasUnsavedChanges)
         {
@@ -362,7 +368,7 @@ public partial class BoardForm : Form, IMessageFilter
 
     private void TryMoveNext(ContentBoardCard card)
     {
-        if (!HasProjectContext) return;
+        if (!HasProjectContext || _projects is not null) return;
         try
         {
             switch (card.Status)
@@ -403,6 +409,7 @@ public partial class BoardForm : Form, IMessageFilter
     private void OpenCreateContentDialog(ContentStatus initialStatus = ContentStatus.Idea)
     {
         if (!HasProjectContext || _profile is not null) return;
+        if (_projects is not null) { ShowUnavailableModule("Tạo Content"); return; }
         var members = _contentService.GetAssignableMembers(CurrentSession.CurrentProjectId, CurrentSession.CurrentUserId);
         using var dlg = new CreateContentDialog(members, _contentService.GetAvailablePlatforms(), initialStatus);
         if (dlg.ShowDialog(this) != DialogResult.OK) return;
@@ -425,15 +432,19 @@ public partial class BoardForm : Form, IMessageFilter
     }
 
     /// <summary>Mở màn My Tasks; nếu người dùng bấm "Mở Content" thì mở drawer chi tiết Content đó trên Board.</summary>
-    private void OpenMyTasks()
+    private async void OpenMyTasks()
     {
-        if (!HasProjectContext) return;
-        CloseProfile();
-        CloseAdmin();
-        CloseReports();
-        CloseCalendar();
+        if (!HasProjectContext || !CanLeaveProjectPage()) return;
+        if (_projects is not null && !await ValidateProjectAsync()) return;
+        CloseProfile(); CloseAdmin(); CloseReports(); CloseCalendar();
         long? contentId;
-        using (var tasksForm = new MyTasksForm(_myTaskService))
+        if (_projects is not null && _taskBackend is null) { ShowUnavailableModule("My Tasks"); return; }
+        CloseProjectPage();
+        long generation = _projects?.Context.Generation ?? 0;
+        long authGeneration = _auth?.Session.Generation ?? 0;
+        using (var tasksForm = _projects is null ? new MyTasksForm(_myTaskService) :
+            new MyTasksForm(_taskBackend!, () => !IsDisposed && _auth?.Session.IsAuthenticated == true &&
+                authGeneration == _auth.Session.Generation && generation == _projects.Context.Generation))
         {
             tasksForm.ShowDialog(this);
             contentId = tasksForm.RequestedContentId;
@@ -447,6 +458,7 @@ public partial class BoardForm : Form, IMessageFilter
     private void OpenIdeaBank()
     {
         if (!HasProjectContext) return;
+        if (_projects is not null) { ShowUnavailableModule("Idea Bank"); return; }
         CloseProfile();
         using (var ideaForm = new IdeaBankForm(_ideaService))
         {
@@ -460,6 +472,7 @@ public partial class BoardForm : Form, IMessageFilter
     private void OpenProjectSettings()
     {
         if (!HasProjectContext) return;
+        if (!CanLeaveProjectPage()) return;
         CloseProfile();
         if (_invitationService is null)
         {
@@ -477,6 +490,7 @@ public partial class BoardForm : Form, IMessageFilter
     /// </summary>
     private void OpenMyInvitations()
     {
+        if (!CanLeaveProjectPage()) return;
         CloseProfile();
         if (_invitationInboxService is null)
         {
@@ -492,6 +506,7 @@ public partial class BoardForm : Form, IMessageFilter
     private void OpenContentById(long contentId)
     {
         if (!HasProjectContext) return;
+        if (_projects is not null) { ShowUnavailableModule("Chi tiết Content"); return; }
         var card = _allCards.FirstOrDefault(c => c.ContentId == contentId);
         if (card is null)
         {
@@ -519,6 +534,7 @@ public partial class BoardForm : Form, IMessageFilter
     private void OpenReviewQueue()
     {
         if (!HasProjectContext) return;
+        if (_projects is not null) { ShowUnavailableModule("Review Queue"); return; }
         CloseProfile();
         CloseAdmin();
         CloseReports();
@@ -530,7 +546,8 @@ public partial class BoardForm : Form, IMessageFilter
 
     private async Task OpenProfileAsync()
     {
-        if (_auth is null || !_auth.Session.IsAuthenticated || _profile is not null) return;
+        if (_auth is null || !_auth.Session.IsAuthenticated || _profile is not null || !CanLeaveProjectPage()) return;
+        CloseProjectPage();
         CloseAdmin();
         CloseReports();
         CloseCalendar();
@@ -567,7 +584,8 @@ public partial class BoardForm : Form, IMessageFilter
     private async Task OpenAdminAsync()
     {
         if (_auth is null || !_auth.Session.IsAuthenticated || _admin is not null) return;
-        if (_auth.Session.CurrentUser?.IsSystemAdmin != true) return;
+        if (_auth.Session.CurrentUser?.IsSystemAdmin != true || !CanLeaveProjectPage()) return;
+        CloseProjectPage();
         CloseProfile();
         CloseReports();
         CloseCalendar();
@@ -598,7 +616,8 @@ public partial class BoardForm : Form, IMessageFilter
     private async Task OpenReportsAsync()
     {
         if (_auth is null || !_auth.Session.IsAuthenticated || _reports is not null) return;
-        if (_auth.Session.CurrentUser?.IsSystemAdmin != true) return;
+        if (_auth.Session.CurrentUser?.IsSystemAdmin != true || !CanLeaveProjectPage()) return;
+        CloseProjectPage();
         CloseProfile();
         CloseAdmin();
         CloseCalendar();
@@ -628,12 +647,14 @@ public partial class BoardForm : Form, IMessageFilter
 
     private void OpenCalendar()
     {
-        if (_calendar is not null) return;
+        if (_calendar is not null || !CanLeaveProjectPage()) return;
+        CloseProjectPage();
         CloseProfile();
         CloseAdmin();
         CloseReports();
         var calendar = new CalendarControl { Dock = DockStyle.Fill };
-        calendar.CardProvider = () => HasProjectContext ? _allCards : null;
+        calendar.CardProvider = () => HasProjectContext && _projects is null ? _allCards : null;
+        if (_projects is not null) calendar.UnavailableReason = "Lịch chưa có nguồn Content từ server cho Project này.";
         calendar.ContentOpened += OpenContentById;
         _calendar = calendar;
         _pnlDrawerHost.Visible = false;
@@ -678,8 +699,8 @@ public partial class BoardForm : Form, IMessageFilter
                 !_auth.Session.IsAuthenticated || _auth.Session.Generation != sessionGeneration)
             { return; }
             var currentUser = _auth.Session.CurrentUser!;
-            _sidebarControl.SetAuthenticatedAccount(currentUser.DisplayName, currentUser.Email, avatar);
-            avatar = null; // Sidebar now owns the image.
+            _topHeaderControl.SetAuthenticatedAccount(currentUser.DisplayName, avatar);
+            avatar = null; // Top bar now owns the image.
         }
         catch (OperationCanceledException) when (_authLifetime.IsCancellationRequested) { }
         finally { avatar?.Dispose(); }
@@ -702,6 +723,7 @@ public partial class BoardForm : Form, IMessageFilter
         var hit = FindControlAt(Cursor.Position);
         for (Control? p = hit; p != null; p = p.Parent)
         {
+            if (ReferenceEquals(p, _sidebarControl)) { _sidebarControl.ScrollNavigation(delta); return true; }
             if (ReferenceEquals(p, _pnlDrawerHost))
                 return false; // Để drawer tự xử lý
 

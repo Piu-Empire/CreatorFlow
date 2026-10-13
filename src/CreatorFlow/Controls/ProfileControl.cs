@@ -17,6 +17,9 @@ public partial class ProfileControl : UserControl
     public event Action<UserProfile>? ProfileSaved;
     public event EventHandler? PasswordChanged;
     public event EventHandler? LogoutRequested;
+    public bool HasUnsavedChanges => _loaded is { } profile &&
+        (nameTextBox.Text != profile.DisplayName || avatarTextBox.Text != (profile.AvatarUrl ?? string.Empty) ||
+         _avatarChange != CreatorFlow.Models.AvatarChange.Keep || currentPassword.Text.Length > 0 || newPassword.Text.Length > 0 || confirmPassword.Text.Length > 0);
 
     public ProfileControl(AuthApiFacade authService)
     {

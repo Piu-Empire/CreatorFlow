@@ -60,6 +60,8 @@ builder.Services.AddScoped<IInvitationRepository, InvitationRepository>();
 builder.Services.AddScoped<InvitationService>();
 builder.Services.AddScoped<IMyInvitationRepository, MyInvitationRepository>();
 builder.Services.AddScoped<MyInvitationService>();
+builder.Services.AddScoped<CreatorFlow.Api.Repositories.Projects.IProjectRepository, CreatorFlow.Api.Repositories.Projects.ProjectRepository>();
+builder.Services.AddScoped<CreatorFlow.Api.Services.Projects.ProjectService>();
 builder.Services.AddSingleton<IAvatarImageProcessor, AvatarImageProcessor>();
 
 builder.Services.AddSingleton<IDbConnectionFactory>(new NpgsqlConnectionFactory(connectionString));
@@ -101,6 +103,7 @@ app.MapTaskEndpoints();
 app.MapWorkflowEndpoints();
 app.MapInvitationEndpoints();
 app.MapMyInvitationEndpoints();
+app.MapProjectEndpoints();
 app.Run();
 
 public partial class Program { }

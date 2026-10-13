@@ -7,18 +7,20 @@ namespace CreatorFlow.Services.Backends;
 /// <summary>My Tasks / progress / deadline chạy qua CreatorFlow.Api (quyền kiểm tra ở Backend).</summary>
 public sealed class ApiMyTaskBackend(ApiClient api, UserSession session) : IMyTaskBackend
 {
+    private T Run<T>(Func<Task<T>> call) => ApiTaskCall.Run(call, session);
+
     public List<MyTaskItem> GetMyTasks(long projectId)
     {
-        var response = ApiTaskCall.Run(() => api.GetMyTasksAsync(projectId, ApiTaskCall.BearerOf(session)));
+        var response = Run(() => api.GetMyTasksAsync(projectId, ApiTaskCall.BearerOf(session)));
         return response.Tasks.Select(ApiTaskMapper.ToItem).ToList();
     }
 
     public MyTaskItem UpdateProgress(long contentId, int percent) =>
-        ApiTaskMapper.ToItem(ApiTaskCall.Run(() =>
+        ApiTaskMapper.ToItem(Run(() =>
             api.UpdateProgressAsync(contentId, new UpdateProgressRequest(percent), ApiTaskCall.BearerOf(session))));
 
     public MyTaskItem ChangeDeadline(long contentId, long assigneeUserId, DateTime? deadline) =>
-        ApiTaskMapper.ToItem(ApiTaskCall.Run(() =>
+        ApiTaskMapper.ToItem(Run(() =>
             api.ChangeDeadlineAsync(contentId, assigneeUserId,
                 new ChangeDeadlineRequest(ApiTaskMapper.ToDateOnly(deadline)), ApiTaskCall.BearerOf(session))));
 
@@ -26,7 +28,7 @@ public sealed class ApiMyTaskBackend(ApiClient api, UserSession session) : IMyTa
     {
         try
         {
-            var role = ApiTaskCall.Run(() => api.GetMyProjectRoleAsync(projectId, ApiTaskCall.BearerOf(session)));
+            var role = Run(() => api.GetMyProjectRoleAsync(projectId, ApiTaskCall.BearerOf(session)));
             return role.Role is "Owner" or "Manager";
         }
         catch (Exception ex) when (ex is Exceptions.UnauthorizedWorkflowActionException or Exceptions.ContentValidationException)
