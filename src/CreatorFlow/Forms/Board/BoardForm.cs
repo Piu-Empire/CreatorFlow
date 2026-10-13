@@ -1,8 +1,13 @@
-﻿using CreatorFlow.Models.Enums;
+using CreatorFlow.Models.Enums;
 using CreatorFlow.Controls;
+using CreatorFlow.Forms.IdeaBank;
+using CreatorFlow.Forms.Invitations;
+using CreatorFlow.Forms.ProjectSettings;
+using CreatorFlow.Forms.Tasks;
 using CreatorFlow.Models;
 using CreatorFlow.Repositories.Interfaces;
 using CreatorFlow.Services;
+using CreatorFlow.Services.Backends;
 using CreatorFlow.Services.Exceptions;
 using CreatorFlow.Theme;
 
@@ -29,6 +34,17 @@ public partial class BoardForm : Form, IMessageFilter
     private readonly IActivityRepository _activityRepository;
     private readonly IProjectMemberRepository _memberRepository;
     private readonly ContentService _contentService;
+    private readonly MyTaskService _myTaskService;
+    private readonly IdeaService _ideaService;
+    private readonly AuthApiFacade? _auth;
+    private readonly ProjectInvitationService? _invitationService;
+    private readonly InvitationInboxService? _invitationInboxService;
+    private ProfileControl? _profile;
+    private AdminUserManagementControl? _admin;
+    private AdminReportsControl? _reports;
+    private CalendarControl? _calendar;
+    private readonly CancellationTokenSource _authLifetime = new();
+    private int _avatarGeneration;
 
     private readonly Dictionary<ContentStatus, KanbanColumnControl> _columns = new();
     private List<ContentBoardCard> _allCards = new();
@@ -48,6 +64,8 @@ public partial class BoardForm : Form, IMessageFilter
         _activityRepository = null!;
         _memberRepository = null!;
         _contentService = null!;
+        _myTaskService = null!;
+        _ideaService = null!;
     }
 
     public BoardForm(
@@ -56,33 +74,60 @@ public partial class BoardForm : Form, IMessageFilter
         IReviewQueueRepository reviewQueueRepository,
         IActivityRepository activityRepository,
         IProjectMemberRepository memberRepository,
-        ContentService contentService)
+        ContentService contentService,
+        MyTaskService myTaskService,
+        ScriptService scriptService,
+        IdeaService ideaService,
+        AuthApiFacade? auth = null,
+        IMetricBackend? metrics = null,
+        ProjectInvitationService? invitationService = null,
+        InvitationInboxService? invitationInboxService = null)
     {
         InitializeComponent();
         _workflowService = workflowService;
         _boardRepository = boardRepository;
         _contentService = contentService;
+        _myTaskService = myTaskService;
+        _ideaService = ideaService;
         _reviewQueueRepository = reviewQueueRepository;
         _activityRepository = activityRepository;
         _memberRepository = memberRepository;
+        _auth = auth;
+        _invitationService = invitationService;
+        _invitationInboxService = invitationInboxService;
+        if (auth is not null)
+        {
+            _sidebarControl.SetAuthenticatedAccount(auth.Session.CurrentUser?.DisplayName ?? string.Empty,
+                auth.Session.CurrentUser?.Email ?? string.Empty, null);
+            _sidebarControl.SetSystemAdmin(auth.Session.CurrentUser?.IsSystemAdmin == true);
+            Shown += async (_, _) => await RefreshAuthenticatedAvatarAsync();
+            _sidebarControl.ProfileRequested += async (_, _) => await OpenProfileAsync();
+            _sidebarControl.AdminWorkspaceRequested += async (_, _) => await OpenAdminAsync();
+            _sidebarControl.AdminReportsRequested += async (_, _) => await OpenReportsAsync();
+            _sidebarControl.CalendarRequested += (_, _) => OpenCalendar();
+        }
 
         _pnlDrawerHost.Paint += PnlDrawerHost_Paint;
         BuildColumns();
 
-        _contentDetailPanel.Initialize(_workflowService, _activityRepository, _memberRepository, _contentService);
+        _contentDetailPanel.Initialize(_workflowService, _activityRepository, _memberRepository, _contentService, scriptService, metrics);
         _contentDetailPanel.ContentChanged += (_, _) => { ReloadBoard(); _toast.ShowToast(this, "Cap nhat thanh cong!"); };
         _contentDetailPanel.CloseRequested += (_, _) => CloseDrawer();
 
         _topHeaderControl.NewContentClicked += (_, _) => OpenCreateContentDialog();
 
-        _modulePageHeader.RefreshClicked += (_, _) => { ReloadBoard(); _toast.ShowToast(this, "Da lam moi du lieu Board"); };
-        _modulePageHeader.ReviewQueueClicked += (_, _) => OpenReviewQueue();
         _modulePageHeader.CreateContentClicked += (_, _) => OpenCreateContentDialog();
         _modulePageHeader.SearchTextChanged += (_, _) => ApplyFilters();
         _modulePageHeader.PlatformFilterChanged += (_, _) => ApplyFilters();
 
         _sidebarControl.ReviewQueueRequested += (_, _) => OpenReviewQueue();
-        _sidebarControl.BoardRequested += (_, _) => ReloadBoard();
+        _sidebarControl.BoardRequested += (_, _) => { CloseProfile(); CloseAdmin(); CloseReports(); CloseCalendar(); ReloadBoard(); };
+        _sidebarControl.MyTasksRequested += (_, _) => OpenMyTasks();
+        _sidebarControl.IdeaBankRequested += (_, _) => OpenIdeaBank();
+        _sidebarControl.ProjectSettingsRequested += (_, _) => OpenProjectSettings();
+        _sidebarControl.InvitationsRequested += (_, _) => OpenMyInvitations();
+        UpdateProjectContext();
+        if (!HasProjectContext) ReloadBoard();
 
         Load += (_, _) =>
         {
@@ -100,6 +145,8 @@ public partial class BoardForm : Form, IMessageFilter
 
     protected override void OnFormClosed(FormClosedEventArgs e)
     {
+        _authLifetime.Cancel();
+        _authLifetime.Dispose();
         Application.RemoveMessageFilter(this);
         base.OnFormClosed(e);
     }
@@ -142,13 +189,55 @@ public partial class BoardForm : Form, IMessageFilter
     // ==========================================================
     // Tải & lọc dữ liệu
     // ==========================================================
+    private bool HasProjectContext => CurrentSession.CurrentProjectId > 0 &&
+        (_auth is null || _auth.Session.IsAuthenticated);
+
+    private void UpdateProjectContext()
+    {
+        _topHeaderControl.SetProjectContext(HasProjectContext ? CurrentSession.CurrentProjectName : null,
+            HasProjectContext && _profile is null);
+        _sidebarControl.ProjectActionsEnabled = HasProjectContext;
+        _sidebarControl.Invalidate();
+    }
+
     private void ReloadBoard()
     {
+        UpdateProjectContext();
+        if (!HasProjectContext)
+        {
+            _allCards.Clear();
+            _selectedContentId = null;
+            _selectedCardControl = null;
+            _sidebarControl.BacklogCount = _sidebarControl.MyWorkCount = _sidebarControl.ReviewQueueCount = 0;
+            _modulePageHeader.Visible = false;
+            _flowColumns.Visible = false;
+            _pnlDrawerHost.Visible = false;
+            if (_pnlBoardArea.Controls["noProjectContext"] is null)
+                _pnlBoardArea.Controls.Add(new Label
+                {
+                    Name = "noProjectContext",
+                    Dock = DockStyle.Fill,
+                    Text = "Chưa chọn dự án. Bạn có thể mở Hồ sơ từ avatar bên trái để quản lý tài khoản hoặc đăng xuất.",
+                    ForeColor = UITheme.Neutral600,
+                    BackColor = UITheme.Neutral50,
+                    TextAlign = ContentAlignment.MiddleCenter
+                });
+            return;
+        }
+        if (_pnlBoardArea.Controls["noProjectContext"] is Control emptyState)
+        {
+            _pnlBoardArea.Controls.Remove(emptyState);
+            emptyState.Dispose();
+        }
+        _modulePageHeader.Visible = true;
+        _flowColumns.Visible = true;
         _allCards = _boardRepository.GetBoardCards(CurrentSession.CurrentProjectId);
         int overdueCount = _allCards.Count(c => c.IsOverdue);
         _topHeaderControl.UpdateStats(_allCards.Count, overdueCount);
         var pendingReviews = _reviewQueueRepository.GetPendingReviews(CurrentSession.CurrentProjectId);
         _sidebarControl.ReviewQueueCount = pendingReviews.Count;
+        _sidebarControl.MyWorkCount = _myTaskService.CountOpenTasks(CurrentSession.CurrentProjectId, CurrentSession.CurrentUserId);
+        _sidebarControl.BacklogCount = _ideaService.CountBacklog(CurrentSession.CurrentProjectId, CurrentSession.CurrentUserId);
         _sidebarControl.Invalidate();
         ApplyFilters();
 
@@ -217,6 +306,7 @@ public partial class BoardForm : Form, IMessageFilter
 
     private void SelectCard(KanbanCardControl cardCtrl)
     {
+        if (!HasProjectContext) return;
         // Đang mở thẻ khác và có thay đổi chưa lưu → hỏi trước khi chuyển (Clear() tự hiện hộp thoại xác nhận).
         if (_selectedContentId.HasValue && _selectedContentId != cardCtrl.Card.ContentId && _contentDetailPanel.HasUnsavedChanges)
         {
@@ -244,6 +334,7 @@ public partial class BoardForm : Form, IMessageFilter
         _selectedCardControl = null;
         _selectedContentId = null;
         _pnlDrawerHost.Visible = false;
+        _calendar?.RefreshData(); // Vẽ lại chip (deadline có thể vừa đổi trong Drawer).
     }
 
     private KanbanCardControl? FindCardControl(long contentId)
@@ -271,6 +362,7 @@ public partial class BoardForm : Form, IMessageFilter
 
     private void TryMoveNext(ContentBoardCard card)
     {
+        if (!HasProjectContext) return;
         try
         {
             switch (card.Status)
@@ -310,8 +402,9 @@ public partial class BoardForm : Form, IMessageFilter
     // ==========================================================
     private void OpenCreateContentDialog(ContentStatus initialStatus = ContentStatus.Idea)
     {
-        var members = _contentService.GetMembers(CurrentSession.CurrentProjectId);
-        using var dlg = new CreateContentDialog(members, initialStatus);
+        if (!HasProjectContext || _profile is not null) return;
+        var members = _contentService.GetAssignableMembers(CurrentSession.CurrentProjectId, CurrentSession.CurrentUserId);
+        using var dlg = new CreateContentDialog(members, _contentService.GetAvailablePlatforms(), initialStatus);
         if (dlg.ShowDialog(this) != DialogResult.OK) return;
 
         try
@@ -331,11 +424,265 @@ public partial class BoardForm : Form, IMessageFilter
         }
     }
 
+    /// <summary>Mở màn My Tasks; nếu người dùng bấm "Mở Content" thì mở drawer chi tiết Content đó trên Board.</summary>
+    private void OpenMyTasks()
+    {
+        if (!HasProjectContext) return;
+        CloseProfile();
+        CloseAdmin();
+        CloseReports();
+        CloseCalendar();
+        long? contentId;
+        using (var tasksForm = new MyTasksForm(_myTaskService))
+        {
+            tasksForm.ShowDialog(this);
+            contentId = tasksForm.RequestedContentId;
+        }
+
+        ReloadBoard();
+        if (contentId.HasValue) OpenContentById(contentId.Value);
+    }
+
+    /// <summary>Mở màn Idea Bank (kho ý tưởng) của Project hiện hành; đóng xong thì cập nhật lại badge Backlog.</summary>
+    private void OpenIdeaBank()
+    {
+        if (!HasProjectContext) return;
+        CloseProfile();
+        using (var ideaForm = new IdeaBankForm(_ideaService))
+        {
+            ideaForm.ShowDialog(this);
+        }
+
+        ReloadBoard();
+    }
+
+    /// <summary>Mở hộp thoại Mời thành viên (SCRUM-26) của Project hiện hành. Quyền Owner do API quyết định.</summary>
+    private void OpenProjectSettings()
+    {
+        if (!HasProjectContext) return;
+        CloseProfile();
+        if (_invitationService is null)
+        {
+            _toast.ShowToast(this, "Chua ket noi API de moi thanh vien");
+            return;
+        }
+
+        using var dialog = new InviteMemberDialog(_invitationService, CurrentSession.CurrentProjectId, CurrentSession.CurrentProjectName);
+        dialog.ShowDialog(this);
+    }
+
+    /// <summary>
+    /// Mở hộp thoại Lời mời của tôi: xem lời mời gửi tới tài khoản đang đăng nhập và chấp nhận / từ chối.
+    /// Không cần đang ở trong Project nào (người mới được mời thường chưa có Project). Hạn dùng, trạng thái và việc tạo thành viên do API quyết định.
+    /// </summary>
+    private void OpenMyInvitations()
+    {
+        CloseProfile();
+        if (_invitationInboxService is null)
+        {
+            _toast.ShowToast(this, "Chưa kết nối API để xem lời mời");
+            return;
+        }
+
+        using var dialog = new MyInvitationsDialog(_invitationInboxService);
+        dialog.ShowDialog(this);
+    }
+
+    /// <summary>Mở drawer chi tiết cho Content theo Id (kể cả khi thẻ đang bị ẩn bởi bộ lọc tìm kiếm/platform).</summary>
+    private void OpenContentById(long contentId)
+    {
+        if (!HasProjectContext) return;
+        var card = _allCards.FirstOrDefault(c => c.ContentId == contentId);
+        if (card is null)
+        {
+            _toast.ShowToast(this, "Khong tim thay Content tren Board");
+            return;
+        }
+
+        // Đang mở thẻ khác và có thay đổi chưa lưu → hỏi trước khi chuyển (Clear() tự hiện hộp thoại xác nhận).
+        if (_selectedContentId.HasValue && _selectedContentId != contentId && _contentDetailPanel.HasUnsavedChanges)
+        {
+            if (!_contentDetailPanel.Clear()) return;
+        }
+
+        if (_selectedCardControl != null && !_selectedCardControl.IsDisposed)
+            _selectedCardControl.IsSelected = false;
+
+        _selectedCardControl = FindCardControl(contentId);
+        if (_selectedCardControl != null) _selectedCardControl.IsSelected = true;
+        _selectedContentId = contentId;
+
+        _pnlDrawerHost.Visible = true;
+        _contentDetailPanel.LoadContent(card);
+    }
+
     private void OpenReviewQueue()
     {
+        if (!HasProjectContext) return;
+        CloseProfile();
+        CloseAdmin();
+        CloseReports();
+        CloseCalendar();
         using var queueForm = new Review.ReviewQueueForm(_reviewQueueRepository, _workflowService);
         queueForm.ShowDialog(this);
         ReloadBoard();
+    }
+
+    private async Task OpenProfileAsync()
+    {
+        if (_auth is null || !_auth.Session.IsAuthenticated || _profile is not null) return;
+        CloseAdmin();
+        CloseReports();
+        CloseCalendar();
+        var profile = new ProfileControl(_auth) { Dock = DockStyle.Fill };
+        _profile = profile;
+        UpdateProjectContext();
+        profile.ProfileSaved += async saved =>
+        {
+            CurrentSession.CurrentUserName = saved.DisplayName;
+            await RefreshAuthenticatedAvatarAsync();
+        };
+        profile.PasswordChanged += (_, _) => _auth.Logout();
+        profile.LogoutRequested += (_, _) => _auth.Logout();
+        _pnlDrawerHost.Visible = false;
+        _pnlBoardArea.Visible = false;
+        _pnlMain.Controls.Add(profile);
+        profile.BringToFront();
+        _topHeaderControl.SetAuthenticatedPage("Hồ sơ cá nhân");
+        await profile.LoadProfileAsync();
+    }
+
+    private void CloseProfile()
+    {
+        if (_profile is null) return;
+        ProfileControl profile = _profile;
+        _profile = null;
+        _pnlMain.Controls.Remove(profile);
+        profile.Dispose();
+        _pnlBoardArea.Visible = true;
+        _topHeaderControl.SetAuthenticatedPage("Board");
+        UpdateProjectContext();
+    }
+
+    private async Task OpenAdminAsync()
+    {
+        if (_auth is null || !_auth.Session.IsAuthenticated || _admin is not null) return;
+        if (_auth.Session.CurrentUser?.IsSystemAdmin != true) return;
+        CloseProfile();
+        CloseReports();
+        CloseCalendar();
+        var admin = new AdminUserManagementControl(_auth, _toast) { Dock = DockStyle.Fill };
+        _admin = admin;
+        _pnlDrawerHost.Visible = false;
+        _pnlBoardArea.Visible = false;
+        _pnlMain.Controls.Add(admin);
+        admin.BringToFront();
+        _sidebarControl.SetActiveMenu("Quản trị người dùng");
+        _topHeaderControl.SetAuthenticatedPage("Quản trị hệ thống");
+        await admin.LoadUsersAsync();
+    }
+
+    private void CloseAdmin()
+    {
+        if (_admin is null) return;
+        AdminUserManagementControl admin = _admin;
+        _admin = null;
+        _pnlMain.Controls.Remove(admin);
+        admin.Dispose();
+        _sidebarControl.SetActiveMenu("Board");
+        _pnlBoardArea.Visible = true;
+        _topHeaderControl.SetAuthenticatedPage("Board");
+        UpdateProjectContext();
+    }
+
+    private async Task OpenReportsAsync()
+    {
+        if (_auth is null || !_auth.Session.IsAuthenticated || _reports is not null) return;
+        if (_auth.Session.CurrentUser?.IsSystemAdmin != true) return;
+        CloseProfile();
+        CloseAdmin();
+        CloseCalendar();
+        var reports = new AdminReportsControl(_auth, _toast) { Dock = DockStyle.Fill };
+        _reports = reports;
+        _pnlDrawerHost.Visible = false;
+        _pnlBoardArea.Visible = false;
+        _pnlMain.Controls.Add(reports);
+        reports.BringToFront();
+        _sidebarControl.SetActiveMenu("Báo cáo vi phạm");
+        _topHeaderControl.SetAuthenticatedPage("Báo cáo vi phạm");
+        await reports.LoadReportsAsync();
+    }
+
+    private void CloseReports()
+    {
+        if (_reports is null) return;
+        AdminReportsControl reports = _reports;
+        _reports = null;
+        _pnlMain.Controls.Remove(reports);
+        reports.Dispose();
+        _sidebarControl.SetActiveMenu("Board");
+        _pnlBoardArea.Visible = true;
+        _topHeaderControl.SetAuthenticatedPage("Board");
+        UpdateProjectContext();
+    }
+
+    private void OpenCalendar()
+    {
+        if (_calendar is not null) return;
+        CloseProfile();
+        CloseAdmin();
+        CloseReports();
+        var calendar = new CalendarControl { Dock = DockStyle.Fill };
+        calendar.CardProvider = () => HasProjectContext ? _allCards : null;
+        calendar.ContentOpened += OpenContentById;
+        _calendar = calendar;
+        _pnlDrawerHost.Visible = false;
+        _pnlBoardArea.Visible = false;
+        _pnlMain.Controls.Add(calendar);
+        calendar.BringToFront();
+        _sidebarControl.SetActiveMenu("Calendar");
+        _topHeaderControl.SetAuthenticatedPage("Lịch Content");
+        calendar.RefreshData();
+    }
+
+    private void CloseCalendar()
+    {
+        if (_calendar is null) return;
+        CalendarControl calendar = _calendar;
+        _calendar = null;
+        _pnlMain.Controls.Remove(calendar);
+        calendar.Dispose();
+        _sidebarControl.SetActiveMenu("Board");
+        _pnlBoardArea.Visible = true;
+        _topHeaderControl.SetAuthenticatedPage("Board");
+        UpdateProjectContext();
+    }
+
+    private async Task RefreshAuthenticatedAvatarAsync()
+    {
+        if (_auth is null || !_auth.Session.IsAuthenticated || IsDisposed || _authLifetime.IsCancellationRequested) return;
+        int generation = ++_avatarGeneration;
+        long sessionGeneration = _auth.Session.Generation;
+        Image? avatar = null;
+        try
+        {
+            var stored = await _auth.GetCurrentAvatarAsync(_authLifetime.Token);
+            if (IsDisposed || _authLifetime.IsCancellationRequested || !_auth.Session.IsAuthenticated) return;
+            if (stored is not null) avatar = CreatorFlow.Helpers.AvatarImageLoader.Decode(stored.ImageData);
+            else
+            {
+                var profile = await _auth.GetCurrentProfileAsync(_authLifetime.Token);
+                avatar = await CreatorFlow.Helpers.AvatarImageLoader.LoadAsync(profile.Profile?.AvatarUrl, _authLifetime.Token);
+            }
+            if (IsDisposed || _authLifetime.IsCancellationRequested || generation != _avatarGeneration ||
+                !_auth.Session.IsAuthenticated || _auth.Session.Generation != sessionGeneration)
+            { return; }
+            var currentUser = _auth.Session.CurrentUser!;
+            _sidebarControl.SetAuthenticatedAccount(currentUser.DisplayName, currentUser.Email, avatar);
+            avatar = null; // Sidebar now owns the image.
+        }
+        catch (OperationCanceledException) when (_authLifetime.IsCancellationRequested) { }
+        finally { avatar?.Dispose(); }
     }
 
     // ==========================================================

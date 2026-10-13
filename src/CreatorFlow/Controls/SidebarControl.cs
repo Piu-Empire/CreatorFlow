@@ -13,12 +13,38 @@ public class SidebarControl : UserControl
 
     public event EventHandler? ReviewQueueRequested;
     public event EventHandler? BoardRequested;
+    public event EventHandler? MyTasksRequested;
+    public event EventHandler? IdeaBankRequested;
+    public event EventHandler? ProfileRequested;
+    public event EventHandler? AdminWorkspaceRequested;
+    public event EventHandler? AdminReportsRequested;
+    public event EventHandler? CalendarRequested;
+    public event EventHandler? ProjectSettingsRequested;
+    public event EventHandler? InvitationsRequested;
 
-    public int BacklogCount = 28;
-    public int MyWorkCount = 9;
-    public int ReviewQueueCount = 2;
+    private readonly Button _accountButton;
+    private string _accountName = string.Empty;
+    private string _accountEmail = string.Empty;
+    private Image? _accountAvatar;
+    private bool _accountHovered;
+    private bool _hasAuthenticatedAccount;
 
-    private enum NavIcon { Summary, Board, List, Calendar, Chart, Check, Review, Sparkle, Gear }
+    public bool ProjectActionsEnabled { get; set; }
+    public int BacklogCount = 0;
+    public int MyWorkCount = 0;
+    private bool _isSystemAdmin;
+    public int ReviewQueueCount = 0;
+
+    /// <summary>Bật/tắt nhóm menu quản trị hệ thống theo quyền admin.</summary>
+    public void SetSystemAdmin(bool value)
+    {
+        if (_isSystemAdmin == value) return;
+        _isSystemAdmin = value;
+        BuildNavItems();
+        Invalidate();
+    }
+
+    private enum NavIcon { Summary, Board, List, Calendar, Chart, Check, Review, Sparkle, Gear, Shield, Flag }
 
     private sealed class NavItem
     {
@@ -26,6 +52,7 @@ public class SidebarControl : UserControl
         public NavIcon Icon;
         public int Y;                       // Toạ độ Y (từ trên, hoặc khoảng cách từ đáy nếu AnchorBottom)
         public bool AnchorBottom;
+        public bool AlwaysEnabled;          // true: bấm được cả khi chưa có Project (Board, Invitations)
         public bool IsActive;
         public bool IsHovered;
         public Action? Action;
@@ -43,6 +70,92 @@ public class SidebarControl : UserControl
         BackColor = UITheme.Black;
         DoubleBuffered = true;
         BuildNavItems();
+        _accountButton = new Button
+        {
+            Name = "authenticatedAccount",
+            Text = string.Empty,
+            Bounds = new Rectangle(14, 68, Width - 28, 60),
+            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
+            FlatStyle = FlatStyle.Flat,
+            BackColor = UITheme.Black,
+            UseVisualStyleBackColor = false,
+            Cursor = Cursors.Hand,
+            Visible = false,
+            TabIndex = 0,
+            AccessibleRole = AccessibleRole.PushButton
+        };
+        _accountButton.FlatAppearance.BorderSize = 0;
+        _accountButton.Paint += PaintAccount;
+        _accountButton.MouseEnter += (_, _) => { _accountHovered = true; _accountButton.Invalidate(); };
+        _accountButton.MouseLeave += (_, _) => { _accountHovered = false; _accountButton.Invalidate(); };
+        _accountButton.GotFocus += (_, _) => _accountButton.Invalidate();
+        _accountButton.LostFocus += (_, _) => _accountButton.Invalidate();
+        _accountButton.Click += (_, _) => ProfileRequested?.Invoke(this, EventArgs.Empty);
+        Controls.Add(_accountButton);
+    }
+
+    // The shell transfers ownership of its decoded image to this control.
+    public void SetAuthenticatedAccount(string name, string email, Image? avatar)
+    {
+        _accountName = name;
+        _accountEmail = email;
+        _hasAuthenticatedAccount = true;
+        Image? previous = _accountAvatar;
+        _accountAvatar = avatar;
+        if (!ReferenceEquals(previous, avatar)) previous?.Dispose();
+        _accountButton.AccessibleName = $"Mở hồ sơ cá nhân của {name}";
+        _accountButton.Visible = true;
+        _accountButton.Invalidate();
+        Invalidate();
+    }
+
+    private void PaintAccount(object? sender, PaintEventArgs e)
+    {
+        var g = e.Graphics;
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        g.Clear(UITheme.Black);
+        var bounds = new Rectangle(0, 0, _accountButton.Width - 1, _accountButton.Height - 1);
+        using var path = UITheme.CreateRoundedRectanglePath(bounds, 10);
+        using var fill = new SolidBrush(_accountHovered ? UITheme.Neutral800 : UITheme.Neutral900);
+        using var border = new Pen(UITheme.Neutral800);
+        g.FillPath(fill, path);
+        g.DrawPath(border, path);
+        var avatarBounds = new Rectangle(12, 12, 36, 36);
+        if (_accountAvatar is null)
+        {
+            string[] words = _accountName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            string initials = words.Length == 0 ? "?" :
+                (System.Globalization.StringInfo.GetNextTextElement(words[0]) +
+                 (words.Length > 1 ? System.Globalization.StringInfo.GetNextTextElement(words[^1]) : string.Empty)).ToUpperInvariant();
+            UITheme.DrawAvatar(g, initials, avatarBounds, UITheme.White, UITheme.Black, UITheme.FontLabelBold);
+        }
+        else
+        {
+            var state = g.Save();
+            using var circle = new GraphicsPath();
+            circle.AddEllipse(avatarBounds);
+            g.SetClip(circle);
+            g.DrawImage(_accountAvatar, avatarBounds);
+            g.Restore(state);
+        }
+        const TextFormatFlags flags = TextFormatFlags.Left | TextFormatFlags.VerticalCenter |
+            TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis;
+        int textWidth = Math.Max(0, bounds.Width - 72);
+        TextRenderer.DrawText(g, _accountName, UITheme.FontBodyBold, new Rectangle(60, 10, textWidth, 20), UITheme.White, flags);
+        TextRenderer.DrawText(g, _accountEmail, UITheme.FontLabel, new Rectangle(60, 30, textWidth, 18), UITheme.SidebarTextMuted, flags);
+        if (_accountButton.Focused) ControlPaint.DrawFocusRectangle(g, Rectangle.Inflate(bounds, -4, -4), UITheme.White, UITheme.Neutral900);
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _accountAvatar?.Dispose();
+            _accountAvatar = null;
+            _accountName = _accountEmail = string.Empty;
+            _hasAuthenticatedAccount = false;
+        }
+        base.Dispose(disposing);
     }
 
     private void BuildNavItems()
@@ -53,22 +166,33 @@ public class SidebarControl : UserControl
         int y = 140;
         _groups.Add(("PROJECT", y)); y += 26;
         _items.Add(new NavItem { Title = "Summary", Icon = NavIcon.Summary, Y = y }); y += ItemStep;
-        _items.Add(new NavItem { Title = "Board", Icon = NavIcon.Board, Y = y, IsActive = true, Action = () => BoardRequested?.Invoke(this, EventArgs.Empty) }); y += ItemStep;
-        _items.Add(new NavItem { Title = "Backlog", Icon = NavIcon.List, Y = y, Badge = () => BacklogCount }); y += ItemStep;
-        _items.Add(new NavItem { Title = "Calendar", Icon = NavIcon.Calendar, Y = y }); y += ItemStep;
+        _items.Add(new NavItem { Title = "Board", Icon = NavIcon.Board, Y = y, IsActive = true, AlwaysEnabled = true, Action = () => BoardRequested?.Invoke(this, EventArgs.Empty) }); y += ItemStep;
+        _items.Add(new NavItem { Title = "Backlog", Icon = NavIcon.List, Y = y, Badge = () => BacklogCount, Action = () => IdeaBankRequested?.Invoke(this, EventArgs.Empty) }); y += ItemStep;
+        _items.Add(new NavItem { Title = "Calendar", Icon = NavIcon.Calendar, Y = y, AlwaysEnabled = true, Action = () => CalendarRequested?.Invoke(this, EventArgs.Empty) }); y += ItemStep;
         _items.Add(new NavItem { Title = "Reports", Icon = NavIcon.Chart, Y = y }); y += ItemStep;
 
         y += 10;
         _groups.Add(("WORK", y)); y += 26;
-        _items.Add(new NavItem { Title = "My Work", Icon = NavIcon.Check, Y = y, Badge = () => MyWorkCount }); y += ItemStep;
+        _items.Add(new NavItem { Title = "My Tasks", Icon = NavIcon.Check, Y = y, Badge = () => MyWorkCount, Action = () => MyTasksRequested?.Invoke(this, EventArgs.Empty) }); y += ItemStep;
         _items.Add(new NavItem { Title = "Review Queue", Icon = NavIcon.Review, Y = y, Badge = () => ReviewQueueCount, Action = () => ReviewQueueRequested?.Invoke(this, EventArgs.Empty) }); y += ItemStep;
 
         y += 10;
         _groups.Add(("AI", y)); y += 26;
         _items.Add(new NavItem { Title = "AI Assistant", Icon = NavIcon.Sparkle, Y = y, Badge = () => -1 });
 
-        // Neo đáy: cách đáy 100px (phía trên dòng trạng thái)
-        _items.Add(new NavItem { Title = "Project Settings", Icon = NavIcon.Gear, Y = 100, AnchorBottom = true });
+        if (_isSystemAdmin)
+        {
+            y += ItemStep + 10;
+            _groups.Add(("ADMIN", y)); y += 26;
+            _items.Add(new NavItem { Title = "Quản trị người dùng", Icon = NavIcon.Shield, Y = y, AlwaysEnabled = true,
+                Action = () => AdminWorkspaceRequested?.Invoke(this, EventArgs.Empty) }); y += ItemStep;
+            _items.Add(new NavItem { Title = "Báo cáo vi phạm", Icon = NavIcon.Flag, Y = y, AlwaysEnabled = true,
+                Action = () => AdminReportsRequested?.Invoke(this, EventArgs.Empty) });
+        }
+
+        // Neo đáy: cách đáy 100px (phía trên dòng trạng thái); Invitations nằm ngay phía trên Project Settings.
+        _items.Add(new NavItem { Title = "Invitations", Icon = NavIcon.List, Y = 144, AnchorBottom = true, AlwaysEnabled = true, Action = () => InvitationsRequested?.Invoke(this, EventArgs.Empty) });
+        _items.Add(new NavItem { Title = "Project Settings", Icon = NavIcon.Gear, Y = 100, AnchorBottom = true, Action = () => ProjectSettingsRequested?.Invoke(this, EventArgs.Empty) });
     }
 
     private Rectangle GetItemRect(NavItem item)
@@ -84,7 +208,7 @@ public class SidebarControl : UserControl
         bool anyHover = false;
         foreach (var item in _items)
         {
-            bool hovered = GetItemRect(item).Contains(e.Location);
+            bool hovered = IsItemEnabled(item) && GetItemRect(item).Contains(e.Location);
             anyHover |= hovered && item.Action != null;
             if (item.IsHovered != hovered) { item.IsHovered = hovered; needsRepaint = true; }
         }
@@ -105,7 +229,8 @@ public class SidebarControl : UserControl
         base.OnMouseClick(e);
         foreach (var item in _items)
         {
-            if (GetItemRect(item).Contains(e.Location)) { item.Action?.Invoke(); break; }
+            if (IsItemEnabled(item) && GetItemRect(item).Contains(e.Location))
+            { item.Action?.Invoke(); break; }
         }
     }
 
@@ -124,26 +249,27 @@ public class SidebarControl : UserControl
             TextRenderer.DrawText(g, "CreatorFlow", brandFont, new Rectangle(58, 18, Width - 70, 32), UITheme.White, tf);
 
         // 2. Project selector
-        var card = new Rectangle(14, 68, Width - 28, 60);
-        using (var cBrush = new SolidBrush(ColorTranslator.FromHtml("#171717")))
-        using (var cPen = new Pen(ColorTranslator.FromHtml("#262626"), 1f))
-        using (var cPath = UITheme.CreateRoundedRectanglePath(new Rectangle(card.X, card.Y, card.Width - 1, card.Height - 1), 10))
+        if (!_hasAuthenticatedAccount)
         {
-            g.FillPath(cBrush, cPath);
-            g.DrawPath(cPen, cPath);
+            var card = new Rectangle(14, 68, Width - 28, 60);
+            using (var cBrush = new SolidBrush(ColorTranslator.FromHtml("#171717")))
+            using (var cPen = new Pen(ColorTranslator.FromHtml("#262626"), 1f))
+            using (var cPath = UITheme.CreateRoundedRectanglePath(new Rectangle(card.X, card.Y, card.Width - 1, card.Height - 1), 10))
+            {
+                g.FillPath(cBrush, cPath);
+                g.DrawPath(cPen, cPath);
+            }
+
+            var av = new Rectangle(card.X + 12, card.Y + 12, 36, 36);
+            using (var avBrush = new SolidBrush(UITheme.White))
+            using (var avPath = UITheme.CreateRoundedRectanglePath(av, 8))
+                g.FillPath(avBrush, avPath);
+            TextRenderer.DrawText(g, "—", UITheme.FontLabelBold, av, UITheme.Black,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+
+            TextRenderer.DrawText(g, "Chưa chọn dự án", UITheme.FontBodyBold, new Rectangle(av.Right + 10, card.Y + 11, card.Width - 70, 20), UITheme.White, tf);
+            TextRenderer.DrawText(g, "Chưa có ngữ cảnh dự án", UITheme.FontLabel, new Rectangle(av.Right + 10, card.Y + 31, card.Width - 70, 18), UITheme.SidebarTextMuted, tf);
         }
-
-        var av = new Rectangle(card.X + 12, card.Y + 12, 36, 36);
-        using (var avBrush = new SolidBrush(UITheme.White))
-        using (var avPath = UITheme.CreateRoundedRectanglePath(av, 8))
-            g.FillPath(avBrush, avPath);
-        TextRenderer.DrawText(g, "SA", UITheme.FontLabelBold, av, UITheme.Black,
-            TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
-
-        TextRenderer.DrawText(g, "Studio Alpha", UITheme.FontBodyBold, new Rectangle(av.Right + 10, card.Y + 11, card.Width - 90, 20), UITheme.White, tf);
-        TextRenderer.DrawText(g, "Q3 Release", UITheme.FontLabel, new Rectangle(av.Right + 10, card.Y + 31, card.Width - 90, 18), UITheme.SidebarTextMuted, tf);
-        UIIcons.Chevron(g, new Rectangle(card.Right - 34, card.Y + 12, 22, 18), ChevronDir.Up, UITheme.SidebarText, 1.6f);
-        UIIcons.Chevron(g, new Rectangle(card.Right - 34, card.Y + 28, 22, 18), ChevronDir.Down, UITheme.SidebarText, 1.6f);
 
         // 3. Nhãn nhóm
         foreach (var (text, y) in _groups)
@@ -171,14 +297,15 @@ public class SidebarControl : UserControl
                 g.FillRectangle(bar, rect.X, rect.Y + 8, 3, rect.Height - 16);
             }
 
-            Color fg = (item.IsActive || item.IsHovered) ? UITheme.White : UITheme.SidebarText;
+            Color fg = !IsItemEnabled(item) ? UITheme.SidebarTextFaint :
+                (item.IsActive || item.IsHovered) ? UITheme.White : UITheme.SidebarText;
             var iconRect = new Rectangle(rect.X + 14, rect.Y + (ItemH - 22) / 2, 22, 22);
             DrawNavIcon(g, item.Icon, iconRect, fg);
 
             var font = item.IsActive ? UITheme.FontBodyBold : UITheme.FontNav;
             TextRenderer.DrawText(g, item.Title, font, new Rectangle(rect.X + 48, rect.Y, rect.Width - 100, rect.Height), fg, tf);
 
-            int badge = item.Badge?.Invoke() ?? 0;
+            int badge = ProjectActionsEnabled ? item.Badge?.Invoke() ?? 0 : 0;
             if (badge > 0)
             {
                 string t = badge.ToString();
@@ -223,6 +350,18 @@ public class SidebarControl : UserControl
             case NavIcon.Review: UIIcons.ReviewQueue(g, r, c); break;
             case NavIcon.Sparkle: UIIcons.Sparkle(g, r, c); break;
             case NavIcon.Gear: UIIcons.Gear(g, r, c); break;
+            case NavIcon.Shield: UIIcons.Shield(g, r, c); break;
+            case NavIcon.Flag: UIIcons.Flag(g, r, c); break;
         }
+    }
+
+    /// <summary>Mục AlwaysEnabled thao tác được cả khi chưa có project, các mục khác cần project.</summary>
+    private bool IsItemEnabled(NavItem item) => ProjectActionsEnabled || item.AlwaysEnabled;
+
+    /// <summary>Đánh dấu mục đang mở (BoardForm gọi khi chuyển màn hình).</summary>
+    public void SetActiveMenu(string title)
+    {
+        foreach (NavItem item in _items) item.IsActive = item.Title == title;
+        Invalidate();
     }
 }

@@ -15,10 +15,7 @@ partial class CreateContentDialog
     private System.Windows.Forms.Label lblHook;
     private System.Windows.Forms.TextBox _txtHook;
     private System.Windows.Forms.Label lblPlatforms;
-    private System.Windows.Forms.CheckBox _chkYouTube;
-    private System.Windows.Forms.CheckBox _chkTikTok;
-    private System.Windows.Forms.CheckBox _chkInstagram;
-    private System.Windows.Forms.CheckBox _chkFacebook;
+    private System.Windows.Forms.FlowLayoutPanel _pnlPlatforms;
     private System.Windows.Forms.Label lblPriority;
     private System.Windows.Forms.Label lblSprint;
     private System.Windows.Forms.ComboBox _cboPriority;
@@ -29,6 +26,10 @@ partial class CreateContentDialog
     private System.Windows.Forms.DateTimePicker _dtpDeadline;
     private System.Windows.Forms.Label lblDuration;
     private System.Windows.Forms.TextBox _txtDuration;
+    private System.Windows.Forms.Label lblPlannedPublish;
+    private System.Windows.Forms.DateTimePicker _dtpPlannedPublish;
+    private System.Windows.Forms.Label lblContentType;
+    private System.Windows.Forms.ComboBox _cboContentType;
     private System.Windows.Forms.Label _lblError;
     private System.Windows.Forms.Panel pnlDivider2;
     private CreatorFlow.Controls.RoundedButton btnCancel;
@@ -53,10 +54,7 @@ partial class CreateContentDialog
         this.lblHook = new System.Windows.Forms.Label();
         this._txtHook = new System.Windows.Forms.TextBox();
         this.lblPlatforms = new System.Windows.Forms.Label();
-        this._chkYouTube = new System.Windows.Forms.CheckBox();
-        this._chkTikTok = new System.Windows.Forms.CheckBox();
-        this._chkInstagram = new System.Windows.Forms.CheckBox();
-        this._chkFacebook = new System.Windows.Forms.CheckBox();
+        this._pnlPlatforms = new System.Windows.Forms.FlowLayoutPanel();
         this.lblPriority = new System.Windows.Forms.Label();
         this.lblSprint = new System.Windows.Forms.Label();
         this._cboPriority = new System.Windows.Forms.ComboBox();
@@ -67,6 +65,10 @@ partial class CreateContentDialog
         this._dtpDeadline = new System.Windows.Forms.DateTimePicker();
         this.lblDuration = new System.Windows.Forms.Label();
         this._txtDuration = new System.Windows.Forms.TextBox();
+        this.lblPlannedPublish = new System.Windows.Forms.Label();
+        this._dtpPlannedPublish = new System.Windows.Forms.DateTimePicker();
+        this.lblContentType = new System.Windows.Forms.Label();
+        this._cboContentType = new System.Windows.Forms.ComboBox();
         this._lblError = new System.Windows.Forms.Label();
         this.pnlDivider2 = new System.Windows.Forms.Panel();
         this.btnCancel = new CreatorFlow.Controls.RoundedButton();
@@ -150,39 +152,13 @@ partial class CreateContentDialog
         this.lblPlatforms.TabIndex = 5;
         this.lblPlatforms.Text = "Nền tảng đăng bài";
         // 
-        // _chkYouTube
+        // _pnlPlatforms
         // 
-        this._chkYouTube.AutoSize = true;
-        this._chkYouTube.Checked = true;
-        this._chkYouTube.CheckState = System.Windows.Forms.CheckState.Checked;
-        this._chkYouTube.Location = new System.Drawing.Point(28, 272);
-        this._chkYouTube.Name = "_chkYouTube";
-        this._chkYouTube.TabIndex = 2;
-        this._chkYouTube.Text = "YouTube";
-        // 
-        // _chkTikTok
-        // 
-        this._chkTikTok.AutoSize = true;
-        this._chkTikTok.Location = new System.Drawing.Point(128, 272);
-        this._chkTikTok.Name = "_chkTikTok";
-        this._chkTikTok.TabIndex = 3;
-        this._chkTikTok.Text = "TikTok";
-        // 
-        // _chkInstagram
-        // 
-        this._chkInstagram.AutoSize = true;
-        this._chkInstagram.Location = new System.Drawing.Point(228, 272);
-        this._chkInstagram.Name = "_chkInstagram";
-        this._chkInstagram.TabIndex = 4;
-        this._chkInstagram.Text = "Instagram";
-        // 
-        // _chkFacebook
-        // 
-        this._chkFacebook.AutoSize = true;
-        this._chkFacebook.Location = new System.Drawing.Point(343, 272);
-        this._chkFacebook.Name = "_chkFacebook";
-        this._chkFacebook.TabIndex = 5;
-        this._chkFacebook.Text = "Facebook";
+        this._pnlPlatforms.AutoSize = true;
+        this._pnlPlatforms.Location = new System.Drawing.Point(28, 272);
+        this._pnlPlatforms.Name = "_pnlPlatforms";
+        this._pnlPlatforms.TabIndex = 2;
+        this._pnlPlatforms.WrapContents = false;
         // 
         // lblPriority
         // 
@@ -281,19 +257,60 @@ partial class CreateContentDialog
         this._txtDuration.Size = new System.Drawing.Size(204, 29);
         this._txtDuration.TabIndex = 10;
         // 
+        // lblPlannedPublish
+        // 
+        this.lblPlannedPublish.AutoSize = true;
+        this.lblPlannedPublish.Font = UITheme.FontLabelBold;
+        this.lblPlannedPublish.ForeColor = UITheme.Neutral700;
+        this.lblPlannedPublish.Location = new System.Drawing.Point(248, 428);
+        this.lblPlannedPublish.Name = "lblPlannedPublish";
+        this.lblPlannedPublish.TabIndex = 15;
+        this.lblPlannedPublish.Text = "Ngày dự kiến đăng";
+        // 
+        // _dtpPlannedPublish
+        // 
+        this._dtpPlannedPublish.Checked = false;
+        this._dtpPlannedPublish.Font = UITheme.FontBody;
+        this._dtpPlannedPublish.Format = System.Windows.Forms.DateTimePickerFormat.Short;
+        this._dtpPlannedPublish.Location = new System.Drawing.Point(248, 448);
+        this._dtpPlannedPublish.Name = "_dtpPlannedPublish";
+        this._dtpPlannedPublish.ShowCheckBox = true;
+        this._dtpPlannedPublish.Size = new System.Drawing.Size(204, 29);
+        this._dtpPlannedPublish.TabIndex = 11;
+        // 
+        // lblContentType
+        // 
+        this.lblContentType.AutoSize = true;
+        this.lblContentType.Font = UITheme.FontLabelBold;
+        this.lblContentType.ForeColor = UITheme.Neutral700;
+        this.lblContentType.Location = new System.Drawing.Point(28, 488);
+        this.lblContentType.Name = "lblContentType";
+        this.lblContentType.TabIndex = 16;
+        this.lblContentType.Text = "Loại nội dung *";
+        // 
+        // _cboContentType
+        // 
+        this._cboContentType.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
+        this._cboContentType.Font = UITheme.FontBody;
+        this._cboContentType.Location = new System.Drawing.Point(28, 508);
+        this._cboContentType.Name = "_cboContentType";
+        this._cboContentType.Size = new System.Drawing.Size(204, 29);
+        this._cboContentType.TabIndex = 12;
+        // 
         // _lblError
         // 
         this._lblError.AutoSize = true;
         this._lblError.Font = UITheme.FontLabelBold;
         this._lblError.ForeColor = UITheme.Danger;
-        this._lblError.Location = new System.Drawing.Point(248, 452);
+        this._lblError.Location = new System.Drawing.Point(248, 490);
+        this._lblError.MaximumSize = new System.Drawing.Size(204, 0);
         this._lblError.Name = "_lblError";
         this._lblError.TabIndex = 17;
         // 
         // pnlDivider2
         // 
         this.pnlDivider2.BackColor = UITheme.Neutral200;
-        this.pnlDivider2.Location = new System.Drawing.Point(28, 496);
+        this.pnlDivider2.Location = new System.Drawing.Point(28, 556);
         this.pnlDivider2.Name = "pnlDivider2";
         this.pnlDivider2.Size = new System.Drawing.Size(424, 1);
         this.pnlDivider2.TabIndex = 18;
@@ -301,19 +318,19 @@ partial class CreateContentDialog
         // btnCancel
         // 
         this.btnCancel.DialogResult = System.Windows.Forms.DialogResult.Cancel;
-        this.btnCancel.Location = new System.Drawing.Point(232, 512);
+        this.btnCancel.Location = new System.Drawing.Point(232, 572);
         this.btnCancel.Name = "btnCancel";
         this.btnCancel.Size = new System.Drawing.Size(90, 36);
-        this.btnCancel.TabIndex = 11;
+        this.btnCancel.TabIndex = 13;
         this.btnCancel.Text = "Huỷ";
         this.btnCancel.UseVisualStyleBackColor = true;
         // 
         // btnSubmit
         // 
-        this.btnSubmit.Location = new System.Drawing.Point(332, 512);
+        this.btnSubmit.Location = new System.Drawing.Point(332, 572);
         this.btnSubmit.Name = "btnSubmit";
         this.btnSubmit.Size = new System.Drawing.Size(120, 36);
-        this.btnSubmit.TabIndex = 12;
+        this.btnSubmit.TabIndex = 14;
         this.btnSubmit.Text = "Tạo nội dung";
         this.btnSubmit.UseVisualStyleBackColor = true;
         this.btnSubmit.Click += new System.EventHandler(this.btnSubmit_Click);
@@ -324,7 +341,7 @@ partial class CreateContentDialog
         this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Dpi;
         this.BackColor = UITheme.White;
         this.CancelButton = this.btnCancel;
-        this.ClientSize = new System.Drawing.Size(480, 568);
+        this.ClientSize = new System.Drawing.Size(480, 628);
         this.Controls.Add(this.lblHeader);
         this.Controls.Add(this.lblSub);
         this.Controls.Add(this.pnlDivider);
@@ -333,10 +350,7 @@ partial class CreateContentDialog
         this.Controls.Add(this.lblHook);
         this.Controls.Add(this._txtHook);
         this.Controls.Add(this.lblPlatforms);
-        this.Controls.Add(this._chkYouTube);
-        this.Controls.Add(this._chkTikTok);
-        this.Controls.Add(this._chkInstagram);
-        this.Controls.Add(this._chkFacebook);
+        this.Controls.Add(this._pnlPlatforms);
         this.Controls.Add(this.lblPriority);
         this.Controls.Add(this.lblSprint);
         this.Controls.Add(this._cboPriority);
@@ -347,6 +361,10 @@ partial class CreateContentDialog
         this.Controls.Add(this._dtpDeadline);
         this.Controls.Add(this.lblDuration);
         this.Controls.Add(this._txtDuration);
+        this.Controls.Add(this.lblPlannedPublish);
+        this.Controls.Add(this._dtpPlannedPublish);
+        this.Controls.Add(this.lblContentType);
+        this.Controls.Add(this._cboContentType);
         this.Controls.Add(this._lblError);
         this.Controls.Add(this.pnlDivider2);
         this.Controls.Add(this.btnCancel);

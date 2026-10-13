@@ -4,6 +4,9 @@ using CreatorFlow.Repositories.Implementations;
 using CreatorFlow.Repositories.InMemory;
 using CreatorFlow.Repositories.Interfaces;
 using CreatorFlow.Services;
+using CreatorFlow.Services.AI;
+using CreatorFlow.ApiClients;
+using CreatorFlow.Services.Backends;
 using System.Runtime.Versioning;
 
 namespace CreatorFlow;
@@ -12,7 +15,7 @@ namespace CreatorFlow;
 static class Program
 {
     /// <summary>
-    /// true  = kết nối PostgreSQL thật (cần đã chạy Database/schema.sql + sửa Data/DbConfig.cs).
+    /// true  = kết nối PostgreSQL thật (cần đã chạy database/01_schema.sql + 02_seed.sql và đặt ConnectionStrings:CreatorFlow trong appsettings.Local.json).
     /// false = chạy tạm với dữ liệu trong RAM (Repositories/InMemory), dùng khi CHƯA có DB
     ///         để vẫn xem/test được giao diện Board + luồng Workflow.
     /// Đổi lại true khi đã setup xong PostgreSQL.
@@ -41,6 +44,10 @@ static class Program
         IReviewQueueRepository reviewQueueRepo;
         IActivityRepository activityRepo;
         IContentDetailsRepository detailsRepo;
+        IMyTaskRepository myTaskRepo;
+        IPlatformRepository platformRepo;
+        IContentScriptRepository scriptRepo;
+        IIdeaRepository ideaRepo;
 
         if (UseDatabase)
         {
@@ -54,6 +61,10 @@ static class Program
             reviewQueueRepo = new ReviewQueueRepository(npgsqlUow);
             activityRepo = new ActivityRepository(npgsqlUow);
             detailsRepo = new ContentDetailsRepository(npgsqlUow);
+            myTaskRepo = new MyTaskRepository(npgsqlUow);
+            platformRepo = new PlatformRepository(npgsqlUow);
+            scriptRepo = new ContentScriptRepository(npgsqlUow);
+            ideaRepo = new IdeaRepository(npgsqlUow);
         }
         else
         {
@@ -66,33 +77,50 @@ static class Program
             reviewQueueRepo = new InMemoryReviewQueueRepository();
             activityRepo = new InMemoryActivityRepository();
             detailsRepo = new InMemoryContentDetailsRepository();
+            myTaskRepo = new InMemoryMyTaskRepository();
+            platformRepo = new InMemoryPlatformRepository();
+            scriptRepo = new InMemoryContentScriptRepository();
+            ideaRepo = new InMemoryIdeaRepository(withSeed: true);
         }
 
         var workflowService = new WorkflowService(contentRepo, historyRepo, reviewRepo, memberRepo, uow);
-        var contentService = new ContentService(contentRepo, detailsRepo, historyRepo, memberRepo, uow);
+        var contentService = new ContentService(contentRepo, detailsRepo, historyRepo, memberRepo, platformRepo, uow, myTaskRepo);
+        var myTaskService = new MyTaskService(myTaskRepo, memberRepo, uow);
+        var ideaService = new IdeaService(ideaRepo, memberRepo, historyRepo, uow);
+        // SCRUM-33: AI chưa có cài đặt thật nên dùng NotConfiguredAiService; thay bằng AIService thật khi có.
+        var scriptService = new ScriptService(scriptRepo, detailsRepo, platformRepo, memberRepo, myTaskRepo, uow, new NotConfiguredAiService());
 
-        // TODO: thay bằng màn Login + chọn Project thật (mục 18 UX spec: Login → Select Project).
-        // Tạm hardcode User #1 / Project #1 — khớp seed data ở cả schema.sql lẫn InMemoryDataStore.
-        CurrentSession.CurrentUserId = 1;
-        CurrentSession.CurrentUserName = "Demo Owner";
-        CurrentSession.CurrentProjectId = 1;
-        CurrentSession.CurrentProjectName = "Creator Team";
+        // AuthenticationApplicationContext binds the authenticated user; project selection belongs to SCRUM-25.
+        CurrentSession.CurrentUserId = 0;
+        CurrentSession.CurrentUserName = string.Empty;
+        CurrentSession.CurrentProjectId = 0;
+        CurrentSession.CurrentProjectName = string.Empty;
 
-        if (args.Length > 0 && args[0] == "--test")
+        try
         {
-            using var testForm = new BoardForm(workflowService, boardRepo, reviewQueueRepo, activityRepo, memberRepo, contentService);
-            var handle = testForm.Handle;
-            testForm.Size = new Size(1440, 900);
-            testForm.PerformLayout();
-
-            Console.WriteLine("TEST_OK: BoardForm created and loaded successfully. Handle: " + handle);
-            foreach (Control c in testForm.Controls)
+            using var api = ApiClient.Create(ApiClientConfiguration.Load());
+            var session = new UserSession();
+            var auth = new AuthApiFacade(api, session);            var metricBackend = new ApiMetricBackend(api, session);
+            var invitations = new ProjectInvitationService(api, session);
+            var invitationInbox = new InvitationInboxService(api, session);
+            if (args.Length > 0 && args[0] == "--test")
             {
-                Console.WriteLine($"Control: {c.GetType().Name}, Bounds: {c.Bounds}, Dock: {c.Dock}");
+                // Diagnostic layout only: no authentication, project queries, or message loop.
+                using var testForm = new BoardForm(workflowService, boardRepo, reviewQueueRepo,
+                    activityRepo, memberRepo, contentService, myTaskService, scriptService, ideaService, auth, metricBackend, invitations, invitationInbox);
+                var handle = testForm.Handle;
+                testForm.Size = new Size(1440, 900);
+                testForm.PerformLayout();
+                Console.WriteLine("LAYOUT_OK: no-project Board shell created. Handle: " + handle);
+                return;
             }
-            return;
+            using var context = new AuthenticationApplicationContext(auth, () =>
+                new BoardForm(workflowService, boardRepo, reviewQueueRepo, activityRepo, memberRepo, contentService, myTaskService, scriptService, ideaService, auth, metricBackend, invitations, invitationInbox));
+            Application.Run(context);
         }
-
-        Application.Run(new BoardForm(workflowService, boardRepo, reviewQueueRepo, activityRepo, memberRepo, contentService));
+        catch (InvalidOperationException)
+        {
+            MessageBox.Show("Không thể đọc cấu hình API. Vui lòng kiểm tra Api:BaseUrl.", "CreatorFlow", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
     }
 }

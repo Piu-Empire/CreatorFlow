@@ -27,8 +27,6 @@ public class ModulePageHeaderControl : UserControl
     private bool _sprintVisible = true;      // ẩn khi header quá hẹp (vd. drawer chi tiết đang mở)
     private bool _segOnSecondRow;            // bộ lọc nền tảng xuống hàng 2 khi hàng 1 không đủ chỗ
 
-    public event EventHandler? RefreshClicked;
-    public event EventHandler? ReviewQueueClicked;
     public event EventHandler? CreateContentClicked;
     public event EventHandler<string>? SearchTextChanged;
     public event EventHandler<string>? PlatformFilterChanged;

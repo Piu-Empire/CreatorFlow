@@ -205,15 +205,33 @@ public class KanbanCardControl : Control
             g.DrawLine(divPen, PadX, dy, Width - PadX, dy);
 
         int fy = dy + (FooterH - 24) / 2;
-        string initials = "--";
-        if (!string.IsNullOrWhiteSpace(_card.AssigneeName))
+        // Nhiều Creator: tối đa 3 avatar chồng nhau (người đầu nằm trên cùng), phần dư hiện "+N".
+        var names = _card.Assignees.Select(a => a.Name).ToList();
+        if (names.Count == 0 && !string.IsNullOrWhiteSpace(_card.AssigneeName)) names.Add(_card.AssigneeName);
+
+        const int AvatarSize = 24, AvatarStep = 16, MaxAvatars = 3;
+        int shown = Math.Min(names.Count, MaxAvatars);
+        int extra = names.Count - shown;
+        int slots = Math.Max(1, shown) + (extra > 0 ? 1 : 0);
+        int avatarsWidth = AvatarSize + (slots - 1) * AvatarStep;
+
+        if (names.Count == 0)
         {
-            var parts = _card.AssigneeName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            initials = parts.Length >= 2
-                ? $"{parts[0][0]}{parts[^1][0]}"
-                : (parts[0].Length >= 2 ? parts[0].Substring(0, 2) : parts[0]);
+            UITheme.DrawAvatar(g, "--", new Rectangle(PadX, fy, AvatarSize, AvatarSize), Color.FromArgb(64, 64, 64), UITheme.White, UITheme.FontMicro);
         }
-        UITheme.DrawAvatar(g, initials, new Rectangle(PadX, fy, 24, 24), Color.FromArgb(64, 64, 64), UITheme.White, UITheme.FontMicro);
+        else
+        {
+            if (extra > 0)
+                UITheme.DrawAvatar(g, $"+{extra}", new Rectangle(PadX + shown * AvatarStep, fy, AvatarSize, AvatarSize),
+                    UITheme.Neutral300, UITheme.Neutral800, UITheme.FontMicro);
+            for (int i = shown - 1; i >= 0; i--)
+            {
+                var ring = new Rectangle(PadX + i * AvatarStep - 1, fy - 1, AvatarSize + 2, AvatarSize + 2);
+                using (var ringBrush = new SolidBrush(UITheme.White)) g.FillEllipse(ringBrush, ring);
+                UITheme.DrawAvatar(g, GetInitials(names[i]), new Rectangle(PadX + i * AvatarStep, fy, AvatarSize, AvatarSize),
+                    Color.FromArgb(64, 64, 64), UITheme.White, UITheme.FontMicro);
+            }
+        }
 
         // Ưu tiên hiện thời lượng dự kiến (giống mẫu "24 min"); nếu chưa có thì hiện hạn chót.
         string timeText = !string.IsNullOrWhiteSpace(_card.EstimatedDuration)
@@ -221,7 +239,7 @@ public class KanbanCardControl : Control
             : (_card.Deadline.HasValue ? _card.Deadline.Value.ToString("dd/MM") : "Chưa có hạn");
         if (_card.IsOverdue) timeText = "Overdue · " + timeText;
         TextRenderer.DrawText(g, timeText, UITheme.FontLabel,
-            new Rectangle(PadX + 24 + 8, fy, Width / 2, 24),
+            new Rectangle(PadX + avatarsWidth + 8, fy, Width / 2, 24),
             _card.IsOverdue ? UITheme.OverdueText : UITheme.Neutral600,
             TextFormatFlags.Left | TextFormatFlags.VerticalCenter | oneLine);
 
@@ -229,6 +247,16 @@ public class KanbanCardControl : Control
         GetArrowRects(out var prevRect, out var nextRect);
         DrawArrow(g, prevRect, ChevronDir.Left, _hoverArrow == -1);
         DrawArrow(g, nextRect, ChevronDir.Right, _hoverArrow == 1);
+    }
+
+    /// <summary>Chữ cái đầu hiển thị trong avatar (VD "Creator A" → "CA", "Phat" → "Ph").</summary>
+    private static string GetInitials(string name)
+    {
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 0) return "--";
+        return parts.Length >= 2
+            ? $"{parts[0][0]}{parts[^1][0]}"
+            : (parts[0].Length >= 2 ? parts[0].Substring(0, 2) : parts[0]);
     }
 
     private static void DrawArrow(Graphics g, Rectangle r, ChevronDir dir, bool hovered)

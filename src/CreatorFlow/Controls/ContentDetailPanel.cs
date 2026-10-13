@@ -1,8 +1,10 @@
 ﻿using CreatorFlow.Models.Enums;
 using System.Drawing.Drawing2D;
+using CreatorFlow.Forms.Board;
 using CreatorFlow.Models;
 using CreatorFlow.Repositories.Interfaces;
 using CreatorFlow.Services;
+using CreatorFlow.Services.Backends;
 using CreatorFlow.Services.Exceptions;
 using CreatorFlow.Theme;
 
@@ -25,9 +27,11 @@ public partial class ContentDetailPanel : UserControl
 
     private ContentBoardCard? _current;
     private List<ProjectMemberInfo> _members = new();
-    private int _selectedTabIndex = 0; // 0: Overview, 1: Script, 2: Checklist, 3: Activity
+    private int _selectedTabIndex = 0; // 0: Overview, 1: Script, 2: Checklist, 3: Activity, 4: Metrics
     private bool _isDirty;
+    private bool _deadlineEdited; // true khi người dùng thật sự đổi ô Deadline (tránh vô tình ghi deadline mặc định khi chỉ sửa tiêu đề)
     private bool _isLoading; // true trong lúc LoadContent() đang gán giá trị → bỏ qua sự kiện TextChanged/SelectedIndexChanged
+    private bool _detailLoaded; // false nếu đọc chi tiết (script, loại, ngày đăng) từ DB thất bại → chặn Lưu để không ghi đè dữ liệu bằng giá trị rỗng
 
     public event EventHandler? ContentChanged;
     public event EventHandler? CloseRequested;
@@ -49,25 +53,30 @@ public partial class ContentDetailPanel : UserControl
     private readonly TextBox _txtTitleVal;
     private readonly TextBox _txtHookVal;
     private readonly RoundedPanel _boxMeta;
-    private readonly Label[] _metaCaptions = new Label[6];
-    private readonly RoundedPanel[] _metaBoxes = new RoundedPanel[6];
+    private readonly Label[] _metaCaptions = new Label[8];
+    private readonly RoundedPanel[] _metaBoxes = new RoundedPanel[8];
 
-    // Index: 0 Pipeline Stage (chỉ đọc) · 1 Platform · 2 Priority · 3 Sprint · 4 Target Week · 5 Estimated Duration
+    // Index: 0 Pipeline Stage (chỉ đọc) · 1 Platform · 2 Priority · 3 Sprint · 4 Target Week · 5 Estimated Duration · 6 Content Type · 7 Planned Publish Date
     private readonly Label _lblStageVal;
-    private readonly ComboBox _cboPlatform;
+    private readonly Button _btnPlatforms;
+    private readonly ContextMenuStrip _mnuPlatforms;
     private readonly ComboBox _cboPriorityEdit;
     private readonly ComboBox _cboSprintEdit;
     private readonly DateTimePicker _dtpTargetWeek;
     private readonly TextBox _txtDurationEdit;
+    private readonly ComboBox _cboTypeEdit;
+    private readonly DateTimePicker _dtpPlannedPublish;
 
     private readonly RoundedPanel _boxLead;
     private readonly ComboBox _cboAssigneeEdit;
     private string _leadName = "";
+    private string _leadCaption = "Assignee";
     private readonly FlowLayoutPanel _flowActions;
 
     // Tab 2: Script
     private readonly Panel _pnlTabScript;
-    private readonly TextBox _txtScript;
+    private readonly ScriptEditorControl _scriptEditor;
+    private string _persistedScript = string.Empty; // script đang lưu trong DB; "Lưu thay đổi" ghi lại đúng bản này để không đụng tới script (script lưu riêng ở tab Script)
 
     // Tab 3: Checklist
     private readonly Panel _pnlTabChecklist;
@@ -76,6 +85,12 @@ public partial class ContentDetailPanel : UserControl
     // Tab 4: Activity
     private readonly Panel _pnlTabActivity;
     private readonly ActivityTimelineControl _activityTimeline;
+
+    // Tab 5: Metrics (theo ContentPlatform, qua IMetricBackend; null = chưa đấu nối API)
+    private IMetricBackend? _metricBackend;
+    private readonly Panel _pnlTabMetrics;
+    private readonly Panel _metricsHost;
+    private long? _metricsLoadedFor; // ContentId đã nạp Metrics; null = cần nạp lại khi mở tab
 
     // Empty state
     private readonly Panel _pnlEmptyState;
@@ -187,9 +202,9 @@ public partial class ContentDetailPanel : UserControl
         _txtHookVal.TextChanged += (_, _) => MarkDirty();
         AddOverviewRow(MakeBox(104, Pad(_txtHookVal, 16, 12)), 20);
 
-        _boxMeta = new RoundedPanel { Height = 18 + 3 * 78 + 6, FillColor = UITheme.Neutral50, Radius = 10 };
-        string[] captions = { "Pipeline Stage", "Platform", "Priority", "Sprint Allocation", "Target Week", "Estimated Duration" };
-        for (int i = 0; i < 6; i++)
+        _boxMeta = new RoundedPanel { Height = 18 + 4 * 78 + 6, FillColor = UITheme.Neutral50, Radius = 10 };
+        string[] captions = { "Pipeline Stage", "Platform", "Priority", "Sprint Allocation", "Target Week", "Estimated Duration", "Content Type", "Planned Publish Date" };
+        for (int i = 0; i < 8; i++)
         {
             _metaCaptions[i] = new Label
             {
@@ -219,11 +234,26 @@ public partial class ContentDetailPanel : UserControl
         _metaBoxes[0].FillColor = UITheme.Neutral100;
         _metaBoxes[0].Controls.Add(_lblStageVal);
 
-        // 1. Platform
-        _cboPlatform = MakeFlatCombo();
-        _cboPlatform.Items.AddRange(ContentService.AvailablePlatforms);
-        _cboPlatform.SelectedIndexChanged += (_, _) => MarkDirty();
-        _metaBoxes[1].Controls.Add(Pad(_cboPlatform, 12, 7));
+        // 1. Platform — chọn nhiều: bấm nút để mở menu tick, menu không đóng sau mỗi lần tick.
+        // Các mục của menu được nạp từ bảng platforms trong Initialize().
+        _mnuPlatforms = new ContextMenuStrip { ShowImageMargin = false, ShowCheckMargin = true, Font = new Font("Segoe UI", 10F) };
+        _mnuPlatforms.Closing += (_, e) =>
+        {
+            if (e.CloseReason == ToolStripDropDownCloseReason.ItemClicked) e.Cancel = true;
+        };
+        _btnPlatforms = new Button
+        {
+            Font = new Font("Segoe UI", 10F),
+            FlatStyle = FlatStyle.Flat,
+            BackColor = UITheme.White,
+            TextAlign = ContentAlignment.MiddleLeft,
+            AutoEllipsis = true,
+            UseMnemonic = false,
+        };
+        _btnPlatforms.FlatAppearance.BorderSize = 0;
+        _btnPlatforms.Click += (_, _) => _mnuPlatforms.Show(_btnPlatforms, new Point(0, _btnPlatforms.Height));
+        _metaBoxes[1].Controls.Add(Pad(_btnPlatforms, 12, 7));
+        UpdatePlatformButtonText();
 
         // 2. Priority
         _cboPriorityEdit = MakeFlatCombo();
@@ -244,7 +274,11 @@ public partial class ContentDetailPanel : UserControl
             Font = new Font("Segoe UI", 10F),
             Format = DateTimePickerFormat.Short,
         };
-        _dtpTargetWeek.ValueChanged += (_, _) => MarkDirty();
+        _dtpTargetWeek.ValueChanged += (_, _) =>
+        {
+            if (!_isLoading) _deadlineEdited = true;
+            MarkDirty();
+        };
         _metaBoxes[4].Controls.Add(Pad(_dtpTargetWeek, 10, 7));
 
         // 5. Estimated Duration
@@ -257,6 +291,24 @@ public partial class ContentDetailPanel : UserControl
         };
         _txtDurationEdit.TextChanged += (_, _) => MarkDirty();
         _metaBoxes[5].Controls.Add(Pad(_txtDurationEdit, 14, 11));
+
+        // 6. Content Type — danh sách cố định ContentService.AvailableContentTypes
+        _cboTypeEdit = MakeFlatCombo();
+        _cboTypeEdit.Items.AddRange(ContentService.AvailableContentTypes);
+        _cboTypeEdit.SelectedIndexChanged += (_, _) => MarkDirty();
+        _metaBoxes[6].Controls.Add(Pad(_cboTypeEdit, 12, 7));
+
+        // 7. Planned Publish Date — tùy chọn: bỏ tick = chưa lên lịch đăng
+        _dtpPlannedPublish = new DateTimePicker
+        {
+            Dock = DockStyle.Fill,
+            Font = new Font("Segoe UI", 10F),
+            Format = DateTimePickerFormat.Short,
+            ShowCheckBox = true,
+            Checked = false,
+        };
+        _dtpPlannedPublish.ValueChanged += (_, _) => MarkDirty();
+        _metaBoxes[7].Controls.Add(Pad(_dtpPlannedPublish, 10, 7));
 
         AddOverviewRow(_boxMeta, 20);
 
@@ -294,16 +346,10 @@ public partial class ContentDetailPanel : UserControl
 
         // ---- TAB 2: SCRIPT ----
         _pnlTabScript = new Panel { Dock = DockStyle.Fill, Padding = new Padding(PadX, 20, PadX, 20), Visible = false };
-        _txtScript = new TextBox
-        {
-            Dock = DockStyle.Fill,
-            Multiline = true,
-            ScrollBars = ScrollBars.Vertical,
-            Font = new Font("Segoe UI", 10.5F),
-            BorderStyle = BorderStyle.FixedSingle,
-            Text = "Kịch bản / Screenplay Notes:\r\n\r\n[Hook 0-3s]: Giới thiệu điểm ấn tượng nhất của sản phẩm.\r\n[Body 3-30s]: Chi tiết tính năng nổi bật + góc quay cận.\r\n[Call To Action]: Đăng ký và theo dõi Studio!",
-        };
-        _pnlTabScript.Controls.Add(_txtScript);
+        // Khu vực script (SCRUM-33): lưu riêng qua ScriptService, có phân quyền, Ctrl+S và thống kê.
+        _scriptEditor = new ScriptEditorControl { Dock = DockStyle.Fill };
+        _scriptEditor.ScriptSaved += (_, text) => _persistedScript = text;
+        _pnlTabScript.Controls.Add(_scriptEditor);
 
         // ---- TAB 3: CHECKLIST ----
         _pnlTabChecklist = new Panel { Dock = DockStyle.Fill, Padding = new Padding(PadX, 20, PadX, 20), Visible = false };
@@ -335,10 +381,16 @@ public partial class ContentDetailPanel : UserControl
         _activityTimeline = new ActivityTimelineControl { Dock = DockStyle.Fill };
         _pnlTabActivity.Controls.Add(_activityTimeline);
 
+        // ---- TAB 5: METRICS ----
+        _pnlTabMetrics = new Panel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = UITheme.White, Padding = new Padding(PadX, 20, PadX, 20), Visible = false };
+        _metricsHost = new Panel { Dock = DockStyle.Top, AutoSize = true, BackColor = UITheme.White };
+        _pnlTabMetrics.Controls.Add(_metricsHost);
+
         _pnlContent.Controls.Add(_pnlTabOverview);
         _pnlContent.Controls.Add(_pnlTabScript);
         _pnlContent.Controls.Add(_pnlTabChecklist);
         _pnlContent.Controls.Add(_pnlTabActivity);
+        _pnlContent.Controls.Add(_pnlTabMetrics);
 
         // 5. Empty state
         _pnlEmptyState = new Panel { Dock = DockStyle.Fill, BackColor = UITheme.White };
@@ -496,7 +548,7 @@ public partial class ContentDetailPanel : UserControl
         // Lưới 2 cột trong khung meta
         int inner = w - 40;
         int colW = (inner - 16) / 2;
-        for (int i = 0; i < 6; i++)
+        for (int i = 0; i < _metaBoxes.Length; i++)
         {
             int x = 20 + (i % 2) * (colW + 16);
             int cy = 18 + (i / 2) * 78;
@@ -527,26 +579,49 @@ public partial class ContentDetailPanel : UserControl
 
         UITheme.DrawAvatar(g, initials, new Rectangle(18, (_boxLead.Height - 44) / 2, 44, 44), UITheme.Neutral800, UITheme.White, UITheme.FontLabelBold);
         const TextFormatFlags tf = TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis;
-        int textW = Math.Max(40, _cboAssigneeEdit.Left - 74 - 10);
+        int textW = Math.Max(40, _boxLead.Width - 74 - 18);
         TextRenderer.DrawText(g, name, UITheme.FontBodyBold, new Rectangle(74, 16, textW, 22), UITheme.Ink, tf);
-        TextRenderer.DrawText(g, "Assignee", UITheme.FontLabel, new Rectangle(74, 38, textW, 20), UITheme.Neutral600, tf);
+        TextRenderer.DrawText(g, _leadCaption, UITheme.FontLabel, new Rectangle(74, 38, textW, 20), UITheme.Neutral600, tf);
     }
 
     private string[] GetTabLabels()
     {
         int total = _chkChecklist?.Items.Count ?? 0;
         int done = _chkChecklist?.CheckedItems.Count ?? 0;
-        return new[] { "Overview", "Script", $"Checklist ({done}/{total})", "Activity" };
+        return new[] { "Overview", "Script", $"Checklist ({done}/{total})", "Activity", "Metrics" };
     }
 
     // ---------- API công khai ----------
 
-    public void Initialize(WorkflowService workflowService, IActivityRepository activityRepo, IProjectMemberRepository memberRepo, ContentService contentService)
+    public void Initialize(WorkflowService workflowService, IActivityRepository activityRepo, IProjectMemberRepository memberRepo, ContentService contentService, ScriptService scriptService, IMetricBackend? metricBackend = null)
     {
+        _scriptEditor.Initialize(scriptService);
         _workflowService = workflowService;
         _activityRepo = activityRepo;
         _memberRepo = memberRepo;
         _contentService = contentService;
+        _metricBackend = metricBackend;
+
+        _mnuPlatforms.Items.Clear();
+        foreach (string name in contentService.GetAvailablePlatforms())
+        {
+            var item = new ToolStripMenuItem(name) { CheckOnClick = true };
+            item.CheckedChanged += (_, _) =>
+            {
+                UpdatePlatformButtonText();
+                MarkDirty();
+            };
+            _mnuPlatforms.Items.Add(item);
+        }
+    }
+
+    private List<string> SelectedPlatformNames() =>
+        _mnuPlatforms.Items.OfType<ToolStripMenuItem>().Where(i => i.Checked).Select(i => i.Text ?? string.Empty).ToList();
+
+    private void UpdatePlatformButtonText()
+    {
+        var names = SelectedPlatformNames();
+        _btnPlatforms.Text = (names.Count == 0 ? "Chọn nền tảng" : string.Join(" • ", names)) + "  ▾";
     }
 
     public void LoadContent(ContentBoardCard card)
@@ -556,6 +631,8 @@ public partial class ContentDetailPanel : UserControl
 
         _isLoading = true;
         _current = card;
+        _metricsLoadedFor = null;
+        _metricsHost.Controls.Clear();
         _members = _memberRepo.GetMembers(card.ProjectId);
 
         _pnlEmptyState.Visible = false;
@@ -564,8 +641,7 @@ public partial class ContentDetailPanel : UserControl
         _pnlContent.Visible = true;
         _pnlFooter.Visible = true;
 
-        string platform = card.Platforms.Count > 0 ? card.Platforms[0] : "";
-        _pnlHeader.SetData(card.Code, platform, card.Sprint);
+        _pnlHeader.SetData(card.Code, card.Platforms, card.Sprint);
         _lblFooterCode.Text = card.Code;
 
         _txtTitleVal.Text = card.Title;
@@ -573,8 +649,9 @@ public partial class ContentDetailPanel : UserControl
 
         _lblStageVal.Text = UITheme.GetStageDisplayName(card.Status);
 
-        _cboPlatform.SelectedItem = platform;
-        if (_cboPlatform.SelectedIndex < 0 && _cboPlatform.Items.Count > 0) _cboPlatform.SelectedIndex = 0;
+        foreach (var item in _mnuPlatforms.Items.OfType<ToolStripMenuItem>())
+            item.Checked = card.Platforms.Contains(item.Text, StringComparer.OrdinalIgnoreCase);
+        UpdatePlatformButtonText();
 
         _cboPriorityEdit.SelectedItem = card.Priority;
 
@@ -582,24 +659,48 @@ public partial class ContentDetailPanel : UserControl
         if (_cboSprintEdit.SelectedIndex < 0) _cboSprintEdit.SelectedIndex = 0;
 
         _dtpTargetWeek.Value = (card.Deadline ?? DateTime.Today.AddDays(7)).Date;
+        // Phân quyền deadline: chỉ Owner/Manager được sửa; Creator chỉ xem.
+        _dtpTargetWeek.Enabled = TaskRules.CanChangeDeadline(_memberRepo.GetRole(card.ProjectId, CurrentSession.CurrentUserId));
+        _deadlineEdited = false;
 
         _txtDurationEdit.Text = card.EstimatedDuration;
+
+        // Script, loại nội dung và ngày dự kiến đăng không nằm trong thẻ Board nên đọc riêng từ DB khi mở Content Detail.
+        var detail = TryLoadDetail(card.ContentId);
+        _detailLoaded = detail != null;
+        _persistedScript = detail?.Script ?? string.Empty;
+        _scriptEditor.LoadScript(card.ContentId, CurrentSession.CurrentUserId);
+        SelectContentType(detail?.ContentType);
+        SetPlannedPublish(detail?.PlannedPublishAt);
 
         // Gán lại DataSource = null rồi DataSource mới đôi khi làm ComboBox quên mất DisplayMember đã đặt
         // (WinForms quirk), khiến nó tự hiện Object.ToString() — tức tên đầy đủ của class thay vì tên người.
         // Đặt lại DisplayMember tường minh ngay trước khi gán DataSource mới để chắc chắn không bị mất.
         _cboAssigneeEdit.DataSource = null;
         _cboAssigneeEdit.DisplayMember = "Name";
-        _cboAssigneeEdit.DataSource = _members;
         var currentMember = _members.FirstOrDefault(m => m.UserId == card.AssigneeUserId);
+        _cboAssigneeEdit.DataSource = _members;
+        _cboAssigneeEdit.Enabled = false; // chỉ hiển thị người đang phụ trách; giao việc dùng nút "Giao việc cho Creator" ở Workflow Actions
         _cboAssigneeEdit.SelectedItem = currentMember;
-        _leadName = currentMember?.Name ?? card.AssigneeName ?? "";
+        // Nhiều Creator: hiện tất cả tên; caption cho biết bao nhiêu người đã hoàn thành.
+        _leadName = card.Assignees.Count > 0
+            ? string.Join(", ", card.Assignees.Select(a => a.Name))
+            : currentMember?.Name ?? card.AssigneeName ?? "";
+        _leadCaption = card.Assignees.Count switch
+        {
+            0 or 1 => "Assignee",
+            _ => card.IsTeamCompleted
+                ? $"Assignee · tất cả {card.TeamTotal} Creator đã hoàn thành"
+                : $"Assignee · {card.TeamDone}/{card.TeamTotal} Creator hoàn thành",
+        };
+        _cboAssigneeEdit.Visible = false; // chỉ để lưu dữ liệu; giao việc dùng nút "Giao việc cho Creator"
         _boxLead.Invalidate();
 
         RebuildActionButtons();
         LayoutOverview();
         _pnlTabOverview.AutoScrollPosition = new Point(0, 0);
         RefreshActivity();
+        if (_selectedTabIndex == 4) LoadMetricsIfNeeded();
         _pnlTabBar.Invalidate();
 
         _isLoading = false;
@@ -608,10 +709,43 @@ public partial class ContentDetailPanel : UserControl
         _lblSaveHint.Text = "";
     }
 
+    /// <summary>Đọc chi tiết Content qua ContentService. Lỗi (không có quyền, không tìm thấy, lỗi DB) được báo cho người dùng và trả về null.</summary>
+    private Content? TryLoadDetail(long contentId)
+    {
+        try
+        {
+            return _contentService!.GetDetail(contentId, CurrentSession.CurrentUserId);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "Không tải được chi tiết nội dung", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return null;
+        }
+    }
+
+    /// <summary>Chọn loại nội dung; để trống → loại mặc định; loại lạ (dữ liệu cũ) được thêm tạm vào danh sách để không bị đổi âm thầm.</summary>
+    private void SelectContentType(string? contentType)
+    {
+        string type = string.IsNullOrWhiteSpace(contentType) ? ContentService.DefaultContentType : contentType.Trim();
+
+        int index = _cboTypeEdit.FindStringExact(type);
+        if (index < 0)
+            index = _cboTypeEdit.Items.Add(type);
+
+        _cboTypeEdit.SelectedIndex = index;
+    }
+
+    /// <summary>Gán Value trước rồi mới đặt Checked, vì WinForms có thể tự bật tick khi gán Value.</summary>
+    private void SetPlannedPublish(DateTime? plannedPublishAt)
+    {
+        _dtpPlannedPublish.Value = (plannedPublishAt ?? DateTime.Today).Date;
+        _dtpPlannedPublish.Checked = plannedPublishAt.HasValue;
+    }
+
     /// <summary>Trả về false (và không xoá gì) nếu người dùng chọn giữ lại thay đổi chưa lưu.</summary>
     public bool Clear()
     {
-        if (_isDirty && _current != null)
+        if (HasUnsavedChanges && _current != null)
         {
             var result = MessageBox.Show(this,
                 "Bạn có thay đổi chưa lưu. Đóng và bỏ qua thay đổi?",
@@ -621,32 +755,44 @@ public partial class ContentDetailPanel : UserControl
 
         _current = null;
         _isDirty = false;
+        _scriptEditor.Reset();
         ShowEmptyState();
         return true;
     }
 
     /// <summary>true nếu có thay đổi chưa lưu — BoardForm dùng để hỏi trước khi reload/đóng.</summary>
-    public bool HasUnsavedChanges => _isDirty;
+    public bool HasUnsavedChanges => _isDirty || _scriptEditor.IsDirty;
 
     private void SaveChanges()
     {
         if (_current == null || _contentService == null) return;
 
+        if (!_detailLoaded)
+        {
+            MessageBox.Show(this, "Chưa tải được chi tiết nội dung (script, loại nội dung, ngày dự kiến đăng) nên không thể lưu. Hãy đóng và mở lại nội dung này.",
+                "Không thể lưu", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
         var draft = new ContentDraft
         {
             Title = _txtTitleVal.Text,
             Description = _txtHookVal.Text,
+            Script = _persistedScript, // không sửa script ở đây: tab Script lưu riêng qua ScriptService
+            ContentType = _cboTypeEdit.SelectedItem as string ?? string.Empty,
+            PlannedPublishAt = _dtpPlannedPublish.Checked ? _dtpPlannedPublish.Value.Date : null,
             Priority = _cboPriorityEdit.SelectedItem is Priority p ? p : _current.Priority,
-            Platforms = _cboPlatform.SelectedItem is string plat ? new List<string> { plat } : new List<string>(),
+            Platforms = SelectedPlatformNames(),
             Sprint = _cboSprintEdit.SelectedItem as string ?? _current.Sprint,
-            Deadline = _dtpTargetWeek.Value.Date,
+            Deadline = _dtpTargetWeek.Enabled && _deadlineEdited ? _dtpTargetWeek.Value.Date : _current.Deadline,
             EstimatedDuration = _txtDurationEdit.Text,
-            AssigneeUserId = (_cboAssigneeEdit.SelectedItem as ProjectMemberInfo)?.UserId,
+            AssigneeUserId = _current.AssigneeUserId, // giữ nguyên; đổi người phụ trách chỉ qua nút "Giao việc cho Creator"
         };
 
         try
         {
             _contentService.Update(_current.ContentId, draft, CurrentSession.CurrentUserId);
+            _deadlineEdited = false;
             _isDirty = false;
             _btnSave.Enabled = false;
             _lblSaveHint.Text = "Đã lưu";
@@ -680,7 +826,9 @@ public partial class ContentDetailPanel : UserControl
         _pnlTabScript.Visible = (tabIndex == 1);
         _pnlTabChecklist.Visible = (tabIndex == 2);
         _pnlTabActivity.Visible = (tabIndex == 3);
+        _pnlTabMetrics.Visible = (tabIndex == 4);
         _pnlTabBar.Invalidate();
+        if (tabIndex == 4) LoadMetricsIfNeeded();
     }
 
     private void RefreshActivity()
@@ -688,6 +836,175 @@ public partial class ContentDetailPanel : UserControl
         if (_current == null) return;
         _activityTimeline.LoadActivity(_activityRepo!.GetActivity(_current.ContentId));
     }
+
+    // ---------- Tab Metrics (theo ContentPlatform, qua API) ----------
+
+    /// <summary>Nạp Metrics khi mở tab lần đầu cho mỗi Content. Quyền/nút Lưu lấy từ cờ CanRecord của API, không tự suy ở client.</summary>
+    private void LoadMetricsIfNeeded()
+    {
+        if (_current == null || _metricsLoadedFor == _current.ContentId) return;
+        _metricsHost.Controls.Clear();
+        if (_metricBackend == null)
+        {
+            _metricsHost.Controls.Add(MakeMetricsInfo("Chưa kết nối API nên không tải được số liệu."));
+            return;
+        }
+        try
+        {
+            var rows = _metricBackend.GetContentMetrics(_current.ContentId).Platforms
+                .Select(ContentMetric.FromResponse).ToList();
+            if (rows.Count == 0)
+                _metricsHost.Controls.Add(MakeMetricsInfo("Content này chưa gắn platform nào."));
+            else
+                foreach (var row in rows) // Dock=Top: thêm trước hiện trước, giữ đúng thứ tự API
+                    _metricsHost.Controls.Add(MakeMetricRow(row));
+            _metricsLoadedFor = _current.ContentId;
+        }
+        catch (Exception ex)
+        {
+            _metricsHost.Controls.Add(MakeMetricsInfo("Không tải được số liệu: " + ex.Message));
+            MessageBox.Show(this, ex.Message, "Không tải được số liệu", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
+    private static Label MakeMetricsInfo(string text) => new Label
+    {
+        Text = text,
+        Font = UITheme.FontBody,
+        ForeColor = UITheme.Neutral600,
+        AutoSize = true,
+        Dock = DockStyle.Top,
+        Padding = new Padding(0, 8, 0, 8),
+        UseMnemonic = false,
+    };
+
+    private sealed class MetricRowState
+    {
+        public ContentMetric Metric = null!;
+        public TextBox TxtViews = null!;
+        public TextBox TxtLikes = null!;
+        public TextBox TxtComments = null!;
+        public TextBox TxtShares = null!;
+        public Label LblUpdated = null!;
+    }
+
+    /// <summary>Mỗi platform một hàng: tên + trạng thái, 4 ô số (trống = giữ nguyên), nút Lưu riêng, nhãn cập nhật lần cuối.</summary>
+    private Panel MakeMetricRow(ContentMetric metric)
+    {
+        var state = new MetricRowState { Metric = metric };
+        var row = new Panel { Dock = DockStyle.Top, Height = 172, BackColor = UITheme.White, Padding = new Padding(0, 10, 0, 10) };
+
+        var header = new Label
+        {
+            Text = $"{metric.PlatformName} · {metric.PublicationStatus}",
+            Font = UITheme.FontLabelBold,
+            ForeColor = UITheme.Neutral600,
+            AutoSize = false,
+            Height = 22,
+            Dock = DockStyle.Top,
+            UseMnemonic = false,
+        };
+        row.Controls.Add(header);
+
+        var grid = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            Height = 62,
+            ColumnCount = 4,
+            RowCount = 2,
+            BackColor = UITheme.White,
+        };
+        for (int i = 0; i < 4; i++) grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
+        grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 20F));
+        grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
+        string[] names = { "Views", "Likes", "Comments", "Shares" };
+        TextBox[] boxes = new TextBox[4];
+        for (int i = 0; i < 4; i++)
+        {
+            grid.Controls.Add(new Label
+            {
+                Text = names[i],
+                Font = UITheme.FontLabel,
+                ForeColor = UITheme.Neutral600,
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.BottomLeft,
+                UseMnemonic = false,
+            }, i, 0);
+            boxes[i] = new TextBox { Font = new Font("Segoe UI", 10F), Dock = DockStyle.Fill, Margin = new Padding(0, 0, 12, 0) };
+            grid.Controls.Add(boxes[i], i, 1);
+        }
+        state.TxtViews = boxes[0];
+        state.TxtLikes = boxes[1];
+        state.TxtComments = boxes[2];
+        state.TxtShares = boxes[3];
+        row.Controls.Add(grid);
+
+        var bottom = new Panel { Dock = DockStyle.Top, Height = 44, BackColor = UITheme.White };
+        var btnSave = new RoundedButton
+        {
+            Text = "Lưu",
+            Style = RoundButtonStyle.Primary,
+            Size = new Size(110, 36),
+            Location = new Point(0, 4),
+            Enabled = metric.CanRecord && _metricBackend != null,
+        };
+        btnSave.Click += (_, _) => OnMetricSave(state);
+        bottom.Controls.Add(btnSave);
+        state.LblUpdated = new Label
+        {
+            Font = UITheme.FontLabel,
+            ForeColor = UITheme.Neutral400,
+            AutoSize = false,
+            Location = new Point(122, 4),
+            Size = new Size(600, 36),
+            TextAlign = ContentAlignment.MiddleLeft,
+            UseMnemonic = false,
+        };
+        RefreshMetricLabel(state);
+        bottom.Controls.Add(state.LblUpdated);
+        row.Controls.Add(bottom);
+        // Dock=Top xếp theo reverse z-order: control thêm trước nằm trên (header → grid → bottom).
+        return row;
+    }
+
+    private static void RefreshMetricLabel(MetricRowState state)
+    {
+        string text = ContentMetric.UpdatedLabel(state.Metric);
+        if (!state.Metric.CanRecord && state.Metric.HasData)
+            text += " Chỉ Owner/Manager được nhập sau Published.";
+        else if (!state.Metric.CanRecord)
+            text = "Chưa có số liệu. Chỉ Owner/Manager được nhập sau Published.";
+        state.LblUpdated.Text = text;
+    }
+
+    private void OnMetricSave(MetricRowState state)
+    {
+        if (_current == null || _metricBackend == null) return;
+        if (!ContentMetric.TryParseField(state.TxtViews.Text, out long? views))
+        { WarnMetric("Views phải là số nguyên ≥ 0 (để trống = giữ nguyên)."); return; }
+        if (!ContentMetric.TryParseField(state.TxtLikes.Text, out long? likes))
+        { WarnMetric("Likes phải là số nguyên ≥ 0 (để trống = giữ nguyên)."); return; }
+        if (!ContentMetric.TryParseField(state.TxtComments.Text, out long? comments))
+        { WarnMetric("Comments phải là số nguyên ≥ 0 (để trống = giữ nguyên)."); return; }
+        if (!ContentMetric.TryParseField(state.TxtShares.Text, out long? shares))
+        { WarnMetric("Shares phải là số nguyên ≥ 0 (để trống = giữ nguyên)."); return; }
+        if (views is null && likes is null && comments is null && shares is null)
+        { WarnMetric("Cần nhập ít nhất một chỉ số."); return; }
+        try
+        {
+            var saved = _metricBackend.RecordMetric(_current.ContentId, state.Metric.PlatformId, views, likes, comments, shares);
+            state.Metric = ContentMetric.FromResponse(saved);
+            state.TxtViews.Text = state.TxtLikes.Text = state.TxtComments.Text = state.TxtShares.Text = "";
+            RefreshMetricLabel(state);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "Không lưu được số liệu", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
+    private void WarnMetric(string message) =>
+        MessageBox.Show(this, message, "Số liệu chưa hợp lệ", MessageBoxButtons.OK, MessageBoxIcon.Warning);
 
     // ---------- Logic Workflow (GIỮ NGUYÊN) ----------
 
@@ -698,6 +1015,9 @@ public partial class ContentDetailPanel : UserControl
 
         var role = _memberRepo!.GetRole(_current.ProjectId, CurrentSession.CurrentUserId);
         var canReview = role == ProjectRole.Owner || role == ProjectRole.Manager;
+
+        if (TaskRules.CanAssign(role) && _current.Status is not (ContentStatus.Published or ContentStatus.Archived))
+            AddActionButton("Giao việc cho Creator", RoundButtonStyle.Secondary, OnAssignClicked);
 
         switch (_current.Status)
         {
@@ -751,6 +1071,37 @@ public partial class ContentDetailPanel : UserControl
             AutoSize = true,
             Padding = new Padding(0, 8, 0, 0),
         });
+    }
+
+    private void OnAssignClicked(object? sender, EventArgs e)
+    {
+        if (_current == null || _contentService == null) return;
+
+        // Sau khi giao, drawer được tải lại → thay đổi chưa lưu sẽ mất, nên hỏi trước.
+        if (HasUnsavedChanges && MessageBox.Show(this,
+                "Có thay đổi chưa lưu. Giao việc sẽ tải lại nội dung và bỏ các thay đổi này. Tiếp tục?",
+                "Giao việc", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+            return;
+
+        var creators = _contentService.GetAssignableMembers(_current.ProjectId, CurrentSession.CurrentUserId);
+        using var dlg = new AssignContentDialog(
+            $"CNT-{_current.ContentId:000}", _current.Title, creators,
+            _contentService.GetAssignments(_current.ContentId), _current.Deadline);
+        if (dlg.ShowDialog(FindForm()) != DialogResult.OK) return;
+
+        try
+        {
+            _contentService.AssignContent(_current.ContentId, dlg.Assignments, CurrentSession.CurrentUserId);
+            ContentChanged?.Invoke(this, EventArgs.Empty);
+        }
+        catch (ContentValidationException ex)
+        {
+            MessageBox.Show(this, ex.Message, "Dữ liệu không hợp lệ", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        catch (UnauthorizedWorkflowActionException ex)
+        {
+            MessageBox.Show(this, ex.Message, "Không đủ quyền", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
     }
 
     private void OnMoveNextClicked(object? sender, EventArgs e)
@@ -811,7 +1162,7 @@ public partial class ContentDetailPanel : UserControl
     private sealed class HeaderPanel : Panel
     {
         private string _code = "";
-        private string _platform = "";
+        private IReadOnlyList<string> _platforms = Array.Empty<string>();
         private string _sprint = "";
         private bool _closeHover;
         private Rectangle _closeRect;
@@ -824,9 +1175,9 @@ public partial class ContentDetailPanel : UserControl
             BackColor = UITheme.White;
         }
 
-        public void SetData(string code, string platform, string sprint)
+        public void SetData(string code, IReadOnlyList<string> platforms, string sprint)
         {
-            _code = code; _platform = platform; _sprint = sprint;
+            _code = code; _platforms = platforms; _sprint = sprint;
             Invalidate();
         }
 
@@ -869,13 +1220,22 @@ public partial class ContentDetailPanel : UserControl
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
             x = codeRect.Right + 10;
 
-            // Pill nền tảng
-            if (!string.IsNullOrEmpty(_platform))
+            // Pill nền tảng đầu tiên + "+N" nếu Content có nhiều nền tảng (danh sách đầy đủ nằm ở ô Platform)
+            if (_platforms.Count > 0)
             {
-                int pw = UIIcons.MeasurePlatformPill(g, _platform, 34);
+                int pw = UIIcons.MeasurePlatformPill(g, _platforms[0], 34);
                 var pr = new Rectangle(x, cy - 17, pw, 34);
-                UIIcons.DrawPlatformPill(g, _platform, pr);
+                UIIcons.DrawPlatformPill(g, _platforms[0], pr);
                 x = pr.Right + 10;
+
+                if (_platforms.Count > 1)
+                {
+                    string more = $"+{_platforms.Count - 1}";
+                    var moreSize = TextRenderer.MeasureText(g, more, UITheme.FontBodyBold, new Size(int.MaxValue, 30), TextFormatFlags.NoPadding);
+                    TextRenderer.DrawText(g, more, UITheme.FontBodyBold, new Rectangle(x, cy - 15, moreSize.Width, 30), UITheme.Neutral600,
+                        TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+                    x += moreSize.Width + 10;
+                }
             }
 
             // Chip sprint

@@ -5,9 +5,16 @@
 
 # dotenv files
 .env
+deploy/docker/.env.*
+!deploy/docker/.env.example
+!deploy/docker/.env.server.example
 
 # Local application settings may contain development secrets
 appsettings.Local.json
+
+# Database backups must be stored outside the repository; ignore accidental copies.
+*.dump
+deploy/backups/
 
 # User-specific files
 *.rsuser

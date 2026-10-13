@@ -18,26 +18,72 @@ public class InMemoryContentDetailsRepository : IContentDetailsRepository
             UpdatedAt = DateTime.Now,
         };
         Apply(record, draft);
+        record.AssignedByUserId = createdByUserId; // người tạo = người giao việc (hiện ở cột "Giao bởi" của My Tasks)
         InMemoryDataStore.Contents.Add(record);
+        if (record.AssigneeUserId is long assignee)
+        {
+            // Content tạo kèm người phụ trách → sinh assignment đầu tiên (Assigned, 0%).
+            InMemoryDataStore.Assignments.Add(new InMemoryAssignmentRecord
+            {
+                Id = InMemoryDataStore.NextAssignmentId(),
+                ContentId = newId,
+                AssigneeUserId = assignee,
+                AssignedByUserId = createdByUserId,
+                Status = AssignmentStatus.Assigned,
+                ProgressPercent = 0,
+                Deadline = record.Deadline,
+            });
+        }
         return newId;
     }
 
     public void Update(long contentId, ContentDraft draft)
     {
         var record = InMemoryDataStore.Contents.First(c => c.Id == contentId);
+        long? assigneeBefore = record.AssigneeUserId;
         Apply(record, draft);
+        // Đổi người phụ trách chỉ đi qua ContentService.AssignContent (kiểm tra quyền + Project) nên Update giữ nguyên assignee.
+        record.AssigneeUserId = assigneeBefore;
         record.UpdatedAt = DateTime.Now;
+    }
+
+    public Content? GetDetail(long contentId)
+    {
+        var r = InMemoryDataStore.Contents.FirstOrDefault(c => c.Id == contentId);
+        if (r == null)
+            return null;
+
+        return new Content
+        {
+            ContentId = r.Id,
+            ProjectId = r.ProjectId,
+            SourceIdeaId = r.IdeaId,
+            Title = r.Title,
+            Description = r.Description,
+            Script = string.IsNullOrEmpty(r.Script) ? null : r.Script,
+            ContentType = string.IsNullOrEmpty(r.ContentType) ? null : r.ContentType,
+            Priority = r.Priority,
+            Status = r.Status,
+            Deadline = r.Deadline,
+            PlannedPublishAt = r.PlannedPublishAt,
+            CreatedBy = r.CreatedByUserId,
+            CreatedAt = r.UpdatedAt,
+            UpdatedAt = r.UpdatedAt,
+        };
     }
 
     private static void Apply(InMemoryContentRecord r, ContentDraft d)
     {
         r.Title = d.Title;
         r.Description = d.Description;
+        r.Script = d.Script;
+        r.ContentType = d.ContentType;
+        r.PlannedPublishAt = d.PlannedPublishAt;
         r.Priority = d.Priority;
-        r.Platforms = new List<string>(d.Platforms);
         r.Sprint = d.Sprint;
         r.Deadline = d.Deadline;
         r.EstimatedDuration = d.EstimatedDuration;
         r.AssigneeUserId = d.AssigneeUserId;
+        r.Platforms = d.Platforms.ToList(); // nền tảng đã được ContentService chuẩn hóa tên
     }
 }

@@ -1,4 +1,5 @@
 ﻿using CreatorFlow.Models.Enums;
+using CreatorFlow.Services;
 namespace CreatorFlow.Models;
 
 /// <summary>
@@ -21,17 +22,27 @@ public class ContentBoardCard
     public string? AssigneeName { get; set; }
     public long? AssigneeUserId { get; set; }
 
+    /// <summary>Toàn bộ Creator được giao (assignment chưa Cancelled). AssigneeName/AssigneeUserId = người đầu tiên.</summary>
+    public List<CardAssignee> Assignees { get; set; } = new();
+
+    public int TeamTotal => Assignees.Count;
+    public int TeamDone => Assignees.Count(a => a.Status == AssignmentStatus.Completed);
+    public bool IsTeamCompleted => TaskRules.IsContentCompleted(Assignees.Select(a => a.Status));
+
     /// <summary>Sprint chứa nội dung này (VD "Sprint 25").</summary>
     public string Sprint { get; set; } = "Sprint 25";
 
     /// <summary>Thời lượng dự kiến dạng chữ tự do (VD "24 min", "60 sec").</summary>
     public string EstimatedDuration { get; set; } = string.Empty;
     public DateTime? Deadline { get; set; }
+
+    /// <summary>Mốc xuất bản dự kiến, dùng cho Calendar (Board không dùng).</summary>
+    public DateTime? PlannedPublishAt { get; set; }
     public List<string> Tags { get; set; } = new();
 
     /// <summary>Có Review đang PENDING hay không (hiện icon Review trên card).</summary>
     public bool HasPendingReview { get; set; }
 
     public bool IsOverdue =>
-        Deadline.HasValue && Deadline.Value.Date < DateTime.Today && Status != ContentStatus.Published;
+        TaskRules.IsOverdue(Deadline, Status == ContentStatus.Published, DateTime.Today);
 }

@@ -23,21 +23,18 @@ public class RoundedButton : Button
     private bool _showPlusIcon;
 
     /// <summary>Vẽ dấu "+" bên trái chữ (nút "New Content", "Add Ticket").</summary>
-    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     public bool ShowPlusIcon
     {
         get => _showPlusIcon;
         set { _showPlusIcon = value; Invalidate(); }
     }
 
-    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     public RoundButtonStyle Style
     {
         get => _style;
         set { _style = value; Invalidate(); }
     }
 
-    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     public int BorderRadius
     {
         get => _borderRadius;

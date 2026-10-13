@@ -14,16 +14,12 @@ public class RoundedPanel : Panel
     private int _radius = 8;
     private bool _showChevron;
 
-    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     public Color FillColor { get => _fillColor; set { _fillColor = value; Invalidate(); } }
 
-    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     public Color BorderColor { get => _borderColor; set { _borderColor = value; Invalidate(); } }
 
-    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     public int Radius { get => _radius; set { _radius = value; Invalidate(); } }
 
-    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     public bool ShowChevron { get => _showChevron; set { _showChevron = value; Invalidate(); } }
 
     public RoundedPanel()
