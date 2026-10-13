@@ -11,7 +11,7 @@ namespace CreatorFlow.Services.Backends;
 /// </summary>
 internal static class ApiTaskCall
 {
-    public static T Run<T>(Func<Task<T>> call)
+    public static T Run<T>(Func<Task<T>> call, UserSession? session = null)
     {
         try
         {
@@ -19,6 +19,7 @@ internal static class ApiTaskCall
         }
         catch (ApiBusinessException ex)
         {
+            if (ex.StatusCode == HttpStatusCode.Unauthorized) session?.Clear();
             throw Translate(ex);
         }
         catch (ApiException ex)

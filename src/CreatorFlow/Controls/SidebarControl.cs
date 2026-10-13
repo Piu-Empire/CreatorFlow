@@ -1,5 +1,6 @@
 using System.Drawing.Drawing2D;
 using CreatorFlow.Theme;
+using CreatorFlow.Helpers;
 
 namespace CreatorFlow.Controls;
 
@@ -10,24 +11,24 @@ public class SidebarControl : UserControl
 {
     private const int ItemH = 42;
     private const int ItemStep = 44;
+    private int _navScrollOffset;
 
     public event EventHandler? ReviewQueueRequested;
     public event EventHandler? BoardRequested;
     public event EventHandler? MyTasksRequested;
     public event EventHandler? IdeaBankRequested;
-    public event EventHandler? ProfileRequested;
     public event EventHandler? AdminWorkspaceRequested;
     public event EventHandler? AdminReportsRequested;
     public event EventHandler? CalendarRequested;
     public event EventHandler? ProjectSettingsRequested;
     public event EventHandler? InvitationsRequested;
 
-    private readonly Button _accountButton;
-    private string _accountName = string.Empty;
-    private string _accountEmail = string.Empty;
-    private Image? _accountAvatar;
-    private bool _accountHovered;
-    private bool _hasAuthenticatedAccount;
+    public event EventHandler? ProjectSelectionRequested;
+    private readonly Button _projectButton;
+    public bool ProjectManagementEnabled { get; set; }
+    public Point ProjectMenuScreenLocation => _projectButton.PointToScreen(new Point(0, _projectButton.Height + 4));
+    public int ProjectMenuAnchorWidth => _projectButton.Width;
+    public void ShowProjectMenu(ToolStripDropDown menu) => menu.Show(_projectButton, new Point(0, _projectButton.Height + 4));
 
     public bool ProjectActionsEnabled { get; set; }
     public int BacklogCount = 0;
@@ -70,100 +71,43 @@ public class SidebarControl : UserControl
         BackColor = UITheme.Black;
         DoubleBuffered = true;
         BuildNavItems();
-        _accountButton = new Button
+        _projectButton = new Button { Text = "Chưa chọn dự án", Bounds = new Rectangle(14, 68, Width - 28, 60),
+            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right, FlatStyle = FlatStyle.Flat,
+            BackColor = UITheme.Neutral900, ForeColor = UITheme.White, AutoEllipsis = true,
+            AccessibleName = "Chọn Project", TabIndex = 0, Font = UITheme.FontBodyBold, Cursor = Cursors.Hand };
+        UiTheme.StyleButton(_projectButton);
+        _projectButton.BackColor = UITheme.Neutral900;
+        _projectButton.FlatAppearance.MouseOverBackColor = UITheme.Neutral800;
+        _projectButton.FlatAppearance.MouseDownBackColor = UITheme.Neutral700;
+        _projectButton.Paint += (_, e) =>
         {
-            Name = "authenticatedAccount",
-            Text = string.Empty,
-            Bounds = new Rectangle(14, 68, Width - 28, 60),
-            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
-            FlatStyle = FlatStyle.Flat,
-            BackColor = UITheme.Black,
-            UseVisualStyleBackColor = false,
-            Cursor = Cursors.Hand,
-            Visible = false,
-            TabIndex = 0,
-            AccessibleRole = AccessibleRole.PushButton
+            e.Graphics.Clear(_projectButton.ClientRectangle.Contains(_projectButton.PointToClient(MousePosition)) ? UITheme.Neutral800 : UITheme.Neutral900);
+            using var path = UITheme.CreateRoundedRectanglePath(new Rectangle(0, 0, _projectButton.Width - 1, _projectButton.Height - 1), 8);
+            using var border = new Pen(UITheme.Neutral700);
+            e.Graphics.DrawPath(border, path);
+            UIIcons.Summary(e.Graphics, new Rectangle(12, 20, 20, 20), UITheme.White);
+            TextRenderer.DrawText(e.Graphics, _projectButton.Text, _projectButton.Font, new Rectangle(44, 0, _projectButton.Width - 78, 60), UITheme.White,
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+            UIIcons.Chevron(e.Graphics, new Rectangle(_projectButton.Width - 26, 24, 12, 12), ChevronDir.Down, UITheme.SidebarText);
+            if (_projectButton.Focused && ShowFocusCues) ControlPaint.DrawFocusRectangle(e.Graphics, new Rectangle(5, 5, _projectButton.Width - 10, _projectButton.Height - 10), UITheme.White, UITheme.Neutral900);
         };
-        _accountButton.FlatAppearance.BorderSize = 0;
-        _accountButton.Paint += PaintAccount;
-        _accountButton.MouseEnter += (_, _) => { _accountHovered = true; _accountButton.Invalidate(); };
-        _accountButton.MouseLeave += (_, _) => { _accountHovered = false; _accountButton.Invalidate(); };
-        _accountButton.GotFocus += (_, _) => _accountButton.Invalidate();
-        _accountButton.LostFocus += (_, _) => _accountButton.Invalidate();
-        _accountButton.Click += (_, _) => ProfileRequested?.Invoke(this, EventArgs.Empty);
-        Controls.Add(_accountButton);
+        _projectButton.Click += (_, _) => ProjectSelectionRequested?.Invoke(this, EventArgs.Empty);
+        Controls.Add(_projectButton);
     }
 
-    // The shell transfers ownership of its decoded image to this control.
-    public void SetAuthenticatedAccount(string name, string email, Image? avatar)
+    public void SetProjectName(string? name)
     {
-        _accountName = name;
-        _accountEmail = email;
-        _hasAuthenticatedAccount = true;
-        Image? previous = _accountAvatar;
-        _accountAvatar = avatar;
-        if (!ReferenceEquals(previous, avatar)) previous?.Dispose();
-        _accountButton.AccessibleName = $"Mở hồ sơ cá nhân của {name}";
-        _accountButton.Visible = true;
-        _accountButton.Invalidate();
-        Invalidate();
-    }
-
-    private void PaintAccount(object? sender, PaintEventArgs e)
-    {
-        var g = e.Graphics;
-        g.SmoothingMode = SmoothingMode.AntiAlias;
-        g.Clear(UITheme.Black);
-        var bounds = new Rectangle(0, 0, _accountButton.Width - 1, _accountButton.Height - 1);
-        using var path = UITheme.CreateRoundedRectanglePath(bounds, 10);
-        using var fill = new SolidBrush(_accountHovered ? UITheme.Neutral800 : UITheme.Neutral900);
-        using var border = new Pen(UITheme.Neutral800);
-        g.FillPath(fill, path);
-        g.DrawPath(border, path);
-        var avatarBounds = new Rectangle(12, 12, 36, 36);
-        if (_accountAvatar is null)
-        {
-            string[] words = _accountName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            string initials = words.Length == 0 ? "?" :
-                (System.Globalization.StringInfo.GetNextTextElement(words[0]) +
-                 (words.Length > 1 ? System.Globalization.StringInfo.GetNextTextElement(words[^1]) : string.Empty)).ToUpperInvariant();
-            UITheme.DrawAvatar(g, initials, avatarBounds, UITheme.White, UITheme.Black, UITheme.FontLabelBold);
-        }
-        else
-        {
-            var state = g.Save();
-            using var circle = new GraphicsPath();
-            circle.AddEllipse(avatarBounds);
-            g.SetClip(circle);
-            g.DrawImage(_accountAvatar, avatarBounds);
-            g.Restore(state);
-        }
-        const TextFormatFlags flags = TextFormatFlags.Left | TextFormatFlags.VerticalCenter |
-            TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis;
-        int textWidth = Math.Max(0, bounds.Width - 72);
-        TextRenderer.DrawText(g, _accountName, UITheme.FontBodyBold, new Rectangle(60, 10, textWidth, 20), UITheme.White, flags);
-        TextRenderer.DrawText(g, _accountEmail, UITheme.FontLabel, new Rectangle(60, 30, textWidth, 18), UITheme.SidebarTextMuted, flags);
-        if (_accountButton.Focused) ControlPaint.DrawFocusRectangle(g, Rectangle.Inflate(bounds, -4, -4), UITheme.White, UITheme.Neutral900);
-    }
-
-    protected override void Dispose(bool disposing)
-    {
-        if (disposing)
-        {
-            _accountAvatar?.Dispose();
-            _accountAvatar = null;
-            _accountName = _accountEmail = string.Empty;
-            _hasAuthenticatedAccount = false;
-        }
-        base.Dispose(disposing);
+        _projectButton.Text = string.IsNullOrWhiteSpace(name) ? "Chưa chọn dự án" : name;
+        _projectButton.AccessibleName = "Chọn Project: " + (name ?? "Chưa chọn");
     }
 
     private void BuildNavItems()
     {
+        _navScrollOffset = 0;
         _items.Clear();
         _groups.Clear();
 
-        int y = 140;
+        int y = 172;
         _groups.Add(("PROJECT", y)); y += 26;
         _items.Add(new NavItem { Title = "Summary", Icon = NavIcon.Summary, Y = y }); y += ItemStep;
         _items.Add(new NavItem { Title = "Board", Icon = NavIcon.Board, Y = y, IsActive = true, AlwaysEnabled = true, Action = () => BoardRequested?.Invoke(this, EventArgs.Empty) }); y += ItemStep;
@@ -198,8 +142,19 @@ public class SidebarControl : UserControl
     private Rectangle GetItemRect(NavItem item)
     {
         int y = item.AnchorBottom ? Height - item.Y : item.Y;
-        return new Rectangle(12, y, Width - 24, ItemH);
+        return new Rectangle(12, item.AnchorBottom ? y : y - _navScrollOffset, Width - 24, ItemH);
     }
+
+    public void ScrollNavigation(int delta)
+    {
+        int bottom = _items.Where(item => !item.AnchorBottom).Select(item => item.Y + ItemH).DefaultIfEmpty(0).Max();
+        int max = Math.Max(0, bottom - Math.Max(172, Height - 152));
+        _navScrollOffset = Math.Clamp(_navScrollOffset - delta / 120 * ItemStep, 0, max);
+        Invalidate();
+    }
+
+    private bool IsNavigationVisible(NavItem item) => item.AnchorBottom ||
+        GetItemRect(item).Top >= 172 && GetItemRect(item).Bottom <= Height - 152;
 
     protected override void OnMouseMove(MouseEventArgs e)
     {
@@ -208,7 +163,7 @@ public class SidebarControl : UserControl
         bool anyHover = false;
         foreach (var item in _items)
         {
-            bool hovered = IsItemEnabled(item) && GetItemRect(item).Contains(e.Location);
+            bool hovered = IsNavigationVisible(item) && IsItemEnabled(item) && GetItemRect(item).Contains(e.Location);
             anyHover |= hovered && item.Action != null;
             if (item.IsHovered != hovered) { item.IsHovered = hovered; needsRepaint = true; }
         }
@@ -229,7 +184,7 @@ public class SidebarControl : UserControl
         base.OnMouseClick(e);
         foreach (var item in _items)
         {
-            if (IsItemEnabled(item) && GetItemRect(item).Contains(e.Location))
+            if (IsNavigationVisible(item) && IsItemEnabled(item) && GetItemRect(item).Contains(e.Location))
             { item.Action?.Invoke(); break; }
         }
     }
@@ -248,32 +203,10 @@ public class SidebarControl : UserControl
         using (var brandFont = new Font("Segoe UI", 13F, FontStyle.Bold))
             TextRenderer.DrawText(g, "CreatorFlow", brandFont, new Rectangle(58, 18, Width - 70, 32), UITheme.White, tf);
 
-        // 2. Project selector
-        if (!_hasAuthenticatedAccount)
-        {
-            var card = new Rectangle(14, 68, Width - 28, 60);
-            using (var cBrush = new SolidBrush(ColorTranslator.FromHtml("#171717")))
-            using (var cPen = new Pen(ColorTranslator.FromHtml("#262626"), 1f))
-            using (var cPath = UITheme.CreateRoundedRectanglePath(new Rectangle(card.X, card.Y, card.Width - 1, card.Height - 1), 10))
-            {
-                g.FillPath(cBrush, cPath);
-                g.DrawPath(cPen, cPath);
-            }
-
-            var av = new Rectangle(card.X + 12, card.Y + 12, 36, 36);
-            using (var avBrush = new SolidBrush(UITheme.White))
-            using (var avPath = UITheme.CreateRoundedRectanglePath(av, 8))
-                g.FillPath(avBrush, avPath);
-            TextRenderer.DrawText(g, "—", UITheme.FontLabelBold, av, UITheme.Black,
-                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
-
-            TextRenderer.DrawText(g, "Chưa chọn dự án", UITheme.FontBodyBold, new Rectangle(av.Right + 10, card.Y + 11, card.Width - 70, 20), UITheme.White, tf);
-            TextRenderer.DrawText(g, "Chưa có ngữ cảnh dự án", UITheme.FontLabel, new Rectangle(av.Right + 10, card.Y + 31, card.Width - 70, 18), UITheme.SidebarTextMuted, tf);
-        }
-
         // 3. Nhãn nhóm
         foreach (var (text, y) in _groups)
-            TextRenderer.DrawText(g, text, UITheme.FontMicro, new Rectangle(22, y, Width - 44, 20), UITheme.SidebarTextMuted, tf);
+            if (y - _navScrollOffset >= 172 && y - _navScrollOffset + 20 <= Height - 152)
+                TextRenderer.DrawText(g, text, UITheme.FontMicro, new Rectangle(22, y - _navScrollOffset, Width - 44, 20), UITheme.SidebarTextMuted, tf);
 
         // 4. Đường kẻ trên vùng đáy
         int dividerY = Height - 100 - 8;
@@ -283,6 +216,7 @@ public class SidebarControl : UserControl
         // 5. Nav items
         foreach (var item in _items)
         {
+            if (!IsNavigationVisible(item)) continue;
             var rect = GetItemRect(item);
 
             if (item.IsActive || item.IsHovered)
@@ -356,7 +290,7 @@ public class SidebarControl : UserControl
     }
 
     /// <summary>Mục AlwaysEnabled thao tác được cả khi chưa có project, các mục khác cần project.</summary>
-    private bool IsItemEnabled(NavItem item) => ProjectActionsEnabled || item.AlwaysEnabled;
+    private bool IsItemEnabled(NavItem item) => ProjectActionsEnabled || item.AlwaysEnabled || ProjectManagementEnabled && item.Icon == NavIcon.Gear;
 
     /// <summary>Đánh dấu mục đang mở (BoardForm gọi khi chuyển màn hình).</summary>
     public void SetActiveMenu(string title)

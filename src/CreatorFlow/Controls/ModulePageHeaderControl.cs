@@ -34,6 +34,14 @@ public class ModulePageHeaderControl : UserControl
     public string SearchText => _txtSearch.Text.Trim();
     public string SelectedPlatform => _segmentedFilter.SelectedValue;
 
+    public void SetContentCreationEnabled(bool enabled) => _btnAddTicket.Enabled = enabled;
+
+    public void ResetFilters()
+    {
+        _txtSearch.Clear();
+        _segmentedFilter.SelectedIndex = 0;
+    }
+
     public ModulePageHeaderControl()
     {
         SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
@@ -54,7 +62,7 @@ public class ModulePageHeaderControl : UserControl
         _segmentedFilter = new SegmentedControl { Height = 34 };
         _segmentedFilter.SelectedIndexChanged += (_, _) => PlatformFilterChanged?.Invoke(this, _segmentedFilter.SelectedValue);
 
-        _btnAddTicket = new RoundedButton
+        _btnAddTicket = new ProjectActionButton
         {
             Text = "Add Ticket",
             Style = RoundButtonStyle.Primary,

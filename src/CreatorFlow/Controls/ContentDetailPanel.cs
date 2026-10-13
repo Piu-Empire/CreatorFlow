@@ -1,4 +1,4 @@
-﻿using CreatorFlow.Models.Enums;
+using CreatorFlow.Models.Enums;
 using System.Drawing.Drawing2D;
 using CreatorFlow.Forms.Board;
 using CreatorFlow.Models;
@@ -593,7 +593,7 @@ public partial class ContentDetailPanel : UserControl
 
     // ---------- API công khai ----------
 
-    public void Initialize(WorkflowService workflowService, IActivityRepository activityRepo, IProjectMemberRepository memberRepo, ContentService contentService, ScriptService scriptService, IMetricBackend? metricBackend = null)
+    public void Initialize(WorkflowService workflowService, IActivityRepository activityRepo, IProjectMemberRepository memberRepo, ContentService contentService, ScriptService scriptService, IMetricBackend? metricBackend = null, bool loadLocalPlatforms = true)
     {
         _scriptEditor.Initialize(scriptService);
         _workflowService = workflowService;
@@ -603,6 +603,7 @@ public partial class ContentDetailPanel : UserControl
         _metricBackend = metricBackend;
 
         _mnuPlatforms.Items.Clear();
+        if (!loadLocalPlatforms) return;
         foreach (string name in contentService.GetAvailablePlatforms())
         {
             var item = new ToolStripMenuItem(name) { CheckOnClick = true };
@@ -762,6 +763,17 @@ public partial class ContentDetailPanel : UserControl
 
     /// <summary>true nếu có thay đổi chưa lưu — BoardForm dùng để hỏi trước khi reload/đóng.</summary>
     public bool HasUnsavedChanges => _isDirty || _scriptEditor.IsDirty;
+
+    public void ResetProject()
+    {
+        _current = null;
+        _isDirty = false;
+        _detailLoaded = false;
+        _scriptEditor.Reset();
+        _metricsLoadedFor = null;
+        _metricsHost.Controls.Clear();
+        ShowEmptyState();
+    }
 
     private void SaveChanges()
     {
