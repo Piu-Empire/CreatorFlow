@@ -1,6 +1,7 @@
 ﻿using CreatorFlow.Models;
 using CreatorFlow.Models.Enums;
 using CreatorFlow.Repositories.Interfaces;
+using CreatorFlow.Services.Backends;
 using CreatorFlow.Services.Exceptions;
 
 namespace CreatorFlow.Services;
@@ -18,6 +19,7 @@ public class MyTaskService
     private readonly IProjectMemberRepository _memberRepo;
     private readonly IUnitOfWork _unitOfWork;
     private readonly Func<DateTime> _today;
+    private IMyTaskBackend? _backend;
 
     /// <param name="today">Chỉ để unit test cố định "hôm nay"; mặc định là DateTime.Today.</param>
     public MyTaskService(
@@ -32,6 +34,9 @@ public class MyTaskService
         _today = today ?? (() => DateTime.Today);
     }
 
+    /// <summary>Bật/tắt API backend cho My Tasks / progress / deadline (SCRUM-39 Client-Server).</summary>
+    public void UseApiBackend(IMyTaskBackend backend) => _backend = backend;
+
     // ==========================================================
     // Đọc
     // ==========================================================
@@ -39,6 +44,10 @@ public class MyTaskService
     /// <summary>Toàn bộ task của User trong Project (chưa lọc). Không phải thành viên → danh sách rỗng.</summary>
     public List<MyTaskItem> GetMyTasks(long projectId, long userId)
     {
+        // Client-Server: Backend tự lấy user từ JWT, trả về task của đúng User/Project.
+        if (_backend is not null)
+            return _backend.GetMyTasks(projectId);
+
         if (_memberRepo.GetRole(projectId, userId) is null)
             return new List<MyTaskItem>();
 
@@ -57,8 +66,13 @@ public class MyTaskService
     }
 
     /// <summary>true nếu User có quyền đổi deadline trong Project (Owner/Manager).</summary>
-    public bool CanChangeDeadline(long projectId, long userId) =>
-        TaskRules.CanChangeDeadline(_memberRepo.GetRole(projectId, userId));
+    public bool CanChangeDeadline(long projectId, long userId)
+    {
+        if (_backend is not null)
+            return _backend.CanChangeDeadline(projectId);
+
+        return TaskRules.CanChangeDeadline(_memberRepo.GetRole(projectId, userId));
+    }
 
     public static List<MyTaskItem> ApplyFilter(IEnumerable<MyTaskItem> tasks, MyTaskFilter filter, DateTime today)
     {
@@ -100,6 +114,10 @@ public class MyTaskService
     /// </summary>
     public MyTaskItem UpdateProgress(long contentId, int percent, long userId)
     {
+        // Client-Server: Backend tự lấy user từ JWT, validate progress + quyền.
+        if (_backend is not null)
+            return _backend.UpdateProgress(contentId, percent);
+
         TaskRules.ValidateProgress(percent);
 
         MyTaskItem task = _taskRepo.GetAssignment(contentId, userId)
@@ -136,6 +154,10 @@ public class MyTaskService
     /// </summary>
     public MyTaskItem ChangeDeadline(long contentId, long assigneeUserId, DateTime? newDeadline, long actorUserId)
     {
+        // Client-Server: Backend tự lấy user từ JWT, kiểm tra quyền Owner/Manager.
+        if (_backend is not null)
+            return _backend.ChangeDeadline(contentId, assigneeUserId, newDeadline);
+
         MyTaskItem task = _taskRepo.GetAssignment(contentId, assigneeUserId)
             ?? throw new InvalidOperationException($"Không tìm thấy công việc của User #{assigneeUserId} trên Content #{contentId}.");
         ProjectRole role = EnsureIsProjectMember(task.ProjectId, actorUserId);

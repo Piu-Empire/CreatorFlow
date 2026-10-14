@@ -44,53 +44,64 @@ partial class ReviewQueueForm
         // 
         // panelTop
         // 
-        panelTop.BackColor = UITheme.White;
+        panelTop.BackColor = Color.FromArgb(255, 255, 255);
         panelTop.Controls.Add(btnOpenReview);
         panelTop.Controls.Add(btnRefresh);
         panelTop.Controls.Add(lblHeader);
         panelTop.Dock = DockStyle.Top;
         panelTop.Location = new Point(0, 0);
-        panelTop.Margin = new Padding(3, 4, 3, 4);
+        panelTop.Margin = new Padding(4, 5, 4, 5);
         panelTop.Name = "panelTop";
-        panelTop.Padding = new Padding(20, 14, 20, 14);
-        panelTop.Size = new Size(869, 64);
+        panelTop.Padding = new Padding(25, 18, 25, 18);
+        panelTop.Size = new Size(1086, 80);
         panelTop.TabIndex = 0;
         panelTop.Paint += panelTop_Paint;
         // 
         // btnOpenReview
         // 
+        btnOpenReview.BorderRadius = 8;
         btnOpenReview.Dock = DockStyle.Right;
         btnOpenReview.Enabled = false;
-        btnOpenReview.Location = new Point(590, 14);
-        btnOpenReview.Margin = new Padding(3, 4, 3, 4);
+        btnOpenReview.FlatStyle = FlatStyle.Flat;
+        btnOpenReview.Font = new Font("Segoe UI", 9.5F, FontStyle.Bold);
+        btnOpenReview.Location = new Point(747, 18);
+        btnOpenReview.Margin = new Padding(4, 5, 4, 5);
         btnOpenReview.Name = "btnOpenReview";
-        btnOpenReview.Size = new Size(150, 36);
+        btnOpenReview.Padding = new Padding(15, 8, 15, 8);
+        btnOpenReview.ShowPlusIcon = false;
+        btnOpenReview.Size = new Size(188, 44);
+        btnOpenReview.Style = RoundButtonStyle.Primary;
         btnOpenReview.TabIndex = 2;
         btnOpenReview.Text = "Kiểm duyệt";
-        btnOpenReview.Style = RoundButtonStyle.Primary;
         btnOpenReview.Click += btnOpenReview_Click;
         // 
         // btnRefresh
         // 
+        btnRefresh.BorderRadius = 8;
         btnRefresh.Dock = DockStyle.Right;
-        btnRefresh.Location = new Point(748, 14);
-        btnRefresh.Margin = new Padding(8, 4, 3, 4);
+        btnRefresh.FlatStyle = FlatStyle.Flat;
+        btnRefresh.Font = new Font("Segoe UI", 9.5F, FontStyle.Bold);
+        btnRefresh.Location = new Point(935, 18);
+        btnRefresh.Margin = new Padding(10, 5, 4, 5);
         btnRefresh.Name = "btnRefresh";
-        btnRefresh.Size = new Size(101, 36);
+        btnRefresh.Padding = new Padding(15, 8, 15, 8);
+        btnRefresh.ShowPlusIcon = false;
+        btnRefresh.Size = new Size(126, 44);
+        btnRefresh.Style = RoundButtonStyle.Secondary;
         btnRefresh.TabIndex = 1;
         btnRefresh.Text = "⟳ Làm mới";
-        btnRefresh.Style = RoundButtonStyle.Secondary;
         btnRefresh.Click += btnRefresh_Click;
         // 
         // lblHeader
         // 
         lblHeader.AutoSize = true;
         lblHeader.Dock = DockStyle.Left;
-        lblHeader.Font = UITheme.FontH2;
-        lblHeader.ForeColor = UITheme.Ink;
-        lblHeader.Location = new Point(20, 14);
+        lblHeader.Font = new Font("Segoe UI", 13.5F, FontStyle.Bold);
+        lblHeader.ForeColor = Color.FromArgb(21, 28, 39);
+        lblHeader.Location = new Point(25, 18);
+        lblHeader.Margin = new Padding(4, 0, 4, 0);
         lblHeader.Name = "lblHeader";
-        lblHeader.Size = new Size(147, 28);
+        lblHeader.Size = new Size(421, 31);
         lblHeader.TabIndex = 0;
         lblHeader.Text = "Review Queue — Danh sách chờ duyệt";
         // 
@@ -99,14 +110,14 @@ partial class ReviewQueueForm
         listViewQueue.BorderStyle = BorderStyle.None;
         listViewQueue.Columns.AddRange(new ColumnHeader[] { columnCode, columnTitle, columnSubmittedBy, columnSubmittedAt, columnReviewNo });
         listViewQueue.Dock = DockStyle.Fill;
-        listViewQueue.Font = UITheme.FontBody;
+        listViewQueue.Font = new Font("Segoe UI", 9.5F);
         listViewQueue.FullRowSelect = true;
         listViewQueue.GridLines = true;
-        listViewQueue.Location = new Point(0, 64);
-        listViewQueue.Margin = new Padding(3, 4, 3, 4);
+        listViewQueue.Location = new Point(0, 80);
+        listViewQueue.Margin = new Padding(4, 5, 4, 5);
         listViewQueue.MultiSelect = false;
         listViewQueue.Name = "listViewQueue";
-        listViewQueue.Size = new Size(869, 523);
+        listViewQueue.Size = new Size(1086, 654);
         listViewQueue.TabIndex = 1;
         listViewQueue.UseCompatibleStateImageBehavior = false;
         listViewQueue.View = View.Details;
@@ -140,14 +151,14 @@ partial class ReviewQueueForm
         // 
         // ReviewQueueForm
         // 
-        AutoScaleDimensions = new SizeF(96F, 96F);
+        AutoScaleDimensions = new SizeF(120F, 120F);
         AutoScaleMode = AutoScaleMode.Dpi;
-        BackColor = UITheme.White;
-        ClientSize = new Size(869, 587);
+        BackColor = Color.FromArgb(255, 255, 255);
+        ClientSize = new Size(1086, 734);
         Controls.Add(listViewQueue);
         Controls.Add(panelTop);
-        Margin = new Padding(3, 4, 3, 4);
-        MinimumSize = new Size(720, 480);
+        Margin = new Padding(4, 5, 4, 5);
+        MinimumSize = new Size(896, 588);
         Name = "ReviewQueueForm";
         StartPosition = FormStartPosition.CenterParent;
         Text = "Review Queue — CreatorFlow";

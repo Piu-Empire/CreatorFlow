@@ -374,7 +374,9 @@ public partial class BoardForm : Form, IMessageFilter
             switch (card.Status)
             {
                 case ContentStatus.Editing:
-                    _workflowService.SubmitForReview(card.ContentId, CurrentSession.CurrentUserId);
+                    // Mở dialog xác nhận; Hủy hoặc lỗi (đã báo bằng MessageBox) → không reload
+                    if (!SubmitReviewDialog.TrySubmit(this, _workflowService, card))
+                        return;
                     break;
 
                 case ContentStatus.Review:

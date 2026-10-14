@@ -1,6 +1,7 @@
 ﻿using CreatorFlow.Models.Enums;
 using CreatorFlow.Models;
 using CreatorFlow.Repositories.Interfaces;
+using CreatorFlow.Services.Backends;
 using CreatorFlow.Services.Exceptions;
 
 namespace CreatorFlow.Services;
@@ -38,6 +39,7 @@ public class ContentService
     private readonly IPlatformRepository _platformRepo;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMyTaskRepository _taskRepo;
+    private IAssignmentBackend? _assignmentBackend;
 
     public ContentService(
         IContentRepository contentRepo,
@@ -56,6 +58,9 @@ public class ContentService
         _unitOfWork = unitOfWork;
         _taskRepo = taskRepo;
     }
+
+    /// <summary>Bật/tắt API backend cho giao việc (SCRUM-39 Client-Server).</summary>
+    public void UseApiBackend(IAssignmentBackend backend) => _assignmentBackend = backend;
 
 
     /// <summary>
@@ -77,7 +82,10 @@ public class ContentService
     }
 
     /// <summary>Mọi assignment đang hiệu lực (không Cancelled) của Content — dùng để nạp hộp thoại giao việc.</summary>
-    public List<MyTaskItem> GetAssignments(long contentId) => _taskRepo.GetAssignments(contentId);
+    public List<MyTaskItem> GetAssignments(long contentId) =>
+        _assignmentBackend is not null
+            ? _assignmentBackend.GetAssignments(contentId)
+            : _taskRepo.GetAssignments(contentId);
 
     /// <summary>
     /// Owner/Manager giao Content cho MỘT HOẶC NHIỀU Creator thuộc đúng Project của Content.
@@ -89,6 +97,13 @@ public class ContentService
     public void AssignContent(long contentId, IReadOnlyList<AssignmentRequest> assignments, long actorUserId)
     {
         ArgumentNullException.ThrowIfNull(assignments);
+
+        // Client-Server: Backend kiểm tra quyền + Project + deadline, ghi assignment qua API.
+        if (_assignmentBackend is not null)
+        {
+            _assignmentBackend.AssignContent(contentId, assignments);
+            return;
+        }
 
         var content = _contentRepo.GetById(contentId)
             ?? throw new InvalidOperationException($"Không tìm thấy Content #{contentId}.");
