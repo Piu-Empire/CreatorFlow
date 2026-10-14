@@ -87,6 +87,10 @@ static class Program
         var contentService = new ContentService(contentRepo, detailsRepo, historyRepo, memberRepo, platformRepo, uow, myTaskRepo);
         var myTaskService = new MyTaskService(myTaskRepo, memberRepo, uow);
         var ideaService = new IdeaService(ideaRepo, memberRepo, historyRepo, uow);
+
+        // SCRUM-39: API backends cho Assignment + MyTasks (luôn bật khi có API)
+        IAssignmentBackend? assignmentBackend = null;
+        IMyTaskBackend? myTaskBackend = null;
         // SCRUM-33: AI chưa có cài đặt thật nên dùng NotConfiguredAiService; thay bằng AIService thật khi có.
         var scriptService = new ScriptService(scriptRepo, detailsRepo, platformRepo, memberRepo, myTaskRepo, uow, new NotConfiguredAiService());
 
@@ -101,8 +105,16 @@ static class Program
             using var api = ApiClient.Create(ApiClientConfiguration.Load());
             var session = new UserSession();
             using var projects = new ProjectApiFacade(api, session);
-            var taskBackend = new ApiMyTaskBackend(api, session);
-            var auth = new AuthApiFacade(api, session);            var metricBackend = new ApiMetricBackend(api, session);
+            var auth = new AuthApiFacade(api, session);
+            var metricBackend = new ApiMetricBackend(api, session);
+
+            // SCRUM-39: Wire API backends — Assignment + MyTasks + Workflow
+            assignmentBackend = new ApiAssignmentBackend(api, session);
+            myTaskBackend = new ApiMyTaskBackend(api, session);
+            contentService.UseApiBackend(assignmentBackend);
+            myTaskService.UseApiBackend(myTaskBackend);
+            // Dùng DB thật thì Submit Review đi qua API; chạy InMemory thì giữ logic cục bộ để Board còn thấy thay đổi.
+            if (UseDatabase) workflowService.UseApiBackend(new ApiWorkflowBackend(api, session));
             var invitations = new ProjectInvitationService(api, session);
             var invitationInbox = new InvitationInboxService(api, session);
             if (args.Length > 0 && args[0] == "--test")
@@ -117,7 +129,7 @@ static class Program
                 return;
             }
             using var context = new AuthenticationApplicationContext(auth, () =>
-                new BoardForm(workflowService, boardRepo, reviewQueueRepo, activityRepo, memberRepo, contentService, myTaskService, scriptService, ideaService, auth, metricBackend, invitations, invitationInbox, projects: projects, taskBackend: taskBackend), projects, invitationInbox);
+                new BoardForm(workflowService, boardRepo, reviewQueueRepo, activityRepo, memberRepo, contentService, myTaskService, scriptService, ideaService, auth, metricBackend, invitations, invitationInbox, projects: projects, taskBackend: myTaskBackend), projects, invitationInbox);
             Application.Run(context);
         }
         catch (InvalidOperationException)

@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using CreatorFlow.Models;
 using CreatorFlow.Repositories.Interfaces;
+using CreatorFlow.Services.Backends;
 using CreatorFlow.Services.Exceptions;
 
 namespace CreatorFlow.Services;
@@ -23,6 +24,7 @@ public class WorkflowService
     private readonly IReviewRepository _reviewRepo;
     private readonly IProjectMemberRepository _memberRepo;
     private readonly IUnitOfWork _unitOfWork;
+    private IWorkflowBackend? _backend;
 
     // Luồng chuyển trạng thái "đi thẳng" (không cần tạo Review kèm theo).
     // Riêng Editing -> Review và Review -> Ready/Editing được xử lý bằng
@@ -50,6 +52,16 @@ public class WorkflowService
         _memberRepo = memberRepo;
         _unitOfWork = unitOfWork;
     }
+
+    /// <summary>
+    /// Chuyển các bước Review sang CreatorFlow.Api (mô hình Client–Server). Chưa gọi thì dùng logic cục bộ như cũ.
+    /// </summary>
+    public void UseApiBackend(IWorkflowBackend backend) => _backend = backend;
+
+    /// <summary>
+    /// Activity timeline lấy từ API khi đang dùng Backend; null nghĩa là dùng IActivityRepository cục bộ.
+    /// </summary>
+    public List<ActivityItem>? GetApiActivity(long contentId) => _backend?.GetActivity(contentId);
 
     /// <summary>
     /// Trả về Status kế tiếp cho các bước "đi thẳng" (không liên quan Reviews),
@@ -104,6 +116,15 @@ public class WorkflowService
     /// </summary>
     public void SubmitForReview(long contentId, long submittedByUserId, string? note = null)
     {
+        note = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
+
+        // Client–Server: Backend kiểm tra quyền/trạng thái, ghi người gửi + thời gian (người gửi lấy từ JWT).
+        if (_backend != null)
+        {
+            _backend.SubmitReview(contentId, note);
+            return;
+        }
+
         var content = GetContentOrThrow(contentId);
 
         if (content.Status != ContentStatus.Editing)
@@ -157,6 +178,15 @@ public class WorkflowService
 
     private void DecideReview(long contentId, long reviewerUserId, string? feedback, bool approve)
     {
+        feedback = string.IsNullOrWhiteSpace(feedback) ? null : feedback.Trim();
+
+        // Client–Server: Backend kiểm tra quyền Owner/Manager, ghi reviewer + thời gian (lấy từ JWT).
+        if (_backend != null)
+        {
+            _backend.DecideReview(contentId, approve, feedback);
+            return;
+        }
+
         var content = GetContentOrThrow(contentId);
 
         if (content.Status != ContentStatus.Review)
