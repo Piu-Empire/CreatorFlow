@@ -209,10 +209,13 @@ public partial class BoardForm : Form, IMessageFilter
     private bool HasProjectContext => CurrentSession.CurrentProjectId > 0 &&
         (_auth is null || _auth.Session.IsAuthenticated);
 
+    /// <summary>Chế độ API: nút New Content chỉ bật khi tạo Content và lấy danh sách người nhận việc đã nối API.</summary>
+    private bool CanCreateContentViaApi => _detailBackend is not null && _assignmentBackend is not null;
+
     private void UpdateProjectContext()
     {
         _topHeaderControl.SetProjectContext(HasProjectContext ? CurrentSession.CurrentProjectName : null,
-            HasProjectContext && _profile is null && _projects is null);
+            HasProjectContext && _profile is null && (_projects is null || CanCreateContentViaApi));
         _sidebarControl.SetProjectName(HasProjectContext ? CurrentSession.CurrentProjectName : null);
         _sidebarControl.ProjectActionsEnabled = HasProjectContext;
         _sidebarControl.Invalidate();
@@ -435,7 +438,8 @@ public partial class BoardForm : Form, IMessageFilter
     // ==========================================================
     private void OpenCreateContentDialog(ContentStatus initialStatus = ContentStatus.Idea)
     {
-        if (!HasProjectContext || _profile is not null) return;
+        // New Content nằm ở header nên bấm được cả khi đang mở Hồ sơ / Quản lý Project / Admin / Báo cáo / Lịch: chỉ tạo khi đang ở Board.
+        if (!HasProjectContext || _profile is not null || _projectPage is not null || _admin is not null || _reports is not null || _calendar is not null) return;
         bool viaApi = _projects is not null;
         if (viaApi && (_detailBackend is null || _assignmentBackend is null)) { ShowUnavailableModule("Tạo Content"); return; }
 
