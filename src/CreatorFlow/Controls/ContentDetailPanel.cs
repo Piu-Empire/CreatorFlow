@@ -846,7 +846,45 @@ public partial class ContentDetailPanel : UserControl
     private void RefreshActivity()
     {
         if (_current == null) return;
-        _activityTimeline.LoadActivity(_activityRepo!.GetActivity(_current.ContentId));
+        _activityTimeline.LoadActivity(FetchActivity(_current.ContentId));
+    }
+
+    /// <summary>Activity của 1 Content: qua API khi đã chuyển sang Client–Server, không thì đọc repo cục bộ.</summary>
+    private List<ActivityItem> FetchActivity(long contentId) =>
+        _workflowService!.GetApiActivity(contentId) ?? _activityRepo!.GetActivity(contentId);
+
+    /// <summary>
+    /// Feedback của lần từ chối gần nhất (để Creator thấy ngay khi mở Content ở trạng thái EDITING).
+    /// Không có (chưa từng bị từ chối) hoặc đọc lỗi → null, không chặn việc hiển thị nút.
+    /// </summary>
+    private ActivityItem? GetLatestRejection(long contentId)
+    {
+        try
+        {
+            return FetchActivity(contentId)
+                .LastOrDefault(i => i.Description.StartsWith("rejected Review", StringComparison.Ordinal));
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    private void AddFeedbackNotice(ActivityItem rejection)
+    {
+        string feedback = string.IsNullOrWhiteSpace(rejection.Feedback) ? "(không có nội dung)" : rejection.Feedback!;
+        var notice = new Label
+        {
+            Text = $"{rejection.ActorName} đã từ chối ({rejection.Description.Replace("rejected ", "")}):\n\"{feedback}\"\nHãy chỉnh sửa theo phản hồi rồi gửi duyệt lại.",
+            Font = UITheme.FontBody,
+            ForeColor = UITheme.Danger,
+            AutoSize = true,
+            MaximumSize = new Size(Math.Max(240, _flowActions.Width - 16), 0),
+            UseMnemonic = false,
+            Margin = new Padding(0, 0, 0, 12),
+        };
+        _flowActions.Controls.Add(notice);
+        _flowActions.SetFlowBreak(notice, true);
     }
 
     // ---------- Tab Metrics (theo ContentPlatform, qua API) ----------
@@ -1034,6 +1072,9 @@ public partial class ContentDetailPanel : UserControl
         switch (_current.Status)
         {
             case ContentStatus.Editing:
+                // Creator xem được feedback của vòng bị từ chối trước khi chỉnh sửa và gửi lại.
+                if (GetLatestRejection(_current.ContentId) is { } rejection)
+                    AddFeedbackNotice(rejection);
                 AddActionButton("Submit Review (Gửi kiểm duyệt)", RoundButtonStyle.Primary, OnSubmitReviewClicked);
                 break;
 
@@ -1128,7 +1169,9 @@ public partial class ContentDetailPanel : UserControl
     private void OnSubmitReviewClicked(object? sender, EventArgs e)
     {
         if (_current == null) return;
-        RunWorkflowAction(() => _workflowService!.SubmitForReview(_current.ContentId, CurrentSession.CurrentUserId));
+
+        if (SubmitReviewDialog.TrySubmit(this, _workflowService!, _current))
+            ContentChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private void OnReviewDecisionClicked(object? sender, EventArgs e)
@@ -1167,6 +1210,14 @@ public partial class ContentDetailPanel : UserControl
         catch (UnauthorizedWorkflowActionException ex)
         {
             MessageBox.Show(this, ex.Message, "Không đủ quyền", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        catch (ContentValidationException ex) // lỗi từ API (thiếu feedback, trạng thái đã đổi, mất mạng...)
+        {
+            MessageBox.Show(this, ex.Message, "Không thể thực hiện", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        catch (InvalidOperationException ex)
+        {
+            MessageBox.Show(this, ex.Message, "Không thể thực hiện", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
     }
 
