@@ -24,6 +24,10 @@ public partial class ContentDetailPanel : UserControl
     private IActivityRepository? _activityRepo;
     private IProjectMemberRepository? _memberRepo;
     private ContentService? _contentService;
+    private IContentDetailBackend? _detailBackend;       // chế độ API: chi tiết/sửa/script/activity/workflow chạy qua CreatorFlow.Api
+    private IAssignmentBackend? _assignmentBackend;      // chế độ API: giao việc
+    private bool _apiPlatformsLoaded;
+    private readonly Dictionary<long, ProjectRole?> _roleCache = new(); // chế độ API: 1 lần gọi vai trò cho mỗi lần mở Content (xoá ở đầu LoadContent)
 
     private ContentBoardCard? _current;
     private List<ProjectMemberInfo> _members = new();
@@ -593,9 +597,12 @@ public partial class ContentDetailPanel : UserControl
 
     // ---------- API công khai ----------
 
-    public void Initialize(WorkflowService workflowService, IActivityRepository activityRepo, IProjectMemberRepository memberRepo, ContentService contentService, ScriptService scriptService, IMetricBackend? metricBackend = null, bool loadLocalPlatforms = true)
+    public void Initialize(WorkflowService workflowService, IActivityRepository activityRepo, IProjectMemberRepository memberRepo, ContentService contentService, ScriptService scriptService, IMetricBackend? metricBackend = null, bool loadLocalPlatforms = true, IContentDetailBackend? detailBackend = null, IAssignmentBackend? assignmentBackend = null)
     {
-        _scriptEditor.Initialize(scriptService);
+        _scriptEditor.Initialize(scriptService, detailBackend);
+        _detailBackend = detailBackend;
+        _assignmentBackend = assignmentBackend;
+        _apiPlatformsLoaded = false;
         _workflowService = workflowService;
         _activityRepo = activityRepo;
         _memberRepo = memberRepo;
@@ -603,17 +610,53 @@ public partial class ContentDetailPanel : UserControl
         _metricBackend = metricBackend;
 
         _mnuPlatforms.Items.Clear();
+        if (detailBackend != null) return; // chế độ API: danh sách platform nạp ở lần LoadContent đầu tiên (EnsureApiPlatforms)
         if (!loadLocalPlatforms) return;
         foreach (string name in contentService.GetAvailablePlatforms())
+            AddPlatformMenuItem(name);
+    }
+
+    private void AddPlatformMenuItem(string name)
+    {
+        var item = new ToolStripMenuItem(name) { CheckOnClick = true };
+        item.CheckedChanged += (_, _) =>
         {
-            var item = new ToolStripMenuItem(name) { CheckOnClick = true };
-            item.CheckedChanged += (_, _) =>
-            {
-                UpdatePlatformButtonText();
-                MarkDirty();
-            };
-            _mnuPlatforms.Items.Add(item);
+            UpdatePlatformButtonText();
+            MarkDirty();
+        };
+        _mnuPlatforms.Items.Add(item);
+    }
+
+    /// <summary>Chế độ API: nạp menu platform từ API một lần (lỗi thì thử lại ở lần mở sau, không chặn việc mở drawer).</summary>
+    private void EnsureApiPlatforms()
+    {
+        if (_detailBackend == null || _apiPlatformsLoaded) return;
+        try
+        {
+            foreach (string name in _detailBackend.GetAvailablePlatforms())
+                AddPlatformMenuItem(name);
+            _apiPlatformsLoaded = true;
         }
+        catch (Exception ex) when (ex is ContentValidationException or UnauthorizedWorkflowActionException or InvalidOperationException)
+        {
+            _mnuPlatforms.Items.Clear();
+        }
+    }
+
+    /// <summary>Vai trò của người đăng nhập trong Project: qua API ở chế độ API, ngược lại đọc từ repository cục bộ.</summary>
+    private ProjectRole? GetMyRole(long projectId)
+    {
+        if (_detailBackend == null)
+            return _memberRepo!.GetRole(projectId, CurrentSession.CurrentUserId);
+
+        if (_roleCache.TryGetValue(projectId, out var cached)) return cached;
+        try
+        {
+            var role = _detailBackend.GetMyRole(projectId);
+            _roleCache[projectId] = role;
+            return role;
+        }
+        catch (Exception ex) when (ex is ContentValidationException or UnauthorizedWorkflowActionException or InvalidOperationException) { return null; }
     }
 
     private List<string> SelectedPlatformNames() =>
@@ -634,7 +677,9 @@ public partial class ContentDetailPanel : UserControl
         _current = card;
         _metricsLoadedFor = null;
         _metricsHost.Controls.Clear();
-        _members = _memberRepo.GetMembers(card.ProjectId);
+        _roleCache.Clear();
+        EnsureApiPlatforms();
+        _members = LoadMembers(card.ProjectId);
 
         _pnlEmptyState.Visible = false;
         _pnlHeader.Visible = true;
@@ -661,7 +706,7 @@ public partial class ContentDetailPanel : UserControl
 
         _dtpTargetWeek.Value = (card.Deadline ?? DateTime.Today.AddDays(7)).Date;
         // Phân quyền deadline: chỉ Owner/Manager được sửa; Creator chỉ xem.
-        _dtpTargetWeek.Enabled = TaskRules.CanChangeDeadline(_memberRepo.GetRole(card.ProjectId, CurrentSession.CurrentUserId));
+        _dtpTargetWeek.Enabled = TaskRules.CanChangeDeadline(GetMyRole(card.ProjectId));
         _deadlineEdited = false;
 
         _txtDurationEdit.Text = card.EstimatedDuration;
@@ -710,12 +755,24 @@ public partial class ContentDetailPanel : UserControl
         _lblSaveHint.Text = "";
     }
 
+    /// <summary>Danh sách thành viên để hiển thị người phụ trách. Chế độ API lấy từ danh sách có thể giao việc (lỗi → rỗng, không chặn mở drawer).</summary>
+    private List<ProjectMemberInfo> LoadMembers(long projectId)
+    {
+        if (_detailBackend == null || _assignmentBackend == null)
+            return _memberRepo!.GetMembers(projectId);
+
+        try { return _assignmentBackend.GetAssignableMembers(projectId); }
+        catch (Exception ex) when (ex is ContentValidationException or UnauthorizedWorkflowActionException or InvalidOperationException) { return new List<ProjectMemberInfo>(); }
+    }
+
     /// <summary>Đọc chi tiết Content qua ContentService. Lỗi (không có quyền, không tìm thấy, lỗi DB) được báo cho người dùng và trả về null.</summary>
     private Content? TryLoadDetail(long contentId)
     {
         try
         {
-            return _contentService!.GetDetail(contentId, CurrentSession.CurrentUserId);
+            return _detailBackend != null
+                ? _detailBackend.GetDetail(contentId)
+                : _contentService!.GetDetail(contentId, CurrentSession.CurrentUserId);
         }
         catch (Exception ex)
         {
@@ -803,7 +860,10 @@ public partial class ContentDetailPanel : UserControl
 
         try
         {
-            _contentService.Update(_current.ContentId, draft, CurrentSession.CurrentUserId);
+            if (_detailBackend != null)
+                _detailBackend.Update(_current.ContentId, draft);
+            else
+                _contentService.Update(_current.ContentId, draft, CurrentSession.CurrentUserId);
             _deadlineEdited = false;
             _isDirty = false;
             _btnSave.Enabled = false;
@@ -846,7 +906,20 @@ public partial class ContentDetailPanel : UserControl
     private void RefreshActivity()
     {
         if (_current == null) return;
-        _activityTimeline.LoadActivity(_activityRepo!.GetActivity(_current.ContentId));
+        if (_detailBackend == null)
+        {
+            _activityTimeline.LoadActivity(_activityRepo!.GetActivity(_current.ContentId));
+            return;
+        }
+
+        try
+        {
+            _activityTimeline.LoadActivity(_detailBackend.GetActivity(_current.ContentId));
+        }
+        catch (Exception ex) when (ex is ContentValidationException or UnauthorizedWorkflowActionException or InvalidOperationException)
+        {
+            _activityTimeline.LoadActivity(new List<ActivityItem>()); // không tải được: để trống, không chặn mở drawer
+        }
     }
 
     // ---------- Tab Metrics (theo ContentPlatform, qua API) ----------
@@ -1025,7 +1098,7 @@ public partial class ContentDetailPanel : UserControl
         _flowActions.Controls.Clear();
         if (_current == null) return;
 
-        var role = _memberRepo!.GetRole(_current.ProjectId, CurrentSession.CurrentUserId);
+        var role = GetMyRole(_current.ProjectId);
         var canReview = role == ProjectRole.Owner || role == ProjectRole.Manager;
 
         if (TaskRules.CanAssign(role) && _current.Status is not (ContentStatus.Published or ContentStatus.Archived))
@@ -1095,15 +1168,43 @@ public partial class ContentDetailPanel : UserControl
                 "Giao việc", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
             return;
 
-        var creators = _contentService.GetAssignableMembers(_current.ProjectId, CurrentSession.CurrentUserId);
+        List<ProjectMemberInfo> creators;
+        List<MyTaskItem> assignments;
+        try
+        {
+            if (_assignmentBackend != null)
+            {
+                creators = _assignmentBackend.GetAssignableMembers(_current.ProjectId);
+                assignments = _assignmentBackend.GetAssignments(_current.ContentId);
+            }
+            else
+            {
+                creators = _contentService.GetAssignableMembers(_current.ProjectId, CurrentSession.CurrentUserId);
+                assignments = _contentService.GetAssignments(_current.ContentId);
+            }
+        }
+        catch (ContentValidationException ex)
+        {
+            MessageBox.Show(this, ex.Message, "Không tải được danh sách giao việc", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        catch (UnauthorizedWorkflowActionException ex)
+        {
+            MessageBox.Show(this, ex.Message, "Không đủ quyền", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
         using var dlg = new AssignContentDialog(
             $"CNT-{_current.ContentId:000}", _current.Title, creators,
-            _contentService.GetAssignments(_current.ContentId), _current.Deadline);
+            assignments, _current.Deadline);
         if (dlg.ShowDialog(FindForm()) != DialogResult.OK) return;
 
         try
         {
-            _contentService.AssignContent(_current.ContentId, dlg.Assignments, CurrentSession.CurrentUserId);
+            if (_assignmentBackend != null)
+                _assignmentBackend.AssignContent(_current.ContentId, dlg.Assignments);
+            else
+                _contentService.AssignContent(_current.ContentId, dlg.Assignments, CurrentSession.CurrentUserId);
             ContentChanged?.Invoke(this, EventArgs.Empty);
         }
         catch (ContentValidationException ex)
@@ -1122,13 +1223,23 @@ public partial class ContentDetailPanel : UserControl
         var next = _workflowService!.GetNextSimpleStatus(_current.Status);
         if (!next.HasValue) return;
 
-        RunWorkflowAction(() => _workflowService!.ChangeStatus(_current.ContentId, next.Value, CurrentSession.CurrentUserId));
+        var contentId = _current.ContentId;
+        RunWorkflowAction(() =>
+        {
+            if (_detailBackend != null) _detailBackend.ChangeStatus(contentId, next.Value);
+            else _workflowService!.ChangeStatus(contentId, next.Value, CurrentSession.CurrentUserId);
+        });
     }
 
     private void OnSubmitReviewClicked(object? sender, EventArgs e)
     {
         if (_current == null) return;
-        RunWorkflowAction(() => _workflowService!.SubmitForReview(_current.ContentId, CurrentSession.CurrentUserId));
+        var contentId = _current.ContentId;
+        RunWorkflowAction(() =>
+        {
+            if (_detailBackend != null) _detailBackend.SubmitForReview(contentId);
+            else _workflowService!.SubmitForReview(contentId, CurrentSession.CurrentUserId);
+        });
     }
 
     private void OnReviewDecisionClicked(object? sender, EventArgs e)
@@ -1145,11 +1256,19 @@ public partial class ContentDetailPanel : UserControl
         var contentId = _current.ContentId;
         if (dialog.Approved)
         {
-            RunWorkflowAction(() => _workflowService!.ApproveReview(contentId, CurrentSession.CurrentUserId, dialog.Feedback));
+            RunWorkflowAction(() =>
+            {
+                if (_detailBackend != null) _detailBackend.DecideReview(contentId, true, dialog.Feedback);
+                else _workflowService!.ApproveReview(contentId, CurrentSession.CurrentUserId, dialog.Feedback);
+            });
         }
         else
         {
-            RunWorkflowAction(() => _workflowService!.RejectReview(contentId, CurrentSession.CurrentUserId, dialog.Feedback));
+            RunWorkflowAction(() =>
+            {
+                if (_detailBackend != null) _detailBackend.DecideReview(contentId, false, dialog.Feedback);
+                else _workflowService!.RejectReview(contentId, CurrentSession.CurrentUserId, dialog.Feedback);
+            });
         }
     }
 
@@ -1161,6 +1280,10 @@ public partial class ContentDetailPanel : UserControl
             ContentChanged?.Invoke(this, EventArgs.Empty);
         }
         catch (InvalidWorkflowTransitionException ex)
+        {
+            MessageBox.Show(this, ex.Message, "Không thể chuyển trạng thái", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        catch (ContentValidationException ex) // chế độ API: lỗi nghiệp vụ/mạng từ Backend
         {
             MessageBox.Show(this, ex.Message, "Không thể chuyển trạng thái", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }

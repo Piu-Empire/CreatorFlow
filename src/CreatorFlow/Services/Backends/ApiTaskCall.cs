@@ -51,7 +51,7 @@ internal static class ApiTaskCall
             ? session.AccessToken
             : throw new UnauthorizedWorkflowActionException("Vui lòng đăng nhập lại.");
 
-    private static Exception Translate(ApiBusinessException ex) => ex.StatusCode switch
+    private static Exception Translate(ApiBusinessException ex) => ex.Code == "script_conflict" ? new ScriptConflictException() : ex.StatusCode switch
     {
         HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden => new UnauthorizedWorkflowActionException(ex.Message),
         HttpStatusCode.NotFound => new InvalidOperationException(ex.Message),

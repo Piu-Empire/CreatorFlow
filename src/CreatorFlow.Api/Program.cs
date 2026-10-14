@@ -68,6 +68,8 @@ builder.Services.AddScoped<IIdeaRepository, IdeaRepository>();
 builder.Services.AddScoped<IdeaService>();
 builder.Services.AddScoped<IBoardCardRepository, BoardCardRepository>();
 builder.Services.AddScoped<BoardService>();
+builder.Services.AddScoped<CreatorFlow.Api.Repositories.ContentDetail.IContentDetailRepository, CreatorFlow.Api.Repositories.ContentDetail.ContentDetailRepository>();
+builder.Services.AddScoped<CreatorFlow.Api.Services.ContentDetail.ContentDetailService>();
 builder.Services.AddScoped<CreatorFlow.Api.Repositories.Projects.IProjectRepository, CreatorFlow.Api.Repositories.Projects.ProjectRepository>();
 builder.Services.AddScoped<CreatorFlow.Api.Services.Projects.ProjectService>();
 builder.Services.AddSingleton<IAvatarImageProcessor, AvatarImageProcessor>();
@@ -114,6 +116,7 @@ app.MapMyInvitationEndpoints();
 app.MapProjectEndpoints();
 app.MapIdeaEndpoints();
 app.MapBoardEndpoints();
+app.MapContentDetailEndpoints();
 app.Run();
 
 public partial class Program { }

@@ -38,6 +38,9 @@ public partial class BoardForm : Form, IMessageFilter
     private readonly IdeaService _ideaService;
     private readonly IIdeaBackend? _ideaBackend;
     private readonly IBoardBackend? _boardBackend;
+    private readonly IContentDetailBackend? _detailBackend;
+    private readonly IAssignmentBackend? _assignmentBackend;
+    private long? _reopenContentId; // chế độ API: mở lại drawer của thẻ này sau khi Board tải lại (sau khi lưu/đổi trạng thái/giao việc)
     private readonly IMyTaskBackend? _taskBackend;
     private readonly AuthApiFacade? _auth;
     private readonly ProjectInvitationService? _invitationService;
@@ -88,7 +91,9 @@ public partial class BoardForm : Form, IMessageFilter
         ProjectApiFacade? projects = null,
         IMyTaskBackend? taskBackend = null,
         IIdeaBackend? ideaBackend = null,
-        IBoardBackend? boardBackend = null)
+        IBoardBackend? boardBackend = null,
+        IContentDetailBackend? detailBackend = null,
+        IAssignmentBackend? assignmentBackend = null)
     {
         InitializeComponent();
         _workflowService = workflowService;
@@ -105,6 +110,8 @@ public partial class BoardForm : Form, IMessageFilter
         _taskBackend = taskBackend;
         _ideaBackend = ideaBackend;
         _boardBackend = boardBackend;
+        _detailBackend = detailBackend;
+        _assignmentBackend = assignmentBackend;
         InitializeProjects(projects);
         if (auth is not null)
         {
@@ -120,8 +127,8 @@ public partial class BoardForm : Form, IMessageFilter
         _pnlDrawerHost.Paint += PnlDrawerHost_Paint;
         BuildColumns();
 
-        _contentDetailPanel.Initialize(_workflowService, _activityRepository, _memberRepository, _contentService, scriptService, metrics, loadLocalPlatforms: projects is null);
-        _contentDetailPanel.ContentChanged += (_, _) => { ReloadBoard(); _toast.ShowToast(this, "Cap nhat thanh cong!"); };
+        _contentDetailPanel.Initialize(_workflowService, _activityRepository, _memberRepository, _contentService, scriptService, metrics, loadLocalPlatforms: projects is null, detailBackend: detailBackend, assignmentBackend: assignmentBackend);
+        _contentDetailPanel.ContentChanged += (_, _) => { if (_projects is not null) _reopenContentId = _selectedContentId; ReloadBoard(); _toast.ShowToast(this, "Cap nhat thanh cong!"); };
         _contentDetailPanel.CloseRequested += (_, _) => CloseDrawer();
 
         _topHeaderControl.NewContentClicked += (_, _) => OpenCreateContentDialog();
@@ -314,8 +321,11 @@ public partial class BoardForm : Form, IMessageFilter
     {
         if (_projects is not null)
         {
-            // Đã đăng nhập: Board mới chỉ hiển thị thẻ qua API; drawer chi tiết sẽ nối API ở bước sau.
-            if (_boardBackend is not null) _toast.ShowToast(this, "Chi tiết Content chưa kết nối API");
+            // Đã đăng nhập: drawer chi tiết chạy qua API khi có IContentDetailBackend.
+            if (_detailBackend is not null && sender is KanbanCardControl apiCardCtrl)
+                SelectCard(apiCardCtrl);
+            else if (_boardBackend is not null)
+                _toast.ShowToast(this, "Chi tiết Content chưa kết nối API");
             return;
         }
         if (sender is KanbanCardControl cardCtrl)
@@ -324,7 +334,7 @@ public partial class BoardForm : Form, IMessageFilter
 
     private void SelectCard(KanbanCardControl cardCtrl)
     {
-        if (!HasProjectContext || _projects is not null) return;
+        if (!HasProjectContext || (_projects is not null && _detailBackend is null)) return;
         // Đang mở thẻ khác và có thay đổi chưa lưu → hỏi trước khi chuyển (Clear() tự hiện hộp thoại xác nhận).
         if (_selectedContentId.HasValue && _selectedContentId != cardCtrl.Card.ContentId && _contentDetailPanel.HasUnsavedChanges)
         {
@@ -426,15 +436,38 @@ public partial class BoardForm : Form, IMessageFilter
     private void OpenCreateContentDialog(ContentStatus initialStatus = ContentStatus.Idea)
     {
         if (!HasProjectContext || _profile is not null) return;
-        if (_projects is not null) { ShowUnavailableModule("Tạo Content"); return; }
-        var members = _contentService.GetAssignableMembers(CurrentSession.CurrentProjectId, CurrentSession.CurrentUserId);
-        using var dlg = new CreateContentDialog(members, _contentService.GetAvailablePlatforms(), initialStatus);
+        bool viaApi = _projects is not null;
+        if (viaApi && (_detailBackend is null || _assignmentBackend is null)) { ShowUnavailableModule("Tạo Content"); return; }
+
+        List<ProjectMemberInfo> members;
+        List<string> platforms;
+        try
+        {
+            // Chế độ API: danh sách người nhận việc và platform lấy từ API (quyền do Backend quyết định).
+            members = viaApi
+                ? _assignmentBackend!.GetAssignableMembers(CurrentSession.CurrentProjectId)
+                : _contentService.GetAssignableMembers(CurrentSession.CurrentProjectId, CurrentSession.CurrentUserId);
+            platforms = viaApi ? _detailBackend!.GetAvailablePlatforms() : _contentService.GetAvailablePlatforms();
+        }
+        catch (ContentValidationException ex)
+        {
+            MessageBox.Show(this, ex.Message, "Không mở được hộp thoại tạo nội dung", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        catch (UnauthorizedWorkflowActionException ex)
+        {
+            MessageBox.Show(this, ex.Message, "Không đủ quyền", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        using var dlg = new CreateContentDialog(members, platforms, initialStatus);
         if (dlg.ShowDialog(this) != DialogResult.OK) return;
 
         try
         {
-            long newId = _contentService.Create(
-                CurrentSession.CurrentProjectId, initialStatus, dlg.Draft, CurrentSession.CurrentUserId);
+            long newId = viaApi
+                ? _detailBackend!.Create(CurrentSession.CurrentProjectId, initialStatus, dlg.Draft)
+                : _contentService.Create(CurrentSession.CurrentProjectId, initialStatus, dlg.Draft, CurrentSession.CurrentUserId);
             ReloadBoard();
             _toast.ShowToast(this, $"Da tao noi dung CNT-{newId:000} thanh cong!");
         }

@@ -316,6 +316,7 @@ public partial class BoardForm
 
         _allCards = cards;
         foreach (var column in _columns.Values) column.SourceAvailable = true;
+        _modulePageHeader.SetContentCreationEnabled(_detailBackend is not null); // nút Add Ticket chỉ bật khi tạo Content đã nối API
         _topHeaderControl.UpdateStats(_allCards.Count, _allCards.Count(c => c.IsOverdue));
         long me = CurrentSession.CurrentUserId;
         _sidebarControl.ReviewQueueCount = _allCards.Count(c => c.HasPendingReview);
@@ -324,6 +325,13 @@ public partial class BoardForm
         ApplyFilters();
         if (_ideaBackend is not null) _sidebarControl.BacklogCount = _ideaBackend.CountBacklog(project.ProjectId, me);
         _sidebarControl.Invalidate();
+
+        // Sau khi lưu/đổi trạng thái/giao việc: mở lại drawer của thẻ vừa thao tác (nạp lại dữ liệu mới nhất từ API).
+        if (_reopenContentId is long reopenId)
+        {
+            _reopenContentId = null;
+            if (_detailBackend is not null && FindCardControl(reopenId) is { } reopenCard) SelectCard(reopenCard);
+        }
     }
     private async void ShowUnavailableModule(string module)
     {
