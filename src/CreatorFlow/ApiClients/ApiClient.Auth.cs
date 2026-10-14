@@ -14,7 +14,10 @@ public sealed partial class ApiClient
     public Task<T> SendMultipartAsync<T>(string path, MultipartFormDataContent content, string bearer, CancellationToken token = default) =>
         SendTypedAsync<T>(new HttpRequestMessage(HttpMethod.Put, path) { Content = content }, bearer, token);
 
-    private async Task<T> SendTypedAsync<T>(HttpRequestMessage request, string? bearer, CancellationToken token)
+    public Task<T> SendProjectJsonAsync<T>(HttpMethod method, string path, object? body, string bearer, CancellationToken token) =>
+        SendTypedAsync<T>(new HttpRequestMessage(method, path) { Content = body is null ? null : JsonContent.Create(body, options: JsonOptions) }, bearer, token, 1048576);
+
+    private async Task<T> SendTypedAsync<T>(HttpRequestMessage request, string? bearer, CancellationToken token, int maximum = 65536)
     {
         using (request)
         {
@@ -24,7 +27,7 @@ public sealed partial class ApiClient
             try
             {
                 using var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, deadline.Token);
-                byte[] data = await ReadBoundedAsync(response.Content, 65536, deadline.Token);
+                byte[] data = await ReadBoundedAsync(response.Content, maximum, deadline.Token);
                 if (!response.IsSuccessStatusCode) throw CreateBusinessError(response.StatusCode, data);
                 T? result = JsonSerializer.Deserialize<T>(data, JsonOptions);
                 return result ?? throw new ApiException(ApiErrorKind.InvalidResponse, "API trả dữ liệu không hợp lệ.");
@@ -91,7 +94,7 @@ public sealed partial class ApiClient
                     if (root.TryGetProperty("title", out var title) && title.ValueKind == JsonValueKind.String && title.GetString() is { Length: > 0 and <= 300 } safeTitle && !safeTitle.Contains('\n')) message = safeTitle;
                     if (root.TryGetProperty("errors", out var errors) && errors.ValueKind == JsonValueKind.Object)
                     {
-                        string[] fields = ["Email", "DisplayName", "Password", "ConfirmPassword", "CurrentPassword", "NewPassword", "AvatarUrl", "Code", "Search", "Status", "Limit", "Offset"];
+                        string[] fields = ["Email", "DisplayName", "Password", "ConfirmPassword", "CurrentPassword", "NewPassword", "AvatarUrl", "Code", "Name", "Description", "Search", "Status", "Limit", "Offset"];
                         foreach (string candidate in fields) if (errors.TryGetProperty(candidate, out _)) { field = candidate; break; }
                     }
                     if (root.TryGetProperty("requestId", out var id) && id.ValueKind == JsonValueKind.String && Guid.TryParse(id.GetString(), out var parsed)) requestId = parsed;
