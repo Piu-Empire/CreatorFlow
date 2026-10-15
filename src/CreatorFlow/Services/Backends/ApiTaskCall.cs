@@ -28,12 +28,30 @@ internal static class ApiTaskCall
         }
     }
 
+    /// <summary>Bản bất đồng bộ của <see cref="Run{T}"/>: chạy tiếp trên thread giao diện nên không treo form khi chờ API.</summary>
+    public static async Task<T> RunAsync<T>(Func<Task<T>> call, UserSession? session = null)
+    {
+        try
+        {
+            return await call();
+        }
+        catch (ApiBusinessException ex)
+        {
+            if (ex.StatusCode == HttpStatusCode.Unauthorized) session?.Clear();
+            throw Translate(ex);
+        }
+        catch (ApiException ex)
+        {
+            throw new ContentValidationException(ex.Message); // mất mạng / quá thời gian chờ: báo cho người dùng
+        }
+    }
+
     public static string BearerOf(UserSession session) =>
         session.IsAuthenticated && !string.IsNullOrEmpty(session.AccessToken)
             ? session.AccessToken
             : throw new UnauthorizedWorkflowActionException("Vui lòng đăng nhập lại.");
 
-    private static Exception Translate(ApiBusinessException ex) => ex.StatusCode switch
+    private static Exception Translate(ApiBusinessException ex) => ex.Code == "script_conflict" ? new ScriptConflictException() : ex.StatusCode switch
     {
         HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden => new UnauthorizedWorkflowActionException(ex.Message),
         HttpStatusCode.NotFound => new InvalidOperationException(ex.Message),

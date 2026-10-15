@@ -36,6 +36,11 @@ public partial class BoardForm : Form, IMessageFilter
     private readonly ContentService _contentService;
     private readonly MyTaskService _myTaskService;
     private readonly IdeaService _ideaService;
+    private readonly IIdeaBackend? _ideaBackend;
+    private readonly IBoardBackend? _boardBackend;
+    private readonly IContentDetailBackend? _detailBackend;
+    private readonly IAssignmentBackend? _assignmentBackend;
+    private long? _reopenContentId; // chế độ API: mở lại drawer của thẻ này sau khi Board tải lại (sau khi lưu/đổi trạng thái/giao việc)
     private readonly IMyTaskBackend? _taskBackend;
     private readonly AuthApiFacade? _auth;
     private readonly ProjectInvitationService? _invitationService;
@@ -84,7 +89,11 @@ public partial class BoardForm : Form, IMessageFilter
         ProjectInvitationService? invitationService = null,
         InvitationInboxService? invitationInboxService = null,
         ProjectApiFacade? projects = null,
-        IMyTaskBackend? taskBackend = null)
+        IMyTaskBackend? taskBackend = null,
+        IIdeaBackend? ideaBackend = null,
+        IBoardBackend? boardBackend = null,
+        IContentDetailBackend? detailBackend = null,
+        IAssignmentBackend? assignmentBackend = null)
     {
         InitializeComponent();
         _workflowService = workflowService;
@@ -99,6 +108,10 @@ public partial class BoardForm : Form, IMessageFilter
         _invitationService = invitationService;
         _invitationInboxService = invitationInboxService;
         _taskBackend = taskBackend;
+        _ideaBackend = ideaBackend;
+        _boardBackend = boardBackend;
+        _detailBackend = detailBackend;
+        _assignmentBackend = assignmentBackend;
         InitializeProjects(projects);
         if (auth is not null)
         {
@@ -114,8 +127,8 @@ public partial class BoardForm : Form, IMessageFilter
         _pnlDrawerHost.Paint += PnlDrawerHost_Paint;
         BuildColumns();
 
-        _contentDetailPanel.Initialize(_workflowService, _activityRepository, _memberRepository, _contentService, scriptService, metrics, loadLocalPlatforms: projects is null);
-        _contentDetailPanel.ContentChanged += (_, _) => { ReloadBoard(); _toast.ShowToast(this, "Cap nhat thanh cong!"); };
+        _contentDetailPanel.Initialize(_workflowService, _activityRepository, _memberRepository, _contentService, scriptService, metrics, loadLocalPlatforms: projects is null, detailBackend: detailBackend, assignmentBackend: assignmentBackend);
+        _contentDetailPanel.ContentChanged += (_, _) => { if (_projects is not null) _reopenContentId = _selectedContentId; ReloadBoard(); _toast.ShowToast(this, "Cap nhat thanh cong!"); };
         _contentDetailPanel.CloseRequested += (_, _) => CloseDrawer();
 
         _topHeaderControl.NewContentClicked += (_, _) => OpenCreateContentDialog();
@@ -196,10 +209,13 @@ public partial class BoardForm : Form, IMessageFilter
     private bool HasProjectContext => CurrentSession.CurrentProjectId > 0 &&
         (_auth is null || _auth.Session.IsAuthenticated);
 
+    /// <summary>Chế độ API: nút New Content chỉ bật khi tạo Content và lấy danh sách người nhận việc đã nối API.</summary>
+    private bool CanCreateContentViaApi => _detailBackend is not null && _assignmentBackend is not null;
+
     private void UpdateProjectContext()
     {
         _topHeaderControl.SetProjectContext(HasProjectContext ? CurrentSession.CurrentProjectName : null,
-            HasProjectContext && _profile is null && _projects is null);
+            HasProjectContext && _profile is null && (_projects is null || CanCreateContentViaApi));
         _sidebarControl.SetProjectName(HasProjectContext ? CurrentSession.CurrentProjectName : null);
         _sidebarControl.ProjectActionsEnabled = HasProjectContext;
         _sidebarControl.Invalidate();
@@ -306,13 +322,22 @@ public partial class BoardForm : Form, IMessageFilter
     // ==========================================================
     private void OnCardClicked(object? sender, ContentBoardCard card)
     {
+        if (_projects is not null)
+        {
+            // Đã đăng nhập: drawer chi tiết chạy qua API khi có IContentDetailBackend.
+            if (_detailBackend is not null && sender is KanbanCardControl apiCardCtrl)
+                SelectCard(apiCardCtrl);
+            else if (_boardBackend is not null)
+                _toast.ShowToast(this, "Chi tiết Content chưa kết nối API");
+            return;
+        }
         if (sender is KanbanCardControl cardCtrl)
             SelectCard(cardCtrl);
     }
 
     private void SelectCard(KanbanCardControl cardCtrl)
     {
-        if (!HasProjectContext || _projects is not null) return;
+        if (!HasProjectContext || (_projects is not null && _detailBackend is null)) return;
         // Đang mở thẻ khác và có thay đổi chưa lưu → hỏi trước khi chuyển (Clear() tự hiện hộp thoại xác nhận).
         if (_selectedContentId.HasValue && _selectedContentId != cardCtrl.Card.ContentId && _contentDetailPanel.HasUnsavedChanges)
         {
@@ -368,7 +393,12 @@ public partial class BoardForm : Form, IMessageFilter
 
     private void TryMoveNext(ContentBoardCard card)
     {
-        if (!HasProjectContext || _projects is not null) return;
+        if (!HasProjectContext) return;
+        if (_projects is not null)
+        {
+            if (_boardBackend is not null) _toast.ShowToast(this, "Chuyển trạng thái chưa kết nối API");
+            return;
+        }
         try
         {
             switch (card.Status)
@@ -408,16 +438,40 @@ public partial class BoardForm : Form, IMessageFilter
     // ==========================================================
     private void OpenCreateContentDialog(ContentStatus initialStatus = ContentStatus.Idea)
     {
-        if (!HasProjectContext || _profile is not null) return;
-        if (_projects is not null) { ShowUnavailableModule("Tạo Content"); return; }
-        var members = _contentService.GetAssignableMembers(CurrentSession.CurrentProjectId, CurrentSession.CurrentUserId);
-        using var dlg = new CreateContentDialog(members, _contentService.GetAvailablePlatforms(), initialStatus);
+        // New Content nằm ở header nên bấm được cả khi đang mở Hồ sơ / Quản lý Project / Admin / Báo cáo / Lịch: chỉ tạo khi đang ở Board.
+        if (!HasProjectContext || _profile is not null || _projectPage is not null || _admin is not null || _reports is not null || _calendar is not null) return;
+        bool viaApi = _projects is not null;
+        if (viaApi && (_detailBackend is null || _assignmentBackend is null)) { ShowUnavailableModule("Tạo Content"); return; }
+
+        List<ProjectMemberInfo> members;
+        List<string> platforms;
+        try
+        {
+            // Chế độ API: danh sách người nhận việc và platform lấy từ API (quyền do Backend quyết định).
+            members = viaApi
+                ? _assignmentBackend!.GetAssignableMembers(CurrentSession.CurrentProjectId)
+                : _contentService.GetAssignableMembers(CurrentSession.CurrentProjectId, CurrentSession.CurrentUserId);
+            platforms = viaApi ? _detailBackend!.GetAvailablePlatforms() : _contentService.GetAvailablePlatforms();
+        }
+        catch (ContentValidationException ex)
+        {
+            MessageBox.Show(this, ex.Message, "Không mở được hộp thoại tạo nội dung", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        catch (UnauthorizedWorkflowActionException ex)
+        {
+            MessageBox.Show(this, ex.Message, "Không đủ quyền", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        using var dlg = new CreateContentDialog(members, platforms, initialStatus);
         if (dlg.ShowDialog(this) != DialogResult.OK) return;
 
         try
         {
-            long newId = _contentService.Create(
-                CurrentSession.CurrentProjectId, initialStatus, dlg.Draft, CurrentSession.CurrentUserId);
+            long newId = viaApi
+                ? _detailBackend!.Create(CurrentSession.CurrentProjectId, initialStatus, dlg.Draft)
+                : _contentService.Create(CurrentSession.CurrentProjectId, initialStatus, dlg.Draft, CurrentSession.CurrentUserId);
             ReloadBoard();
             _toast.ShowToast(this, $"Da tao noi dung CNT-{newId:000} thanh cong!");
         }
@@ -446,7 +500,7 @@ public partial class BoardForm : Form, IMessageFilter
             new MyTasksForm(_taskBackend!, () => !IsDisposed && _auth?.Session.IsAuthenticated == true &&
                 authGeneration == _auth.Session.Generation && generation == _projects.Context.Generation))
         {
-            tasksForm.ShowDialog(this);
+            ShowWithActiveMenu("My Tasks", () => tasksForm.ShowDialog(this));
             contentId = tasksForm.RequestedContentId;
         }
 
@@ -458,14 +512,41 @@ public partial class BoardForm : Form, IMessageFilter
     private void OpenIdeaBank()
     {
         if (!HasProjectContext) return;
-        if (_projects is not null) { ShowUnavailableModule("Idea Bank"); return; }
-        CloseProfile();
-        using (var ideaForm = new IdeaBankForm(_ideaService))
+        if (_projects is not null)
         {
-            ideaForm.ShowDialog(this);
+            // Đã đăng nhập: Idea Bank chạy qua API. Chưa có backend API thì giữ thông báo "chưa kết nối" như cũ.
+            if (_ideaBackend is null) { ShowUnavailableModule("Idea Bank"); return; }
+            if (!CanLeaveProjectPage()) return;
+            ShowIdeaBankDialog(_ideaBackend);
+            return;
         }
+        CloseProfile();
+        ShowIdeaBankDialog(_ideaService);
 
         ReloadBoard();
+    }
+
+    /// <summary>Hiện Idea Bank và sáng mục Backlog trên sidebar trong lúc mở; đóng xong trả highlight về mục trước đó.</summary>
+    private void ShowIdeaBankDialog(IIdeaBackend backend) =>
+        ShowWithActiveMenu("Backlog", () =>
+        {
+            using var ideaForm = new IdeaBankForm(backend);
+            ideaForm.ShowDialog(this);
+        });
+
+    /// <summary>Chạy một hộp thoại mở từ sidebar: sáng mục <paramref name="menu"/> trong lúc mở, đóng xong trả highlight về mục trước đó.</summary>
+    private void ShowWithActiveMenu(string menu, Action show)
+    {
+        string? previous = _sidebarControl.ActiveMenu;
+        _sidebarControl.SetActiveMenu(menu);
+        try
+        {
+            show();
+        }
+        finally
+        {
+            _sidebarControl.SetActiveMenu(previous ?? "Board");
+        }
     }
 
     /// <summary>Mở hộp thoại Mời thành viên (SCRUM-26) của Project hiện hành. Quyền Owner do API quyết định.</summary>
@@ -481,7 +562,7 @@ public partial class BoardForm : Form, IMessageFilter
         }
 
         using var dialog = new InviteMemberDialog(_invitationService, CurrentSession.CurrentProjectId, CurrentSession.CurrentProjectName);
-        dialog.ShowDialog(this);
+        ShowWithActiveMenu("Project Settings", () => dialog.ShowDialog(this));
     }
 
     /// <summary>
@@ -499,7 +580,7 @@ public partial class BoardForm : Form, IMessageFilter
         }
 
         using var dialog = new MyInvitationsDialog(_invitationInboxService);
-        dialog.ShowDialog(this);
+        ShowWithActiveMenu("Invitations", () => dialog.ShowDialog(this));
     }
 
     /// <summary>Mở drawer chi tiết cho Content theo Id (kể cả khi thẻ đang bị ẩn bởi bộ lọc tìm kiếm/platform).</summary>
@@ -540,7 +621,7 @@ public partial class BoardForm : Form, IMessageFilter
         CloseReports();
         CloseCalendar();
         using var queueForm = new Review.ReviewQueueForm(_reviewQueueRepository, _workflowService);
-        queueForm.ShowDialog(this);
+        ShowWithActiveMenu("Review Queue", () => queueForm.ShowDialog(this));
         ReloadBoard();
     }
 

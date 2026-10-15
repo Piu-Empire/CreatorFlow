@@ -1,5 +1,6 @@
 using CreatorFlow.Models;
 using CreatorFlow.Services;
+using CreatorFlow.Services.Backends;
 using CreatorFlow.Services.Exceptions;
 using CreatorFlow.Theme;
 
@@ -21,6 +22,7 @@ public class ScriptEditorControl : UserControl
     private readonly RoundedButton _btnAi;
 
     private ScriptService? _service;
+    private IContentDetailBackend? _backend; // chế độ API: mở/lưu script qua CreatorFlow.Api
     private ScriptDocument? _document;
     private long _userId;
     private bool _loading;
@@ -126,7 +128,11 @@ public class ScriptEditorControl : UserControl
         Controls.Add(bottomBar);
     }
 
-    public void Initialize(ScriptService service) => _service = service;
+    public void Initialize(ScriptService service, IContentDetailBackend? backend = null)
+    {
+        _service = service;
+        _backend = backend;
+    }
 
     // ---------- API công khai ----------
 
@@ -139,9 +145,10 @@ public class ScriptEditorControl : UserControl
         _userId = userId;
         try
         {
-            ApplyDocument(_service.Open(contentId, userId));
+            ApplyDocument(_backend != null ? _backend.OpenScript(contentId) : _service.Open(contentId, userId));
         }
         catch (Exception ex) when (ex is UnauthorizedWorkflowActionException or InvalidOperationException
+                                       or ContentValidationException
                                        or Npgsql.NpgsqlException or TimeoutException)
         {
             _document = null;
@@ -209,7 +216,9 @@ public class ScriptEditorControl : UserControl
 
         try
         {
-            ScriptDocument saved = _service.Save(_document.ContentId, _txtScript.Text, _document.Version, _userId);
+            ScriptDocument saved = _backend != null
+                ? _backend.SaveScript(_document.ContentId, _txtScript.Text, _document.Version)
+                : _service.Save(_document.ContentId, _txtScript.Text, _document.Version, _userId);
             ApplyDocument(saved);
             SetNotice("Đã lưu kịch bản.", UITheme.Success);
             ScriptSaved?.Invoke(this, saved.Text);

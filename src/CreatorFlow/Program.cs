@@ -102,7 +102,11 @@ static class Program
             var session = new UserSession();
             using var projects = new ProjectApiFacade(api, session);
             var taskBackend = new ApiMyTaskBackend(api, session);
-            var auth = new AuthApiFacade(api, session);            var metricBackend = new ApiMetricBackend(api, session);
+            var auth = new AuthApiFacade(api, session); var metricBackend = new ApiMetricBackend(api, session);
+            var ideaBackend = new ApiIdeaBackend(api, session);
+            var boardBackend = new ApiBoardBackend(api, session);
+            var detailBackend = new ApiContentDetailBackend(api, session);
+            var assignmentBackend = new ApiAssignmentBackend(api, session);
             var invitations = new ProjectInvitationService(api, session);
             var invitationInbox = new InvitationInboxService(api, session);
             if (args.Length > 0 && args[0] == "--test")
@@ -117,7 +121,7 @@ static class Program
                 return;
             }
             using var context = new AuthenticationApplicationContext(auth, () =>
-                new BoardForm(workflowService, boardRepo, reviewQueueRepo, activityRepo, memberRepo, contentService, myTaskService, scriptService, ideaService, auth, metricBackend, invitations, invitationInbox, projects: projects, taskBackend: taskBackend), projects, invitationInbox);
+                new BoardForm(workflowService, boardRepo, reviewQueueRepo, activityRepo, memberRepo, contentService, myTaskService, scriptService, ideaService, auth, metricBackend, invitations, invitationInbox, projects: projects, taskBackend: taskBackend, ideaBackend: ideaBackend, boardBackend: boardBackend, detailBackend: detailBackend, assignmentBackend: assignmentBackend), projects, invitationInbox);
             Application.Run(context);
         }
         catch (InvalidOperationException)

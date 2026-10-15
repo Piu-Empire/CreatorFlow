@@ -10,7 +10,7 @@ namespace CreatorFlow.Services;
 /// của phiên đăng nhập và đổi lỗi API sang ngoại lệ nghiệp vụ mà giao diện đã xử lý:
 /// ContentValidationException (dữ liệu sai, trùng, mất mạng...) / UnauthorizedWorkflowActionException (không đủ quyền, hết phiên).
 /// </summary>
-public sealed class ProjectInvitationService(ApiClient api, UserSession session)
+public sealed class ProjectInvitationService(ApiClient api, UserSession session) : IInvitationBackend
 {
     /// <summary>Owner mời <paramref name="email"/> với vai trò "Manager" hoặc "Creator". Trả về lời mời vừa tạo (Pending).</summary>
     public InvitationResponse Invite(long projectId, string email, string role) =>

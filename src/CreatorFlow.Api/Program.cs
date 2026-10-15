@@ -19,6 +19,10 @@ using CreatorFlow.Api.Repositories.Workflow;
 using CreatorFlow.Api.Services.Workflow;
 using CreatorFlow.Api.Repositories.Invitations;
 using CreatorFlow.Api.Services.Invitations;
+using CreatorFlow.Api.Repositories.Ideas;
+using CreatorFlow.Api.Services.Ideas;
+using CreatorFlow.Api.Repositories.Board;
+using CreatorFlow.Api.Services.Board;
 using Microsoft.AspNetCore.Http.Features;
 using System.Text.Json.Serialization;
 
@@ -60,6 +64,12 @@ builder.Services.AddScoped<IInvitationRepository, InvitationRepository>();
 builder.Services.AddScoped<InvitationService>();
 builder.Services.AddScoped<IMyInvitationRepository, MyInvitationRepository>();
 builder.Services.AddScoped<MyInvitationService>();
+builder.Services.AddScoped<IIdeaRepository, IdeaRepository>();
+builder.Services.AddScoped<IdeaService>();
+builder.Services.AddScoped<IBoardCardRepository, BoardCardRepository>();
+builder.Services.AddScoped<BoardService>();
+builder.Services.AddScoped<CreatorFlow.Api.Repositories.ContentDetail.IContentDetailRepository, CreatorFlow.Api.Repositories.ContentDetail.ContentDetailRepository>();
+builder.Services.AddScoped<CreatorFlow.Api.Services.ContentDetail.ContentDetailService>();
 builder.Services.AddScoped<CreatorFlow.Api.Repositories.Projects.IProjectRepository, CreatorFlow.Api.Repositories.Projects.ProjectRepository>();
 builder.Services.AddScoped<CreatorFlow.Api.Services.Projects.ProjectService>();
 builder.Services.AddSingleton<IAvatarImageProcessor, AvatarImageProcessor>();
@@ -104,6 +114,9 @@ app.MapWorkflowEndpoints();
 app.MapInvitationEndpoints();
 app.MapMyInvitationEndpoints();
 app.MapProjectEndpoints();
+app.MapIdeaEndpoints();
+app.MapBoardEndpoints();
+app.MapContentDetailEndpoints();
 app.Run();
 
 public partial class Program { }
