@@ -23,7 +23,7 @@ public sealed class IdeaService(IIdeaRepository ideas, ITaskRepository tasks, Cu
         IdeaStatus? parsed = null;
         if (!string.IsNullOrWhiteSpace(status))
         {
-            if (!Enum.TryParse(status, ignoreCase: true, out IdeaStatus value) || !Enum.IsDefined(value))
+            if (!IdeaRules.TryParseStatus(status, out IdeaStatus value))
                 return Invalid<IdeasResponse>("Trạng thái Idea không hợp lệ.", "status");
             parsed = value;
         }
@@ -114,7 +114,7 @@ public sealed class IdeaService(IIdeaRepository ideas, ITaskRepository tasks, Cu
         string note = (request.Note ?? string.Empty).Trim();
         string[] tags = IdeaRules.NormalizeTags(request.Tags);
 
-        if (!Enum.TryParse(request.Status, ignoreCase: true, out IdeaStatus status) || !Enum.IsDefined(status))
+        if (!IdeaRules.TryParseStatus(request.Status, out IdeaStatus status))
             return (null, "Trạng thái Idea không hợp lệ.");
         if (IdeaRules.Validate(title, description, note, tags) is { } error) return (null, error);
         if (IdeaRules.ValidateStatusChange(currentStatus, status) is { } statusError) return (null, statusError);

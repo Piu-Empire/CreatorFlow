@@ -326,8 +326,13 @@ public sealed class ContentDetailService(
     {
         string trimmed = (contentType ?? string.Empty).Trim();
         if (trimmed.Length == 0) return DefaultContentType;
-        return AvailableContentTypes.FirstOrDefault(t => t.Equals(trimmed, StringComparison.OrdinalIgnoreCase)) ?? trimmed;
+        // So khớp bỏ qua hoa/thường, '_', '-' và khoảng trắng để nhận cả giá trị cũ trong DB (VD seed lưu "SHORT_VIDEO") và trả về tên chuẩn "Short video".
+        string key = ContentTypeKey(trimmed);
+        return AvailableContentTypes.FirstOrDefault(t => ContentTypeKey(t) == key) ?? trimmed;
     }
+
+    private static string ContentTypeKey(string value) =>
+        new(value.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray());
 
     private static AuthOperationResult<ScriptResponse> ScriptConflict() =>
         Fail<ScriptResponse>("script_conflict",

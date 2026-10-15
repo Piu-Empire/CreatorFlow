@@ -29,6 +29,18 @@ public static class IdeaRules
         _ => false,
     };
 
+    /// <summary>
+    /// Đọc tên trạng thái Idea. Chỉ nhận chữ cái ("Draft", "backlog"): Enum.TryParse còn nhận số ("1" → Backlog)
+    /// và danh sách ("Draft,Backlog" → một giá trị hợp lệ khác) nên không dùng trực tiếp cho dữ liệu từ client.
+    /// </summary>
+    public static bool TryParseStatus(string? value, out IdeaStatus status)
+    {
+        status = default;
+        string text = value?.Trim() ?? string.Empty;
+        return text.Length > 0 && text.All(char.IsLetter)
+            && Enum.TryParse(text, ignoreCase: true, out status) && Enum.IsDefined(status);
+    }
+
     public static string NormalizeTag(string? tag) =>
         Regex.Replace((tag ?? string.Empty).Trim().TrimStart('#').Trim(), @"\s+", " ");
 

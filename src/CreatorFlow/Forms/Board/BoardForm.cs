@@ -500,7 +500,7 @@ public partial class BoardForm : Form, IMessageFilter
             new MyTasksForm(_taskBackend!, () => !IsDisposed && _auth?.Session.IsAuthenticated == true &&
                 authGeneration == _auth.Session.Generation && generation == _projects.Context.Generation))
         {
-            tasksForm.ShowDialog(this);
+            ShowWithActiveMenu("My Tasks", () => tasksForm.ShowDialog(this));
             contentId = tasksForm.RequestedContentId;
         }
 
@@ -517,17 +517,36 @@ public partial class BoardForm : Form, IMessageFilter
             // Đã đăng nhập: Idea Bank chạy qua API. Chưa có backend API thì giữ thông báo "chưa kết nối" như cũ.
             if (_ideaBackend is null) { ShowUnavailableModule("Idea Bank"); return; }
             if (!CanLeaveProjectPage()) return;
-            using var apiIdeaForm = new IdeaBankForm(_ideaBackend);
-            apiIdeaForm.ShowDialog(this);
+            ShowIdeaBankDialog(_ideaBackend);
             return;
         }
         CloseProfile();
-        using (var ideaForm = new IdeaBankForm(_ideaService))
-        {
-            ideaForm.ShowDialog(this);
-        }
+        ShowIdeaBankDialog(_ideaService);
 
         ReloadBoard();
+    }
+
+    /// <summary>Hiện Idea Bank và sáng mục Backlog trên sidebar trong lúc mở; đóng xong trả highlight về mục trước đó.</summary>
+    private void ShowIdeaBankDialog(IIdeaBackend backend) =>
+        ShowWithActiveMenu("Backlog", () =>
+        {
+            using var ideaForm = new IdeaBankForm(backend);
+            ideaForm.ShowDialog(this);
+        });
+
+    /// <summary>Chạy một hộp thoại mở từ sidebar: sáng mục <paramref name="menu"/> trong lúc mở, đóng xong trả highlight về mục trước đó.</summary>
+    private void ShowWithActiveMenu(string menu, Action show)
+    {
+        string? previous = _sidebarControl.ActiveMenu;
+        _sidebarControl.SetActiveMenu(menu);
+        try
+        {
+            show();
+        }
+        finally
+        {
+            _sidebarControl.SetActiveMenu(previous ?? "Board");
+        }
     }
 
     /// <summary>Mở hộp thoại Mời thành viên (SCRUM-26) của Project hiện hành. Quyền Owner do API quyết định.</summary>
@@ -543,7 +562,7 @@ public partial class BoardForm : Form, IMessageFilter
         }
 
         using var dialog = new InviteMemberDialog(_invitationService, CurrentSession.CurrentProjectId, CurrentSession.CurrentProjectName);
-        dialog.ShowDialog(this);
+        ShowWithActiveMenu("Project Settings", () => dialog.ShowDialog(this));
     }
 
     /// <summary>
@@ -561,7 +580,7 @@ public partial class BoardForm : Form, IMessageFilter
         }
 
         using var dialog = new MyInvitationsDialog(_invitationInboxService);
-        dialog.ShowDialog(this);
+        ShowWithActiveMenu("Invitations", () => dialog.ShowDialog(this));
     }
 
     /// <summary>Mở drawer chi tiết cho Content theo Id (kể cả khi thẻ đang bị ẩn bởi bộ lọc tìm kiếm/platform).</summary>
@@ -602,7 +621,7 @@ public partial class BoardForm : Form, IMessageFilter
         CloseReports();
         CloseCalendar();
         using var queueForm = new Review.ReviewQueueForm(_reviewQueueRepository, _workflowService);
-        queueForm.ShowDialog(this);
+        ShowWithActiveMenu("Review Queue", () => queueForm.ShowDialog(this));
         ReloadBoard();
     }
 

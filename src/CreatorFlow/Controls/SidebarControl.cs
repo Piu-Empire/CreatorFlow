@@ -71,10 +71,20 @@ public class SidebarControl : UserControl
         BackColor = UITheme.Black;
         DoubleBuffered = true;
         BuildNavItems();
-        _projectButton = new Button { Text = "Chưa chọn dự án", Bounds = new Rectangle(14, 68, Width - 28, 60),
-            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right, FlatStyle = FlatStyle.Flat,
-            BackColor = UITheme.Neutral900, ForeColor = UITheme.White, AutoEllipsis = true,
-            AccessibleName = "Chọn Project", TabIndex = 0, Font = UITheme.FontBodyBold, Cursor = Cursors.Hand };
+        _projectButton = new Button
+        {
+            Text = "Chưa chọn dự án",
+            Bounds = new Rectangle(14, 68, Width - 28, 60),
+            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
+            FlatStyle = FlatStyle.Flat,
+            BackColor = UITheme.Neutral900,
+            ForeColor = UITheme.White,
+            AutoEllipsis = true,
+            AccessibleName = "Chọn Project",
+            TabIndex = 0,
+            Font = UITheme.FontBodyBold,
+            Cursor = Cursors.Hand
+        };
         UiTheme.StyleButton(_projectButton);
         _projectButton.BackColor = UITheme.Neutral900;
         _projectButton.FlatAppearance.MouseOverBackColor = UITheme.Neutral800;
@@ -128,10 +138,22 @@ public class SidebarControl : UserControl
         {
             y += ItemStep + 10;
             _groups.Add(("ADMIN", y)); y += 26;
-            _items.Add(new NavItem { Title = "Quản trị người dùng", Icon = NavIcon.Shield, Y = y, AlwaysEnabled = true,
-                Action = () => AdminWorkspaceRequested?.Invoke(this, EventArgs.Empty) }); y += ItemStep;
-            _items.Add(new NavItem { Title = "Báo cáo vi phạm", Icon = NavIcon.Flag, Y = y, AlwaysEnabled = true,
-                Action = () => AdminReportsRequested?.Invoke(this, EventArgs.Empty) });
+            _items.Add(new NavItem
+            {
+                Title = "Quản trị người dùng",
+                Icon = NavIcon.Shield,
+                Y = y,
+                AlwaysEnabled = true,
+                Action = () => AdminWorkspaceRequested?.Invoke(this, EventArgs.Empty)
+            }); y += ItemStep;
+            _items.Add(new NavItem
+            {
+                Title = "Báo cáo vi phạm",
+                Icon = NavIcon.Flag,
+                Y = y,
+                AlwaysEnabled = true,
+                Action = () => AdminReportsRequested?.Invoke(this, EventArgs.Empty)
+            });
         }
 
         // Neo đáy: cách đáy 100px (phía trên dòng trạng thái); Invitations nằm ngay phía trên Project Settings.
@@ -291,6 +313,9 @@ public class SidebarControl : UserControl
 
     /// <summary>Mục AlwaysEnabled thao tác được cả khi chưa có project, các mục khác cần project.</summary>
     private bool IsItemEnabled(NavItem item) => ProjectActionsEnabled || item.AlwaysEnabled || ProjectManagementEnabled && item.Icon == NavIcon.Gear;
+
+    /// <summary>Tên mục đang được đánh dấu (null nếu chưa có).</summary>
+    public string? ActiveMenu => _items.FirstOrDefault(item => item.IsActive)?.Title;
 
     /// <summary>Đánh dấu mục đang mở (BoardForm gọi khi chuyển màn hình).</summary>
     public void SetActiveMenu(string title)
