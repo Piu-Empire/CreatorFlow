@@ -11,6 +11,11 @@ public static class ProjectEndpoints
         group.MapGet("/", async (ProjectService service, CancellationToken token) => Http(await service.ListAsync(token)));
         group.MapGet("/{id:long}", async (long id, ProjectService service, CancellationToken token) => Http(await service.GetAsync(id, token)));
         group.MapGet("/{id:long}/access", async (long id, ProjectService service, CancellationToken token) => Http(await service.AccessAsync(id, token)));
+        group.MapGet("/{id:long}/members", async (long id, ProjectMembersService service, CancellationToken token) => Http(await service.ListAsync(id, token)));
+        group.MapPut("/{id:long}/members/{userId:long}/role", async (long id, long userId, UpdateProjectMemberRoleRequest input,
+            ProjectMembersService service, CancellationToken token) => Http(await service.UpdateRoleAsync(id, userId, input, token)));
+        group.MapDelete("/{id:long}/members/{userId:long}", async (long id, long userId, ProjectMembersService service, CancellationToken token) =>
+            Http(await service.RemoveAsync(id, userId, token)));
         group.MapPost("/", async (CreateProjectRequest input, ProjectService service, CancellationToken token) =>
         {
             var result = await service.CreateAsync(input, token);
@@ -18,6 +23,7 @@ public static class ProjectEndpoints
         });
         group.MapPut("/{id:long}", async (long id, UpdateProjectRequest input, ProjectService service, CancellationToken token) => Http(await service.UpdateAsync(id, input, token)));
         group.MapPost("/{id:long}/archive", async (long id, ProjectService service, CancellationToken token) => Http(await service.ArchiveAsync(id, token)));
+        group.MapPost("/{id:long}/restore", async (long id, ProjectService service, CancellationToken token) => Http(await service.RestoreAsync(id, token)));
         group.MapDelete("/{id:long}", async (long id, ProjectService service, CancellationToken token) => Http(await service.DeleteAsync(id, token)));
     }
 

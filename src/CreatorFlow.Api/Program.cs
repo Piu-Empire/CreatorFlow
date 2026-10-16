@@ -13,7 +13,6 @@ using Microsoft.AspNetCore.Authorization;
 using CreatorFlow.Api.Configuration;
 using CreatorFlow.Api.Services.Auth;
 using CreatorFlow.Api.Repositories.Auth;
-using CreatorFlow.Api.Repositories.Tasks;
 using CreatorFlow.Api.Services.Tasks;
 using CreatorFlow.Api.Repositories.Workflow;
 using CreatorFlow.Api.Services.Workflow;
@@ -72,6 +71,7 @@ builder.Services.AddScoped<CreatorFlow.Api.Repositories.ContentDetail.IContentDe
 builder.Services.AddScoped<CreatorFlow.Api.Services.ContentDetail.ContentDetailService>();
 builder.Services.AddScoped<CreatorFlow.Api.Repositories.Projects.IProjectRepository, CreatorFlow.Api.Repositories.Projects.ProjectRepository>();
 builder.Services.AddScoped<CreatorFlow.Api.Services.Projects.ProjectService>();
+builder.Services.AddScoped<CreatorFlow.Api.Services.Projects.ProjectMembersService>();
 builder.Services.AddSingleton<IAvatarImageProcessor, AvatarImageProcessor>();
 
 builder.Services.AddSingleton<IDbConnectionFactory>(new NpgsqlConnectionFactory(connectionString));

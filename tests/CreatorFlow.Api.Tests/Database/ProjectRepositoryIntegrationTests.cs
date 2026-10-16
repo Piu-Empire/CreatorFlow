@@ -85,6 +85,38 @@ public sealed class ProjectRepositoryIntegrationTests
         Assert.AreEqual(1L, await fixture.Count("projects"));
     }
 
+    [TestMethod]
+    public async Task MemberRolesAreProjectScoped_AndProjectAlwaysKeepsAnActiveOwner()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        long firstProject = (await fixture.Service.CreateAsync(new("First", null), default)).Value!.ProjectId;
+        long secondProject = (await fixture.Service.CreateAsync(new("Second", null), default)).Value!.ProjectId;
+        long memberId = await fixture.AddUser("member@example.test");
+        long secondOwnerId = await fixture.AddUser("second-owner@example.test");
+        await fixture.InsertMember(firstProject, memberId, "CREATOR");
+        await fixture.InsertMember(secondProject, memberId, "CREATOR");
+        await fixture.InsertMember(firstProject, secondOwnerId, "OWNER");
+        var service = new ProjectMembersService(new ProjectRepository(fixture.Factory), new CurrentAuthenticatedUser { User = new User
+        { UserId = fixture.UserId, Email = "fixture@example.test", DisplayName = "Fixture", PasswordHash = "unused", AccountStatus = AccountStatus.Active, EmailVerifiedAt = DateTimeOffset.UtcNow } });
+
+        Assert.AreEqual(200, (await service.UpdateRoleAsync(firstProject, memberId, new("MANAGER"), default)).Status);
+        Assert.AreEqual("MANAGER", await fixture.Role(firstProject, memberId));
+        Assert.AreEqual("CREATOR", await fixture.Role(secondProject, memberId));
+
+        // The last Owner cannot leave the Project without ownership.
+        Assert.AreEqual(409, (await service.UpdateRoleAsync(firstProject, fixture.UserId, new("CREATOR"), default)).Status);
+        Assert.AreEqual(409, (await service.RemoveAsync(firstProject, fixture.UserId, default)).Status);
+        Assert.AreEqual("OWNER", await fixture.Role(firstProject, fixture.UserId));
+        Assert.IsTrue(await fixture.IsActive(firstProject, fixture.UserId));
+
+        // With a second Owner, the original Owner may leave; owner_id follows the remaining active Owner.
+        Assert.AreEqual(200, (await service.UpdateRoleAsync(firstProject, fixture.UserId, new("MANAGER"), default)).Status);
+        Assert.AreEqual("MANAGER", await fixture.Role(firstProject, fixture.UserId));
+        Assert.AreEqual("OWNER", await fixture.Role(firstProject, secondOwnerId));
+        Assert.AreEqual(secondOwnerId, await fixture.ProjectOwnerId(firstProject));
+        Assert.AreEqual("CREATOR", await fixture.Role(secondProject, memberId));
+    }
+
     private sealed class Fixture : IAsyncDisposable
     {
         public required NpgsqlConnectionFactory Factory { get; init; }
@@ -121,6 +153,44 @@ public sealed class ProjectRepositoryIntegrationTests
             await using var connection = await Factory.OpenConnectionAsync(); await using var command = new NpgsqlCommand(sql, connection);
             command.Parameters.AddWithValue("a", a); command.Parameters.AddWithValue("b", b); command.Parameters.AddWithValue("user", UserId);
             await command.ExecuteNonQueryAsync();
+        }
+        public async Task<long> AddUser(string email)
+        {
+            await using var connection = await Factory.OpenConnectionAsync();
+            await using var command = new NpgsqlCommand("INSERT INTO users(email,password_hash,display_name) VALUES(@email,'unused',@name) RETURNING user_id", connection);
+            command.Parameters.AddWithValue("email", email);
+            command.Parameters.AddWithValue("name", email);
+            return (long)(await command.ExecuteScalarAsync())!;
+        }
+        public async Task InsertMember(long projectId, long userId, string role)
+        {
+            await using var connection = await Factory.OpenConnectionAsync();
+            await using var command = new NpgsqlCommand("INSERT INTO project_members(project_id,user_id,role) VALUES(@project,@user,@role::project_role)", connection);
+            command.Parameters.AddWithValue("project", projectId);
+            command.Parameters.AddWithValue("user", userId);
+            command.Parameters.AddWithValue("role", role);
+            await command.ExecuteNonQueryAsync();
+        }
+        public async Task<string> Role(long projectId, long userId)
+        {
+            await using var connection = await Factory.OpenConnectionAsync();
+            await using var command = new NpgsqlCommand("SELECT role::text FROM project_members WHERE project_id=@project AND user_id=@user", connection);
+            command.Parameters.AddWithValue("project", projectId); command.Parameters.AddWithValue("user", userId);
+            return (string)(await command.ExecuteScalarAsync())!;
+        }
+        public async Task<bool> IsActive(long projectId, long userId)
+        {
+            await using var connection = await Factory.OpenConnectionAsync();
+            await using var command = new NpgsqlCommand("SELECT is_active FROM project_members WHERE project_id=@project AND user_id=@user", connection);
+            command.Parameters.AddWithValue("project", projectId); command.Parameters.AddWithValue("user", userId);
+            return (bool)(await command.ExecuteScalarAsync())!;
+        }
+        public async Task<long> ProjectOwnerId(long projectId)
+        {
+            await using var connection = await Factory.OpenConnectionAsync();
+            await using var command = new NpgsqlCommand("SELECT owner_id FROM projects WHERE project_id=@project", connection);
+            command.Parameters.AddWithValue("project", projectId);
+            return (long)(await command.ExecuteScalarAsync())!;
         }
         public async Task<long> Count(string fixtureTable)
         {

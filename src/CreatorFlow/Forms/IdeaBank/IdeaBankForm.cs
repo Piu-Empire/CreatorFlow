@@ -20,7 +20,8 @@ public partial class IdeaBankForm : Form
     private const string AllStatusLabel = "Tất cả trạng thái";
     private const string AllTagLabel = "Tất cả tag";
 
-    private readonly IIdeaBackend _ideaService;
+    // Null only in the parameterless constructor used by the Visual Studio Designer.
+    private readonly IIdeaBackend? _ideaService;
     private readonly ToastNotification? _toast;
     private readonly System.Windows.Forms.Timer _searchTimer = new() { Interval = 300 };
     private List<Idea> _ideas = new();
@@ -103,6 +104,7 @@ public partial class IdeaBankForm : Form
 
     private List<string> SafeGetProjectTags()
     {
+        if (_ideaService is null) return new List<string>();
         try { return _ideaService.GetProjectTags(ProjectId, UserId); }
         catch (Exception ex) when (ex is UnauthorizedWorkflowActionException or IdeaValidationException) { return new List<string>(); }
     }
@@ -158,10 +160,11 @@ public partial class IdeaBankForm : Form
     private void UpdateDetailAndButtons()
     {
         var idea = SelectedIdea;
-        btnNew.Enabled = _ideaService is not null && _ideaService.CanCreate(ProjectId, UserId);
-        btnEdit.Enabled = idea is not null && _ideaService.CanEdit(idea, UserId);
-        btnDelete.Enabled = idea is not null && _ideaService.CanDelete(idea, UserId);
-        btnConvert.Enabled = idea is not null && _ideaService.CanConvert(idea, UserId);
+        var service = _ideaService;
+        btnNew.Enabled = service?.CanCreate(ProjectId, UserId) == true;
+        btnEdit.Enabled = service is not null && idea is not null && service.CanEdit(idea, UserId);
+        btnDelete.Enabled = service is not null && idea is not null && service.CanDelete(idea, UserId);
+        btnConvert.Enabled = service is not null && idea is not null && service.CanConvert(idea, UserId);
 
         if (idea is null)
         {
@@ -200,27 +203,31 @@ public partial class IdeaBankForm : Form
 
     private void btnNew_Click(object? sender, EventArgs e)
     {
+        var service = _ideaService;
+        if (service is null) return;
         using var dialog = new IdeaEditDialog(SafeGetProjectTags());
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
 
-        Execute(() => _ideaService.Create(ProjectId, dialog.Draft, UserId), "Da them y tuong moi");
+        Execute(() => service.Create(ProjectId, dialog.Draft, UserId), "Da them y tuong moi");
     }
 
     private void btnEdit_Click(object? sender, EventArgs e)
     {
+        var service = _ideaService;
         var idea = SelectedIdea;
-        if (idea is null) return;
+        if (service is null || idea is null) return;
 
         using var dialog = new IdeaEditDialog(SafeGetProjectTags(), idea);
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
 
-        Execute(() => _ideaService.Update(idea.IdeaId, dialog.Draft, UserId), "Da cap nhat y tuong");
+        Execute(() => service.Update(idea.IdeaId, dialog.Draft, UserId), "Da cap nhat y tuong");
     }
 
     private void btnConvert_Click(object? sender, EventArgs e)
     {
+        var service = _ideaService;
         var idea = SelectedIdea;
-        if (idea is null) return;
+        if (service is null || idea is null) return;
 
         var confirm = MessageBox.Show(this,
             $"Chuyển ý tưởng \"{idea.Title}\" thành Content?{Environment.NewLine}{Environment.NewLine}" +
@@ -228,19 +235,20 @@ public partial class IdeaBankForm : Form
             "Chuyển thành Content", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
         if (confirm != DialogResult.Yes) return;
 
-        Execute(() => _ideaService.ConvertToContent(idea.IdeaId, UserId), "Da chuyen thanh Content");
+        Execute(() => service.ConvertToContent(idea.IdeaId, UserId), "Da chuyen thanh Content");
     }
 
     private void btnDelete_Click(object? sender, EventArgs e)
     {
+        var service = _ideaService;
         var idea = SelectedIdea;
-        if (idea is null) return;
+        if (service is null || idea is null) return;
 
         var confirm = MessageBox.Show(this, $"Xóa ý tưởng \"{idea.Title}\"? Thao tác này không hoàn tác được.",
             "Xóa ý tưởng", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
         if (confirm != DialogResult.Yes) return;
 
-        Execute(() => _ideaService.Delete(idea.IdeaId, UserId), "Da xoa y tuong");
+        Execute(() => service.Delete(idea.IdeaId, UserId), "Da xoa y tuong");
     }
 
     /// <summary>Chạy một thao tác ghi, hiện lỗi nghiệp vụ bằng hộp thoại, thành công thì tải lại danh sách và báo toast.</summary>

@@ -1,6 +1,7 @@
 using CreatorFlow.ApiClients;
 using CreatorFlow.Controls;
 using CreatorFlow.Contracts.Projects;
+using CreatorFlow.Forms.ProjectSettings;
 using CreatorFlow.Services;
 using CreatorFlow.Theme;
 
@@ -111,7 +112,7 @@ public partial class BoardForm
         string profileDraft = DraftSnapshot(_profile), contentDraft = DraftSnapshot(_contentDetailPanel);
         bool dirty = _profile?.HasUnsavedChanges == true || _contentDetailPanel.HasUnsavedChanges;
         using var dialog = new CreatorFlow.Forms.Projects.CreateProjectDialog(_projects, dirty);
-        if (dialog.ShowProjectDialog(this) == DialogResult.OK && dialog.CreatedProject is { } created && !IsDisposed &&
+        if (dialog.ShowDialog(this) == DialogResult.OK && dialog.CreatedProject is { } created && !IsDisposed &&
             generation == _projects.Context.Generation && authGeneration == _auth.Session.Generation &&
             profileDraft == DraftSnapshot(_profile) && contentDraft == DraftSnapshot(_contentDetailPanel))
             await SelectProjectCoreAsync(created.ProjectId, false);
@@ -121,6 +122,7 @@ public partial class BoardForm
         if (_projects is null || IsDisposed || !CanLeaveProjectPage()) return;
         var settings = new ProjectSettingsControl(_projects, _invitationService is not null);
         settings.SelectRequested += async id => await SelectProjectAsync(id);
+        settings.MembersRequested += (_, _) => OpenProjectMembers();
         settings.InvitationRequested += (_, _) => OpenProjectSettings();
         settings.CreateRequested += async (_, _) => await CreateProjectAsync();
         settings.ProjectUnavailable += target =>
@@ -132,6 +134,14 @@ public partial class BoardForm
         ShowProjectPage(settings, "Quản lý Project");
         await settings.LoadProjectAsync();
     }
+
+    private void OpenProjectMembers()
+    {
+        if (_projects?.Context.Current is not { } project || !CanLeaveProjectPage()) return;
+        using var dialog = new ProjectMembersDialog(_projects, project.ProjectId, project.Name);
+        ShowWithActiveMenu("Project Settings", () => dialog.ShowDialog(this));
+    }
+
     private bool _selectingProject;
     private Task SelectProjectAsync(long id) => SelectProjectCoreAsync(id, true);
     private static string DraftSnapshot(Control? root)

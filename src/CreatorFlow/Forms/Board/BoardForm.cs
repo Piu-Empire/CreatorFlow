@@ -438,8 +438,9 @@ public partial class BoardForm : Form, IMessageFilter
     // ==========================================================
     private void OpenCreateContentDialog(ContentStatus initialStatus = ContentStatus.Idea)
     {
-        // New Content nằm ở header nên bấm được cả khi đang mở Hồ sơ / Quản lý Project / Admin / Báo cáo / Lịch: chỉ tạo khi đang ở Board.
-        if (!HasProjectContext || _profile is not null || _projectPage is not null || _admin is not null || _reports is not null || _calendar is not null) return;
+        // New Content is available over Project Settings; its modal opens above the settings page.
+        // Other workspaces and Profile keep their existing navigation/unsaved-state behavior.
+        if (!HasProjectContext || _profile is not null || _admin is not null || _reports is not null || _calendar is not null) return;
         bool viaApi = _projects is not null;
         if (viaApi && (_detailBackend is null || _assignmentBackend is null)) { ShowUnavailableModule("Tạo Content"); return; }
 
