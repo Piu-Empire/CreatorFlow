@@ -20,6 +20,7 @@ public sealed class ProjectSettingsControl : UserControl
     private readonly Button archive = new() { Text = "Lưu trữ Project", Width = 150 };
     private readonly Button delete = new() { Text = "Xóa Project", Width = 150 };
     private readonly FlowLayoutPanel danger = new() { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true };
+    private Label? memberEntry;
     private Label? invitationEntry;
     private readonly Label targetName = new() { AutoSize = true, Font = UITheme.FontBodyBold };
     private ProjectResponse? loadedCurrent;
@@ -27,7 +28,9 @@ public sealed class ProjectSettingsControl : UserControl
     private bool released;
     private int sequence;
     private long? uncertainTarget;
+    private bool uncertainRestore;
     public event Action<long>? SelectRequested;
+    public event EventHandler? MembersRequested;
     public event EventHandler? InvitationRequested;
     public event EventHandler? CreateRequested;
 
@@ -44,6 +47,10 @@ public sealed class ProjectSettingsControl : UserControl
         UiTheme.AddRow(layout, header, 24); UiTheme.AddRow(layout, message);
         message.Visible = false;
         layout.SizeChanged += (_, _) => message.MaximumSize = new(Math.Max(1, layout.ClientSize.Width), 0);
+        archivedRows.ColumnCount = 2;
+        archivedRows.ColumnStyles.Clear();
+        archivedRows.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        archivedRows.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 132));
         AddSection("Project hiện tại", currentRows); AddSection("Project đang hoạt động", activeRows); AddSection("Project đã lưu trữ", archivedRows);
         danger.Padding = new(16); danger.BackColor = UITheme.DangerBg; UiTheme.StyleCard(danger);
         danger.Controls.AddRange([new Label { Text = "Khu vực nguy hiểm", AutoSize = true, ForeColor = UITheme.Danger, Font = UITheme.FontBodyBold }, targetName,
@@ -60,13 +67,18 @@ public sealed class ProjectSettingsControl : UserControl
                 Padding = new(12, 0, 8, 0), Font = title == "Quản lý Project" ? UITheme.FontBodyBold : UITheme.FontBody,
                 BackColor = title == "Quản lý Project" ? UITheme.Neutral100 : UITheme.Neutral50,
                 ForeColor = title == "Quản lý Project" ? UITheme.Ink : UITheme.Neutral400 };
-            if (title == "Lời mời" && invitationsAvailable)
+            if (title == "Thành viên")
+            {
+                memberEntry = item; item.Cursor = Cursors.Hand;
+                item.Click += (_, _) => MembersRequested?.Invoke(this, EventArgs.Empty);
+            }
+            else if (title == "Lời mời" && invitationsAvailable)
             {
                 invitationEntry = item; item.ForeColor = UITheme.Ink; item.Cursor = Cursors.Hand;
                 item.Click += (_, _) => InvitationRequested?.Invoke(this, EventArgs.Empty);
             }
             menu.Controls.Add(item);
-            if (title != "Quản lý Project" && !(title == "Lời mời" && invitationsAvailable)) menu.Controls.Add(new Label { Text = "Chưa khả dụng", Width = 184, Height = 24, Padding = new(12, 0, 0, 0), ForeColor = UITheme.Neutral400, Font = UITheme.FontLabel });
+            if (title != "Quản lý Project" && title != "Thành viên" && !(title == "Lời mời" && invitationsAvailable)) menu.Controls.Add(new Label { Text = "Chưa khả dụng", Width = 184, Height = 24, Padding = new(12, 0, 0, 0), ForeColor = UITheme.Neutral400, Font = UITheme.FontLabel });
         }
         var body = new Panel { Dock = DockStyle.Fill, AutoScroll = true, Padding = new(32) }; body.Controls.Add(layout);
         Controls.Add(body); Controls.Add(menu);
@@ -75,7 +87,8 @@ public sealed class ProjectSettingsControl : UserControl
     }
     private void AddSection(string title, TableLayoutPanel rows)
     {
-        rows.ColumnStyles.Add(new(SizeType.Percent, 100)); rows.BackColor = UITheme.White; rows.Padding = new(16); UiTheme.StyleCard(rows);
+        if (rows.ColumnStyles.Count == 0) rows.ColumnStyles.Add(new(SizeType.Percent, 100));
+        rows.BackColor = UITheme.White; rows.Padding = new(16); UiTheme.StyleCard(rows);
         UiTheme.AddRow(layout, new Label { Text = title, Font = UITheme.FontH2, AutoSize = true }, 8);
         UiTheme.AddRow(layout, rows, 24);
     }
@@ -97,13 +110,40 @@ public sealed class ProjectSettingsControl : UserControl
             AccessibleName = item.Name + (current ? ", Project hiện tại" : ""), AccessibleDescription = item.Status };
         if (!row.SelectableProject) row.Cursor = Cursors.Default;
         row.Click += (_, _) => SelectRequested?.Invoke(item.ProjectId);
-        UiTheme.AddRow(rows, row, 0); return row;
+        int rowIndex = rows.RowCount;
+        UiTheme.AddRow(rows, row, 0);
+        if (ReferenceEquals(rows, archivedRows) && item.CurrentUserRole == "OWNER")
+        {
+            var restore = new ProjectActionButton
+            {
+                Name = $"restoreProject_{item.ProjectId}",
+                Text = "Khôi phục",
+                Width = 112,
+                Height = 36,
+                Anchor = AnchorStyles.None,
+                Margin = Padding.Empty
+            };
+            restore.Click += async (_, _) =>
+            {
+                restore.Enabled = false;
+                try { await RestoreArchivedProjectAsync(item); }
+                finally { if (!restore.IsDisposed) restore.Enabled = true; }
+            };
+            rows.Controls.Add(restore, 1, rowIndex);
+        }
+        return row;
     }
     private void SetBusy(bool value)
     {
         busy = value; message.Visible = !string.IsNullOrEmpty(message.Text);
         bool owner = loadedCurrent is { CurrentUserRole: "OWNER", Status: "ACTIVE" } &&
             projects.Context.Current is { Role: CreatorFlow.Models.Enums.ProjectRole.Owner } current && current.ProjectId == loadedCurrent.ProjectId;
+        if (memberEntry is not null)
+        {
+            memberEntry.Enabled = owner && !value && uncertainTarget is null;
+            memberEntry.ForeColor = memberEntry.Enabled ? UITheme.Ink : UITheme.Neutral400;
+            memberEntry.Text = owner ? "Thành viên" : "Thành viên · Chỉ Owner";
+        }
         if (invitationEntry is not null)
         {
             invitationEntry.Enabled = owner && !value && uncertainTarget is null;
@@ -167,10 +207,24 @@ public sealed class ProjectSettingsControl : UserControl
             if (uncertainTarget is { } target)
             {
                 var actual = result.Items.FirstOrDefault(item => item.ProjectId == target);
-                message.Text = actual is null ? "Project không còn trong danh sách có quyền truy cập." : $"Trạng thái đã đối chiếu: {actual.Name} · {actual.Status}.";
-                if (actual is null || actual.Status == "ARCHIVED") { uncertainTarget = null; if (current?.ProjectId == target) ProjectUnavailable?.Invoke(target); }
-                else if (loadedCurrent?.ProjectId == target && loadedCurrent.Status == "ACTIVE")
-                { uncertainTarget = null; message.Text += " Nếu cần thao tác mới, hãy xác nhận lại."; }
+                if (uncertainRestore)
+                {
+                    message.Text = actual is null
+                        ? "Project không còn trong danh sách có quyền truy cập."
+                        : $"Đã đối chiếu trạng thái khôi phục: {actual.Name} · {actual.Status}.";
+                    if (actual is null || actual.Status is "ACTIVE" or "ARCHIVED")
+                    {
+                        uncertainTarget = null;
+                        uncertainRestore = false;
+                    }
+                }
+                else
+                {
+                    message.Text = actual is null ? "Project không còn trong danh sách có quyền truy cập." : $"Trạng thái đã đối chiếu: {actual.Name} · {actual.Status}.";
+                    if (actual is null || actual.Status == "ARCHIVED") { uncertainTarget = null; if (current?.ProjectId == target) ProjectUnavailable?.Invoke(target); }
+                    else if (loadedCurrent?.ProjectId == target && loadedCurrent.Status == "ACTIVE")
+                    { uncertainTarget = null; message.Text += " Nếu cần thao tác mới, hãy xác nhận lại."; }
+                }
             }
         }
         catch (OperationCanceledException) when (lifetime.IsCancellationRequested || IsDisposed) { }
@@ -210,13 +264,68 @@ public sealed class ProjectSettingsControl : UserControl
             if (!Valid()) return;
             message.Text = error.Message;
             if (sent && (error is ApiException || error is ApiBusinessException unavailable && (int)unavailable.StatusCode >= 500))
-            { uncertainTarget = current.ProjectId; message.Text = "Chưa xác định kết quả. Đang đọc lại trạng thái; không gửi lại thao tác."; await LoadProjectAsync(); }
+            { uncertainTarget = current.ProjectId; uncertainRestore = false; message.Text = "Chưa xác định kết quả. Đang đọc lại trạng thái; không gửi lại thao tác."; await LoadProjectAsync(); }
             else if (error is ApiBusinessException invalid && invalid.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.Conflict) ProjectUnavailable?.Invoke(current.ProjectId);
             else if (error is ApiBusinessException denied && denied.StatusCode == HttpStatusCode.Forbidden)
             { loadedCurrent = null; await LoadProjectAsync(); }
         }
         finally { if (Valid()) SetBusy(false); }
     }
+
+    private async Task RestoreArchivedProjectAsync(ProjectListItem item)
+    {
+        if (busy || uncertainTarget is not null || IsDisposed || lifetime.IsCancellationRequested || item.CurrentUserRole != "OWNER") return;
+        using (var confirm = new RestoreProjectDialog(item.Name))
+        {
+            if (confirm.ShowDialog(this) != DialogResult.OK || IsDisposed || lifetime.IsCancellationRequested) return;
+        }
+
+        var current = projects.Context.Current;
+        long generation = projects.Context.Generation;
+        int version = ++sequence;
+        bool sent = false;
+        bool Valid() => !IsDisposed && !lifetime.IsCancellationRequested && version == sequence &&
+            generation == projects.Context.Generation && projects.Context.Current?.ProjectId == current?.ProjectId;
+        SetBusy(true);
+        try
+        {
+            var latest = await projects.GetAsync(item.ProjectId, lifetime.Token);
+            if (!Valid()) return;
+            if (latest.CurrentUserRole != "OWNER" || latest.Status != "ARCHIVED")
+            {
+                message.Text = "Project đã thay đổi trạng thái hoặc bạn không còn quyền khôi phục.";
+                await LoadProjectAsync();
+                return;
+            }
+
+            sent = true;
+            await projects.RestoreAsync(item.ProjectId, lifetime.Token);
+            if (Valid()) await LoadProjectAsync();
+        }
+        catch (OperationCanceledException) when (lifetime.IsCancellationRequested || IsDisposed) { }
+        catch (Exception error) when (error is ApiException or ApiBusinessException)
+        {
+            if (!Valid()) return;
+            message.Text = error.Message;
+            if (sent && (error is ApiException || error is ApiBusinessException unavailable && (int)unavailable.StatusCode >= 500))
+            {
+                uncertainTarget = item.ProjectId;
+                uncertainRestore = true;
+                message.Text = "Chưa xác định kết quả khôi phục. Đang đọc lại trạng thái; không gửi lại thao tác.";
+                await LoadProjectAsync();
+            }
+            else if (error is ApiBusinessException denied && denied.StatusCode == HttpStatusCode.Forbidden)
+            {
+                await LoadProjectAsync();
+            }
+            else if (error is ApiBusinessException invalid && invalid.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.Conflict)
+            {
+                await LoadProjectAsync();
+            }
+        }
+        finally { if (Valid()) SetBusy(false); }
+    }
+
     protected override void Dispose(bool disposing)
     {
         if (disposing && !released) { released = true; projects.Context.Changed -= ContextChanged; lifetime.Cancel(); lifetime.Dispose(); }

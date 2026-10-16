@@ -201,7 +201,9 @@ public sealed class ProjectShellTests
             var archived = Field<TableLayoutPanel>(settings, "archivedRows");
             Assert.IsFalse(Descendants(archived).OfType<ProjectListRowControl>().Single().SelectableProject);
             Assert.AreEqual(81L, fixture.Projects.Context.Current!.ProjectId);
-            Assert.AreEqual(5, Descendants(settings).OfType<Label>().Count(label => label.Text == "Chưa khả dụng"));
+            Assert.AreEqual(4, Descendants(settings).OfType<Label>().Count(label => label.Text == "Chưa khả dụng"));
+            var members = Descendants(settings).OfType<Label>().Single(label => label.Text.StartsWith("Thành viên", StringComparison.Ordinal));
+            Assert.AreEqual(owner, members.Enabled);
         });
     }
     [TestMethod]

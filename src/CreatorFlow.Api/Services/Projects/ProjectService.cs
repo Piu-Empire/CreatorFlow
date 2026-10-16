@@ -6,8 +6,6 @@ using CreatorFlow.Contracts.Projects;
 
 namespace CreatorFlow.Api.Services.Projects;
 
-public sealed record ProjectResult<T>(T? Value, string? Code = null, string? Message = null, int Status = 200, string? Field = null);
-
 public sealed class ProjectService(IProjectRepository repository, CurrentAuthenticatedUser current)
 {
     private sealed class Rejected(string code, string message, int status, string? field = null) : Exception(message)
@@ -21,10 +19,9 @@ public sealed class ProjectService(IProjectRepository repository, CurrentAuthent
         throw new Rejected("unauthorized", "Vui lòng đăng nhập lại.", 401);
     private static ProjectRecord Accessible(ProjectRecord? project) => project ??
         throw new Rejected("project_not_found", "Project không tồn tại hoặc bạn không có quyền truy cập.", 404);
-    private static void Owner(ProjectRecord project, long userId)
+    private static void Owner(ProjectRecord project)
     {
         if (project.Role != "OWNER") throw new Rejected("forbidden", "Chỉ Owner được quản trị Project.", 403);
-        if (project.OwnerId != userId) throw new Rejected("owner_inconsistent", "Thông tin Owner không nhất quán. Vui lòng liên hệ quản trị.", 409);
     }
     private static string Name(string? name)
     {
@@ -66,7 +63,7 @@ public sealed class ProjectService(IProjectRepository repository, CurrentAuthent
         long user = UserId();
         return await repository.InTransactionAsync(async (tx, ct) =>
         {
-            Owner(Accessible(await tx.LockAsync(id, user, ct)), user);
+            Owner(Accessible(await tx.LockAsync(id, user, ct)));
             string name = Name(input.Name); Description(input.Description);
             return Response(await tx.UpdateAsync(id, user, name, input.Description, ct));
         }, token);
@@ -76,8 +73,19 @@ public sealed class ProjectService(IProjectRepository repository, CurrentAuthent
         long user = UserId();
         return await repository.InTransactionAsync(async (tx, ct) =>
         {
-            Owner(Accessible(await tx.LockAsync(id, user, ct)), user);
+            Owner(Accessible(await tx.LockAsync(id, user, ct)));
             return Response(await tx.ArchiveAsync(id, user, ct));
+        }, token);
+    });
+    public Task<ProjectResult<ProjectResponse>> RestoreAsync(long id, CancellationToken token) => Execute(async () =>
+    {
+        long user = UserId();
+        return await repository.InTransactionAsync(async (tx, ct) =>
+        {
+            var project = Accessible(await tx.LockAsync(id, user, ct));
+            Owner(project);
+            if (project.Status != "ARCHIVED") throw new Rejected("project_not_archived", "Project này chưa được lưu trữ.", 409);
+            return Response(await tx.RestoreAsync(id, user, ct));
         }, token);
     });
     public Task<ProjectResult<ProjectMutationResponse>> DeleteAsync(long id, CancellationToken token) => Execute(async () =>
@@ -85,7 +93,7 @@ public sealed class ProjectService(IProjectRepository repository, CurrentAuthent
         long user = UserId();
         return await repository.InTransactionAsync(async (tx, ct) =>
         {
-            Owner(Accessible(await tx.LockAsync(id, user, ct)), user);
+            Owner(Accessible(await tx.LockAsync(id, user, ct)));
             await tx.DeleteAsync(id, ct);
             return new ProjectMutationResponse(id, true);
         }, token);

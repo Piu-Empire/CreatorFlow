@@ -39,6 +39,96 @@ public sealed class ProjectClientTests
         using var api = new ApiClient(http); using var projects = new ProjectApiFacade(api, Session());
         Assert.AreEqual("CREATOR", (await projects.AccessAsync(81, default)).CurrentUserRole);
     }
+
+    [TestMethod]
+    public async Task MemberOperations_UseProjectScopedRoutesAndAcceptProjectRoleResponses()
+    {
+        var calls = new List<(HttpMethod Method, string Path)>();
+        using var http = new HttpClient(new Handler(async (request, _) =>
+        {
+            calls.Add((request.Method, request.RequestUri!.AbsolutePath));
+            Assert.AreEqual("fixture-token", request.Headers.Authorization!.Parameter);
+            if (request.Method == HttpMethod.Get)
+                return Response(new ProjectMembersResponse([new(55, "Member", "member@example.test", "CREATOR", DateTimeOffset.UtcNow)]));
+            if (request.Method == HttpMethod.Put)
+            {
+                var body = await request.Content!.ReadFromJsonAsync<UpdateProjectMemberRoleRequest>();
+                Assert.AreEqual("MANAGER", body!.Role);
+                return Response(new ProjectMemberMutationResponse(81, 55, "MANAGER", false));
+            }
+            return Response(new ProjectMemberMutationResponse(81, 55, "MANAGER", true));
+        })) { BaseAddress = new("http://fixture.test/") };
+        using var api = new ApiClient(http); using var projects = new ProjectApiFacade(api, Session());
+
+        Assert.AreEqual(1, (await projects.GetMembersAsync(81, default)).Members.Count);
+        Assert.AreEqual("MANAGER", (await projects.UpdateMemberRoleAsync(81, 55, "MANAGER", default)).Role);
+        Assert.IsTrue((await projects.RemoveMemberAsync(81, 55, default)).Removed);
+        CollectionAssert.AreEqual(new[]
+        {
+            (HttpMethod.Get, "/api/projects/81/members"),
+            (HttpMethod.Put, "/api/projects/81/members/55/role"),
+            (HttpMethod.Delete, "/api/projects/81/members/55")
+        }, calls.ToArray());
+    }
+
+    [TestMethod]
+    public async Task Restore_UsesProjectScopedPostRouteAndReturnsActiveProject()
+    {
+        using var http = new HttpClient(new Handler((request, _) =>
+        {
+            Assert.AreEqual(HttpMethod.Post, request.Method);
+            Assert.AreEqual("/api/projects/81/restore", request.RequestUri!.AbsolutePath);
+            Assert.IsNull(request.Content);
+            Assert.AreEqual("fixture-token", request.Headers.Authorization!.Parameter);
+            return Task.FromResult(Response(new ProjectResponse(81, "A", null, "Owner", "OWNER", "ACTIVE", DateTimeOffset.UtcNow)));
+        })) { BaseAddress = new("http://fixture.test/") };
+        using var api = new ApiClient(http); using var projects = new ProjectApiFacade(api, Session());
+
+        var result = await projects.RestoreAsync(81, default);
+
+        Assert.AreEqual(81L, result.ProjectId);
+        Assert.AreEqual("ACTIVE", result.Status);
+    }
+
+    [TestMethod]
+    public async Task RestoreConflict_PreservesProjectNotArchivedBusinessCode()
+    {
+        using var http = new HttpClient(new Handler((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.Conflict)
+        { Content = JsonContent.Create(new { code = "project_not_archived", title = "Project is already active." }) }))) { BaseAddress = new("http://fixture.test/") };
+        using var api = new ApiClient(http); using var projects = new ProjectApiFacade(api, Session());
+
+        try
+        {
+            await projects.RestoreAsync(81, default);
+            Assert.Fail("Restoring an active Project must preserve the business conflict.");
+        }
+        catch (ApiBusinessException error)
+        {
+            Assert.AreEqual(HttpStatusCode.Conflict, error.StatusCode);
+            Assert.AreEqual("project_not_archived", error.Code);
+            Assert.AreEqual("Project is already active.", error.Message);
+        }
+    }
+
+    [TestMethod]
+    public async Task MemberConflict_PreservesLastOwnerBusinessCodeAndMessage()
+    {
+        using var http = new HttpClient(new Handler((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.Conflict)
+        { Content = JsonContent.Create(new { code = "last_owner_required", title = "Project must keep one Owner." }) }))) { BaseAddress = new("http://fixture.test/") };
+        using var api = new ApiClient(http); using var projects = new ProjectApiFacade(api, Session());
+        try
+        {
+            await projects.RemoveMemberAsync(81, 42, default);
+            Assert.Fail("Removing the last Owner must return a conflict.");
+        }
+        catch (ApiBusinessException error)
+        {
+            Assert.AreEqual(HttpStatusCode.Conflict, error.StatusCode);
+            Assert.AreEqual("last_owner_required", error.Code);
+            Assert.AreEqual("Project must keep one Owner.", error.Message);
+        }
+    }
+
     [TestMethod]
     public async Task LateValidationOfA_CannotClearOrRenameB()
     {

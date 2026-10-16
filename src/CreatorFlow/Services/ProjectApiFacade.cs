@@ -36,7 +36,13 @@ public sealed class ProjectApiFacade : IDisposable
     public Task<ProjectResponse> CreateAsync(string name, string description, CancellationToken token) => Send<ProjectResponse>(HttpMethod.Post, "api/projects", new CreateProjectRequest(name, description), token);
     public Task<ProjectResponse> UpdateAsync(long id, string name, string description, CancellationToken token) => Send<ProjectResponse>(HttpMethod.Put, $"api/projects/{id}", new UpdateProjectRequest(name, description), token);
     public Task<ProjectResponse> ArchiveAsync(long id, CancellationToken token) => Send<ProjectResponse>(HttpMethod.Post, $"api/projects/{id}/archive", null, token);
+    public Task<ProjectResponse> RestoreAsync(long id, CancellationToken token) => Send<ProjectResponse>(HttpMethod.Post, $"api/projects/{id}/restore", null, token);
     public Task<ProjectMutationResponse> DeleteAsync(long id, CancellationToken token) => Send<ProjectMutationResponse>(HttpMethod.Delete, $"api/projects/{id}", null, token);
+    public Task<ProjectMembersResponse> GetMembersAsync(long id, CancellationToken token) => Send<ProjectMembersResponse>(HttpMethod.Get, $"api/projects/{id}/members", null, token);
+    public Task<ProjectMemberMutationResponse> UpdateMemberRoleAsync(long projectId, long userId, string role, CancellationToken token) =>
+        Send<ProjectMemberMutationResponse>(HttpMethod.Put, $"api/projects/{projectId}/members/{userId}/role", new UpdateProjectMemberRoleRequest(role), token);
+    public Task<ProjectMemberMutationResponse> RemoveMemberAsync(long projectId, long userId, CancellationToken token) =>
+        Send<ProjectMemberMutationResponse>(HttpMethod.Delete, $"api/projects/{projectId}/members/{userId}", null, token);
 
     public async Task<bool> RevalidateAsync(CancellationToken token)
     {
@@ -86,9 +92,14 @@ public sealed class ProjectApiFacade : IDisposable
             ProjectAccessResponse access => Valid(access.ProjectId, access.Name, access.CurrentUserRole, access.Status),
             ProjectResponse project => Valid(project.ProjectId, project.Name, project.CurrentUserRole, project.Status),
             ProjectMutationResponse mutation => mutation.ProjectId > 0 && mutation.Deleted,
+            ProjectMembersResponse members => members.Members is not null && members.Members.All(member => member is not null &&
+                member.UserId > 0 && !string.IsNullOrWhiteSpace(member.DisplayName) && !string.IsNullOrWhiteSpace(member.Email) &&
+                IsRole(member.Role) && member.JoinedAt != default),
+            ProjectMemberMutationResponse mutation => mutation.ProjectId > 0 && mutation.UserId > 0 && IsRole(mutation.Role),
             _ => false
         };
         if (!valid) throw InvalidResponse();
     }
+    private static bool IsRole(string? role) => role is "OWNER" or "MANAGER" or "CREATOR";
     public void Dispose() { session.Cleared -= Cleared; lifetime.Cancel(); lifetime.Dispose(); }
 }
