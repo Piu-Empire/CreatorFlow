@@ -14,6 +14,7 @@ using CreatorFlow.Api.Repositories.Tasks;
 using CreatorFlow.Api.Services.ContentDetail;
 using CreatorFlow.Api.Services.Ideas;
 using CreatorFlow.Api.Services.Invitations;
+using CreatorFlow.Api.Services.Auth;
 using CreatorFlow.Api.Tests.ContentDetail;
 using CreatorFlow.Api.Tests.Ideas;
 using CreatorFlow.Api.Tests.Services;
@@ -40,7 +41,7 @@ public sealed class FeatureRoutingTests
     private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
 
     private sealed record Host(WebApplication App, HttpClient Client, IdeaRepositoryFake Ideas, ContentDetailRepositoryFake Contents,
-        MemberRolesFake Roles, InvitationFake Invites, MyInvitationFake MyInvites) : IAsyncDisposable
+        MemberRolesFake Roles, InvitationFake Invites, MyInvitationFake MyInvites, TestEmailSender EmailSender) : IAsyncDisposable
     {
         public async ValueTask DisposeAsync() { Client.Dispose(); await App.DisposeAsync(); }
     }
@@ -54,6 +55,7 @@ public sealed class FeatureRoutingTests
         var roles = new MemberRolesFake();
         var invites = new InvitationFake();
         var myInvites = new MyInvitationFake();
+        var emailSender = new TestEmailSender();
         roles.Roles[(ProjectId, 1)] = ProjectRole.Owner;
         roles.Roles[(ProjectId, ActorId)] = ProjectRole.Creator;
         invites.Roles[(ProjectId, ActorId)] = ProjectRole.Owner; // trong test lời mời, người đăng nhập là Owner
@@ -63,6 +65,7 @@ public sealed class FeatureRoutingTests
         builder.Services.AddSingleton<ITaskRepository>(roles);
         builder.Services.AddSingleton<IInvitationRepository>(invites);
         builder.Services.AddSingleton<IMyInvitationRepository>(myInvites);
+        builder.Services.AddSingleton<IEmailSender>(emailSender);
         builder.Services.AddSingleton(TimeProvider.System);
         builder.Services.AddScoped(_ => new CurrentAuthenticatedUser
         {
@@ -87,7 +90,7 @@ public sealed class FeatureRoutingTests
 
         HttpClient client = app.GetTestClient();
         if (signedIn) client.DefaultRequestHeaders.Authorization = new("fixture", "actor");
-        return new Host(app, client, ideas, contents, roles, invites, myInvites);
+        return new Host(app, client, ideas, contents, roles, invites, myInvites, emailSender);
     }
 
     private static readonly (HttpMethod Method, string Path, object? Body)[] AllRoutes =
@@ -251,6 +254,8 @@ public sealed class FeatureRoutingTests
         Assert.AreEqual("Pending", body.GetProperty("status").GetString());
         Assert.AreEqual("Creator", body.GetProperty("role").GetString());
         Assert.IsFalse(body.TryGetProperty("token", out _), "token không được lộ ra API");
+        Assert.AreEqual("New@X.vn", host.EmailSender.Invitations.Single().Email);
+        Assert.AreEqual(ProjectId, host.EmailSender.Invitations.Single().ProjectId);
 
         Assert.AreEqual(HttpStatusCode.Conflict, (await host.Client.PostAsJsonAsync("/api/projects/1/invitations", new { email = "new@x.vn", role = "Creator" })).StatusCode);
         Assert.AreEqual(HttpStatusCode.BadRequest, (await host.Client.PostAsJsonAsync("/api/projects/1/invitations", new { email = "b@x.vn", role = "Owner" })).StatusCode);
@@ -310,6 +315,14 @@ public sealed class FeatureRoutingTests
 
         public Task<IReadOnlyList<ProjectInvitation>> GetByProjectAsync(long projectId, CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<ProjectInvitation>>(_rows.Where(i => i.ProjectId == projectId).ToList());
+
+        public Task<bool> CancelPendingAsync(long invitationId, DateTime respondedAtUtc, CancellationToken cancellationToken = default)
+        {
+            int index = _rows.FindIndex(i => i.InvitationId == invitationId && i.Status == InvitationStatus.Pending);
+            if (index < 0) return Task.FromResult(false);
+            _rows[index] = _rows[index] with { Status = InvitationStatus.Cancelled, RespondedAt = respondedAtUtc };
+            return Task.FromResult(true);
+        }
     }
 
     internal sealed class MyInvitationFake : IMyInvitationRepository

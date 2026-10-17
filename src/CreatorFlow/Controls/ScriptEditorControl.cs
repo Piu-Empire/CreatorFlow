@@ -239,6 +239,10 @@ public class ScriptEditorControl : UserControl
         {
             MessageBox.Show(this, ex.Message, "Không đủ quyền", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
+        catch (InvalidOperationException ex)
+        {
+            MessageBox.Show(this, ex.Message, "Không thể lưu kịch bản", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
         catch (Exception ex) when (ex is Npgsql.NpgsqlException or TimeoutException)
         {
             MessageBox.Show(this, "Không lưu được kịch bản. Vui lòng kiểm tra kết nối và thử lại.",

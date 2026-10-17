@@ -127,6 +127,21 @@ public sealed class InvitationRepository(IDbConnectionFactory connectionFactory)
         return await ReadAllAsync(command, cancellationToken);
     }
 
+    public async Task<bool> CancelPendingAsync(long invitationId, DateTime respondedAtUtc, CancellationToken cancellationToken = default)
+    {
+        const string sql = """
+            UPDATE project_invitations
+            SET status = 'CANCELLED', responded_at = @responded_at
+            WHERE invitation_id = @invitation_id AND status = 'PENDING';
+            """;
+
+        await using NpgsqlConnection connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
+        await using var command = new NpgsqlCommand(sql, connection);
+        command.Parameters.AddWithValue("invitation_id", NpgsqlDbType.Bigint, invitationId);
+        command.Parameters.AddWithValue("responded_at", NpgsqlDbType.TimestampTz, respondedAtUtc);
+        return await command.ExecuteNonQueryAsync(cancellationToken) == 1;
+    }
+
     // ------------------------------------------------------------------ helpers
 
     private async Task<ProjectInvitation?> GetByIdAsync(long invitationId, CancellationToken cancellationToken)

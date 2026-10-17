@@ -95,7 +95,6 @@ public sealed class ProjectRepositoryIntegrationTests
         long secondOwnerId = await fixture.AddUser("second-owner@example.test");
         await fixture.InsertMember(firstProject, memberId, "CREATOR");
         await fixture.InsertMember(secondProject, memberId, "CREATOR");
-        await fixture.InsertMember(firstProject, secondOwnerId, "OWNER");
         var service = new ProjectMembersService(new ProjectRepository(fixture.Factory), new CurrentAuthenticatedUser { User = new User
         { UserId = fixture.UserId, Email = "fixture@example.test", DisplayName = "Fixture", PasswordHash = "unused", AccountStatus = AccountStatus.Active, EmailVerifiedAt = DateTimeOffset.UtcNow } });
 
@@ -110,6 +109,7 @@ public sealed class ProjectRepositoryIntegrationTests
         Assert.IsTrue(await fixture.IsActive(firstProject, fixture.UserId));
 
         // With a second Owner, the original Owner may leave; owner_id follows the remaining active Owner.
+        await fixture.InsertMember(firstProject, secondOwnerId, "OWNER");
         Assert.AreEqual(200, (await service.UpdateRoleAsync(firstProject, fixture.UserId, new("MANAGER"), default)).Status);
         Assert.AreEqual("MANAGER", await fixture.Role(firstProject, fixture.UserId));
         Assert.AreEqual("OWNER", await fixture.Role(firstProject, secondOwnerId));

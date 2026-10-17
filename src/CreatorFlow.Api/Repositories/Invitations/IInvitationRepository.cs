@@ -20,6 +20,9 @@ public interface IInvitationRepository
         long projectId, string email, ProjectRole role, long invitedBy, string token,
         DateTime nowUtc, DateTime expiresAtUtc, CancellationToken cancellationToken = default);
 
+    /// <summary>Hủy lời mời còn Pending khi không gửi được email thông báo.</summary>
+    Task<bool> CancelPendingAsync(long invitationId, DateTime respondedAtUtc, CancellationToken cancellationToken = default);
+
     /// <summary>Mọi lời mời của Project, mới nhất trước.</summary>
     Task<IReadOnlyList<ProjectInvitation>> GetByProjectAsync(long projectId, CancellationToken cancellationToken = default);
 }

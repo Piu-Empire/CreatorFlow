@@ -7,9 +7,9 @@ namespace CreatorFlow.Services.Backends;
 public sealed class ApiMetricBackend(ApiClient api, UserSession session) : IMetricBackend
 {
     public ContentMetricsResponse GetContentMetrics(long contentId) =>
-        ApiTaskCall.Run(() => api.GetContentMetricsAsync(contentId, ApiTaskCall.BearerOf(session)));
+        ApiTaskCall.Run(() => api.GetContentMetricsAsync(contentId, ApiTaskCall.BearerOf(session)), session);
 
     public PlatformMetricsResponse RecordMetric(long contentId, long platformId, long? views, long? likes, long? comments, long? shares) =>
         ApiTaskCall.Run(() => api.RecordMetricAsync(contentId, platformId,
-            new RecordMetricRequest(views, likes, comments, shares), ApiTaskCall.BearerOf(session)));
+            new RecordMetricRequest(views, likes, comments, shares), ApiTaskCall.BearerOf(session)), session);
 }

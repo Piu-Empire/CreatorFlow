@@ -6,6 +6,7 @@ using CreatorFlow.Api.Models.Tasks;
 using CreatorFlow.Api.Repositories.Invitations;
 using CreatorFlow.Api.Services.Auth;
 using CreatorFlow.Contracts.Invitations;
+using Microsoft.Extensions.Logging;
 
 namespace CreatorFlow.Api.Services.Invitations;
 
@@ -17,7 +18,8 @@ namespace CreatorFlow.Api.Services.Invitations;
 ///   - lời mời luôn thuộc đúng Project trên route và được lưu ở trạng thái Pending.
 /// Người thao tác luôn lấy từ JWT, không bao giờ nhận từ body/route.
 /// </summary>
-public sealed class InvitationService(IInvitationRepository repository, CurrentAuthenticatedUser current, TimeProvider timeProvider)
+public sealed class InvitationService(IInvitationRepository repository, CurrentAuthenticatedUser current, TimeProvider timeProvider,
+    IEmailSender emailSender, ILogger<InvitationService> logger)
 {
     public async Task<AuthOperationResult<InvitationResponse>> InviteAsync(
         long projectId, InviteMemberRequest request, CancellationToken token = default)
@@ -38,13 +40,51 @@ public sealed class InvitationService(IInvitationRepository repository, CurrentA
         if (await repository.IsActiveMemberByEmailAsync(projectId, email, token))
             return AuthOperationResult<InvitationResponse>.Fail("already_member", "Người này đã là thành viên của Project.", "email", 409);
 
+        if (!emailSender.IsConfigured)
+            return AuthOperationResult<InvitationResponse>.Fail("email_not_configured",
+                "Dịch vụ gửi email lời mời chưa được cấu hình.", status: 503);
+
         DateTime now = timeProvider.GetUtcNow().UtcDateTime;
         ProjectInvitation? created = await repository.CreatePendingAsync(
             projectId, email, inviteRole, user.UserId, NewToken(), now, now + InvitationRules.Lifetime, token);
 
-        return created is null
-            ? AuthOperationResult<InvitationResponse>.Fail("invitation_pending", "Email này đã có lời mời đang chờ phản hồi.", "email", 409)
-            : new AuthOperationResult<InvitationResponse>(ToResponse(created, now), Status: 201);
+        if (created is null)
+            return AuthOperationResult<InvitationResponse>.Fail("invitation_pending", "Email này đã có lời mời đang chờ phản hồi.", "email", 409);
+
+        try
+        {
+            await emailSender.SendProjectInvitationAsync(email, projectId, inviteRole.ToString(), user.DisplayName,
+                created.ExpiresAt, token);
+        }
+        catch (OperationCanceledException)
+        {
+            await CancelUndeliveredInvitationAsync(created);
+            throw;
+        }
+        catch (EmailDeliveryException)
+        {
+            await CancelUndeliveredInvitationAsync(created);
+            return AuthOperationResult<InvitationResponse>.Fail("email_delivery_failed",
+                "Không gửi được email lời mời. Hãy kiểm tra cấu hình email rồi thử lại.", status: 503);
+        }
+
+        return new AuthOperationResult<InvitationResponse>(ToResponse(created, now), Status: 201);
+    }
+
+    private async Task CancelUndeliveredInvitationAsync(ProjectInvitation invitation)
+    {
+        try
+        {
+            bool cancelled = await repository.CancelPendingAsync(invitation.InvitationId,
+                timeProvider.GetUtcNow().UtcDateTime, CancellationToken.None);
+            if (!cancelled)
+                logger.LogWarning("Invitation {InvitationId} was no longer pending after email delivery failed.", invitation.InvitationId);
+        }
+        catch (Exception exception)
+        {
+            logger.LogError("Could not cancel invitation {InvitationId} after email delivery failed. Failure type: {FailureType}.",
+                invitation.InvitationId, exception.GetType().Name);
+        }
     }
 
     public async Task<AuthOperationResult<InvitationsResponse>> GetInvitationsAsync(long projectId, CancellationToken token = default)

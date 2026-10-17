@@ -58,9 +58,9 @@ public sealed class ContentLibraryTests
                 new ContentBoardCard { ContentId = 901, Code = "CNT-901", Title = "Archived video", Status = ContentStatus.Archived, Platforms = ["TikTok"] },
                 new ContentBoardCard { ContentId = 900, Code = "CNT-900", Title = "New script", Status = ContentStatus.Script, Platforms = ["YouTube"] },
             ]);
-            TableLayoutPanel rows = Descendants(library).OfType<TableLayoutPanel>().Single(control => control.Name == "contentLibraryRows");
-            TextBox search = Descendants(library).OfType<TextBox>().Single(control => control.Name == "contentLibrarySearch");
-            ComboBox status = Descendants(library).OfType<ComboBox>().Single(control => control.Name == "contentLibraryStatusFilter");
+            TableLayoutPanel rows = Descendants(library).OfType<TableLayoutPanel>().Single(control => control.Name == "rows");
+            TextBox search = Descendants(library).OfType<TextBox>().Single(control => control.Name == "search");
+            ComboBox status = Descendants(library).OfType<ComboBox>().Single(control => control.Name == "statusFilter");
 
             search.Text = "CNT-901";
             Assert.AreEqual(1, rows.Controls.Count);
@@ -72,7 +72,7 @@ public sealed class ContentLibraryTests
             Assert.AreEqual(ContentStatus.Archived, ((ContentLibraryRowControl)rows.Controls[0]).Content.Status);
 
             status.SelectedIndex = 0;
-            ComboBox platform = Descendants(library).OfType<ComboBox>().Single(control => control.Name == "contentLibraryPlatformFilter");
+            ComboBox platform = Descendants(library).OfType<ComboBox>().Single(control => control.Name == "platformFilter");
             platform.SelectedIndex = platform.Items.IndexOf("TikTok");
             Assert.AreEqual(1, rows.Controls.Count);
             Assert.AreEqual("CNT-901", ((ContentLibraryRowControl)rows.Controls[0]).Content.Code);
@@ -85,7 +85,7 @@ public sealed class ContentLibraryTests
         RunSta(() =>
         {
             using var library = new ContentLibraryControl("Project Alpha");
-            Label state = Descendants(library).OfType<Label>().Single(control => control.Name == "contentLibraryState");
+            Label state = Descendants(library).OfType<Label>().Single(control => control.Name == "stateLabel");
 
             library.SetLoading();
             Assert.IsTrue(state.Visible);

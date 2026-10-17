@@ -879,6 +879,10 @@ public partial class ContentDetailPanel : UserControl
         {
             MessageBox.Show(this, ex.Message, "Không đủ quyền", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
+        catch (InvalidOperationException ex)
+        {
+            MessageBox.Show(this, ex.Message, "Không lưu được Content", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
     }
 
     private void ShowEmptyState()
@@ -1193,6 +1197,11 @@ public partial class ContentDetailPanel : UserControl
             MessageBox.Show(this, ex.Message, "Không đủ quyền", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
+        catch (InvalidOperationException ex)
+        {
+            MessageBox.Show(this, ex.Message, "Không tải được danh sách giao việc", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
 
         using var dlg = new AssignContentDialog(
             $"CNT-{_current.ContentId:000}", _current.Title, creators,
@@ -1214,6 +1223,10 @@ public partial class ContentDetailPanel : UserControl
         catch (UnauthorizedWorkflowActionException ex)
         {
             MessageBox.Show(this, ex.Message, "Không đủ quyền", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        catch (InvalidOperationException ex)
+        {
+            MessageBox.Show(this, ex.Message, "Không lưu được giao việc", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
     }
 
@@ -1290,6 +1303,10 @@ public partial class ContentDetailPanel : UserControl
         catch (UnauthorizedWorkflowActionException ex)
         {
             MessageBox.Show(this, ex.Message, "Không đủ quyền", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        catch (InvalidOperationException ex)
+        {
+            MessageBox.Show(this, ex.Message, "Không thể chuyển trạng thái", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
     }
 

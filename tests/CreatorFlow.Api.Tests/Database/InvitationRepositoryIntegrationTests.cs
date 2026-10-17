@@ -18,7 +18,11 @@ namespace CreatorFlow.Api.Tests.Database;
 public sealed class InvitationRepositoryIntegrationTests
 {
     // Làm tròn tới giây để so sánh với TIMESTAMPTZ (PostgreSQL lưu micro giây, .NET lưu 100ns).
-    private static DateTime UtcNow() => DateTime.UtcNow.AddTicks(-(DateTime.UtcNow.Ticks % TimeSpan.TicksPerSecond));
+    private static DateTime UtcNow()
+    {
+        DateTime now = DateTime.UtcNow;
+        return now.AddTicks(-(now.Ticks % TimeSpan.TicksPerSecond));
+    }
 
     // ================================================================== vai trò / thành viên
 
@@ -201,6 +205,23 @@ public sealed class InvitationRepositoryIntegrationTests
         Assert.IsTrue(rows.All(r => r.ProjectId == f.ProjectId));
     }
 
+    [TestMethod]
+    public async Task CancelPending_ChangesOnlyPendingInvitation_AndSetsResponseTime()
+    {
+        await using var f = await Fixture.CreateAsync();
+        DateTime now = UtcNow();
+        ProjectInvitation created = (await f.Repository.CreatePendingAsync(
+            f.ProjectId, f.OutsiderEmail, ProjectRole.Creator, f.OwnerId, "cancel-" + f.Tag, now, now.AddDays(7)))!;
+        DateTime respondedAt = now.AddMinutes(1);
+
+        Assert.IsTrue(await f.Repository.CancelPendingAsync(created.InvitationId, respondedAt));
+        Assert.IsFalse(await f.Repository.CancelPendingAsync(created.InvitationId, respondedAt.AddMinutes(1)));
+
+        ProjectInvitation cancelled = (await f.Repository.GetByProjectAsync(f.ProjectId)).Single(i => i.InvitationId == created.InvitationId);
+        Assert.AreEqual(InvitationStatus.Cancelled, cancelled.Status);
+        Assert.AreEqual(respondedAt, cancelled.RespondedAt!.Value.ToUniversalTime());
+    }
+
     // ================================================================== fixture
 
     private sealed class Fixture : IAsyncDisposable
@@ -208,7 +229,7 @@ public sealed class InvitationRepositoryIntegrationTests
         public required NpgsqlConnectionFactory ConnectionFactory { get; init; }
         public required InvitationRepository Repository { get; init; }
         public required string Tag { get; init; }
-        public long OwnerId, CreatorId, InactiveId, OutsiderId, ProjectId, EmptyProjectId;
+        public long OwnerId, CreatorId, InactiveId, OutsiderId, OtherOwnerId, ProjectId, EmptyProjectId;
         public string OwnerName = "SCRUM-26 owner";
         public string CreatorEmail = "", InactiveEmail = "", OutsiderEmail = "";
 
@@ -239,13 +260,14 @@ public sealed class InvitationRepositoryIntegrationTests
                 f.CreatorId = await f.InsertUserAsync(f.CreatorEmail, "SCRUM-26 creator");
                 f.InactiveId = await f.InsertUserAsync(f.InactiveEmail, "SCRUM-26 inactive");
                 f.OutsiderId = await f.InsertUserAsync(f.OutsiderEmail, "SCRUM-26 outsider");
+                f.OtherOwnerId = await f.InsertUserAsync($"scrum26-{f.Tag}-other-owner@example.test", "SCRUM-26 other owner");
 
                 f.ProjectId = await f.InsertProjectAsync("SCRUM-26 project");
-                f.EmptyProjectId = await f.InsertProjectAsync("SCRUM-26 other project"); // chỉ có Owner
+                f.EmptyProjectId = await f.InsertProjectAsync("SCRUM-26 other project", f.OtherOwnerId); // Owner chính không thuộc Project này
                 await f.AddMemberAsync(f.ProjectId, f.OwnerId, "OWNER", true);
                 await f.AddMemberAsync(f.ProjectId, f.CreatorId, "CREATOR", true);
                 await f.AddMemberAsync(f.ProjectId, f.InactiveId, "MANAGER", false);
-                await f.AddMemberAsync(f.EmptyProjectId, f.OwnerId, "OWNER", true);
+                await f.AddMemberAsync(f.EmptyProjectId, f.OtherOwnerId, "OWNER", true);
             }
             catch
             {
@@ -259,9 +281,9 @@ public sealed class InvitationRepositoryIntegrationTests
             INSERT INTO users (email, password_hash, display_name) VALUES (@email, 'x', @name) RETURNING user_id
             """, ("email", email), ("name", displayName));
 
-        private Task<long> InsertProjectAsync(string name) => ScalarAsync<long>("""
+        private Task<long> InsertProjectAsync(string name, long? ownerId = null) => ScalarAsync<long>("""
             INSERT INTO projects (project_name, owner_id) VALUES (@name, @owner) RETURNING project_id
-            """, ("name", name + " " + Tag), ("owner", OwnerId));
+            """, ("name", name + " " + Tag), ("owner", ownerId ?? OwnerId));
 
         private Task AddMemberAsync(long projectId, long userId, string role, bool active) => ExecuteAsync("""
             INSERT INTO project_members (project_id, user_id, role, is_active)

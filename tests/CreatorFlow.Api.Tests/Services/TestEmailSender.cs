@@ -2,10 +2,12 @@ using CreatorFlow.Api.Services.Auth;
 namespace CreatorFlow.Api.Tests.Services;
 internal sealed class TestEmailSender : IEmailSender
 {
-    public bool IsConfigured => true;
+    public bool Configured { get; set; } = true;
+    public bool IsConfigured => Configured;
     public bool Fail { get; set; }
     public string? VerificationCode { get; private set; }
     public string? ResetCode { get; private set; }
+    public List<(string Email, long ProjectId, string Role, string InviterName, DateTime ExpiresAtUtc)> Invitations { get; } = new();
     public Task SendEmailVerificationCodeAsync(string email, string code, CancellationToken cancellationToken = default)
     {
         if (Fail) throw new EmailDeliveryException();
@@ -16,6 +18,13 @@ internal sealed class TestEmailSender : IEmailSender
     {
         if (Fail) throw new EmailDeliveryException();
         ResetCode = code;
+        return Task.CompletedTask;
+    }
+    public Task SendProjectInvitationAsync(string email, long projectId, string role, string inviterName,
+        DateTime expiresAtUtc, CancellationToken cancellationToken = default)
+    {
+        if (Fail) throw new EmailDeliveryException();
+        Invitations.Add((email, projectId, role, inviterName, expiresAtUtc));
         return Task.CompletedTask;
     }
 }

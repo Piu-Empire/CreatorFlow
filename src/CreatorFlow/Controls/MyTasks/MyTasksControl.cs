@@ -373,6 +373,10 @@ public partial class MyTasksControl : UserControl
         {
             if (CheckContext()) ShowError(ex.Message);
         }
+        catch (InvalidOperationException ex)
+        {
+            if (CheckContext()) ShowError(ex.Message);
+        }
     }
 
     private void btnSaveDeadline_Click(object? sender, EventArgs e)
@@ -397,6 +401,10 @@ public partial class MyTasksControl : UserControl
             if (CheckContext()) ShowError(ex.Message);
         }
         catch (UnauthorizedWorkflowActionException ex)
+        {
+            if (CheckContext()) ShowError(ex.Message);
+        }
+        catch (InvalidOperationException ex)
         {
             if (CheckContext()) ShowError(ex.Message);
         }

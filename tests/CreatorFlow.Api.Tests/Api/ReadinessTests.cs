@@ -29,6 +29,8 @@ public sealed class ReadinessTests
         });
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
+        // Windows EventLog is an optional default provider and may be unavailable to test runners.
+        builder.Logging.ClearProviders();
         builder.Services.AddSingleton<IDatabaseReadinessRepository>(repository);
         builder.Services.AddScoped<DatabaseReadinessService>();
         builder.Services.AddSingleton<HealthService>();

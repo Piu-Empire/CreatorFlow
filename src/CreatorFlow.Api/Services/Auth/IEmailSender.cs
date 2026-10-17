@@ -5,6 +5,8 @@ public interface IEmailSender
     bool IsConfigured { get; }
     Task SendEmailVerificationCodeAsync(string email, string code, CancellationToken cancellationToken = default);
     Task SendPasswordResetCodeAsync(string email, string code, CancellationToken cancellationToken = default);
+    Task SendProjectInvitationAsync(string email, long projectId, string role, string inviterName,
+        DateTime expiresAtUtc, CancellationToken cancellationToken = default);
 }
 
 public sealed class EmailDeliveryException() : Exception("Không thể gửi email xác nhận lúc này.") { }
