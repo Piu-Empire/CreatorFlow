@@ -4,7 +4,7 @@ namespace CreatorFlow.Services.Backends;
 
 /// <summary>
 /// Nguồn dữ liệu của màn Idea Bank: IdeaService (chạy thẳng DB / InMemory) hoặc ApiIdeaBackend (qua CreatorFlow.Api,
-/// quyền và validation kiểm tra ở Backend). IdeaBankForm chỉ biết interface này.
+/// quyền và validation kiểm tra ở Backend). IdeaBankControl chỉ biết interface này.
 /// </summary>
 public interface IIdeaBackend
 {

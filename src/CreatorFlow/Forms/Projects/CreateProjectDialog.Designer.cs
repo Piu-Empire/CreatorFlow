@@ -32,7 +32,7 @@ partial class CreateProjectDialog
         headerPanel.Dock = DockStyle.Top;
         headerPanel.Location = new Point(0, 0);
         headerPanel.Name = "headerPanel";
-        headerPanel.Size = new Size(760, 130);
+        headerPanel.Size = new Size(600, 104);
         headerPanel.TabIndex = 2;
         headerPanel.Paint += HeaderPanel_Paint;
         //
@@ -40,9 +40,9 @@ partial class CreateProjectDialog
         //
         titleLabel.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
         titleLabel.AutoEllipsis = true;
-        titleLabel.Location = new Point(38, 24);
+        titleLabel.Location = new Point(24, 14);
         titleLabel.Name = "titleLabel";
-        titleLabel.Size = new Size(684, 34);
+        titleLabel.Size = new Size(552, 34);
         titleLabel.TabIndex = 0;
         titleLabel.Text = "Tạo Project";
         //
@@ -51,9 +51,9 @@ partial class CreateProjectDialog
         explanationLabel.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
         explanationLabel.AutoEllipsis = true;
         explanationLabel.Font = new Font("Segoe UI", 12F);
-        explanationLabel.Location = new Point(38, 68);
+        explanationLabel.Location = new Point(24, 54);
         explanationLabel.Name = "explanationLabel";
-        explanationLabel.Size = new Size(684, 30);
+        explanationLabel.Size = new Size(552, 30);
         explanationLabel.TabIndex = 1;
         //
         // bodyPanel  (các ô nhập được thêm lúc chạy trong BuildFields)
@@ -62,18 +62,18 @@ partial class CreateProjectDialog
         bodyPanel.Dock = DockStyle.Fill;
         bodyPanel.Location = new Point(0, 0);
         bodyPanel.Name = "bodyPanel";
-        bodyPanel.Padding = new Padding(38, 24, 38, 20);
-        bodyPanel.Size = new Size(760, 372);
+        bodyPanel.Padding = new Padding(24, 16, 24, 12);
+        bodyPanel.Size = new Size(600, 262);
         bodyPanel.TabIndex = 0;
         //
         // footerPanel
         //
         footerPanel.Controls.Add(buttonsPanel);
         footerPanel.Dock = DockStyle.Bottom;
-        footerPanel.Location = new Point(0, 502);
+        footerPanel.Location = new Point(0, 366);
         footerPanel.Name = "footerPanel";
-        footerPanel.Padding = new Padding(38, 17, 38, 17);
-        footerPanel.Size = new Size(760, 88);
+        footerPanel.Padding = new Padding(24, 10, 24, 10);
+        footerPanel.Size = new Size(600, 64);
         footerPanel.TabIndex = 1;
         footerPanel.Paint += FooterPanel_Paint;
         //
@@ -82,10 +82,10 @@ partial class CreateProjectDialog
         buttonsPanel.Controls.Add(cancel);
         buttonsPanel.Controls.Add(confirm);
         buttonsPanel.Dock = DockStyle.Right;
-        buttonsPanel.Location = new Point(448, 17);
+        buttonsPanel.Location = new Point(336, 10);
         buttonsPanel.Margin = new Padding(0);
         buttonsPanel.Name = "buttonsPanel";
-        buttonsPanel.Size = new Size(274, 54);
+        buttonsPanel.Size = new Size(240, 44);
         buttonsPanel.TabIndex = 0;
         buttonsPanel.WrapContents = false;
         //
@@ -93,19 +93,19 @@ partial class CreateProjectDialog
         //
         cancel.DialogResult = DialogResult.Cancel;
         cancel.Location = new Point(0, 0);
-        cancel.Margin = new Padding(0, 0, 16, 0);
+        cancel.Margin = new Padding(0, 0, 12, 0);
         cancel.Name = "createProjectCancel";
-        cancel.Size = new Size(96, 52);
+        cancel.Size = new Size(84, 40);
         cancel.Style = RoundButtonStyle.Secondary;
         cancel.TabIndex = 0;
         cancel.Text = "Hủy";
         //
         // confirm
         //
-        confirm.Location = new Point(112, 0);
+        confirm.Location = new Point(96, 0);
         confirm.Margin = new Padding(0);
         confirm.Name = "createProjectConfirm";
-        confirm.Size = new Size(162, 52);
+        confirm.Size = new Size(144, 40);
         confirm.TabIndex = 1;
         confirm.Text = "Tạo Project";
         //
@@ -115,7 +115,7 @@ partial class CreateProjectDialog
         AutoScaleDimensions = new SizeF(96F, 96F);
         AutoScaleMode = AutoScaleMode.Dpi;
         CancelButton = cancel;
-        ClientSize = new Size(760, 590);
+        ClientSize = new Size(600, 430);
         Controls.Add(bodyPanel);
         Controls.Add(footerPanel);
         Controls.Add(headerPanel);

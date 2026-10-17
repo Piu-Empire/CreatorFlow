@@ -4,20 +4,24 @@ using System.Reflection;
 using System.Windows.Forms;
 using CreatorFlow.ApiClients;
 using CreatorFlow.Contracts.Auth;
+using CreatorFlow.Contracts.Board;
+using CreatorFlow.Contracts.ContentDetail;
 using CreatorFlow.Contracts.Projects;
 using CreatorFlow.Contracts.Users;
 using CreatorFlow.Contracts.Tasks;
 using CreatorFlow.Services.Exceptions;
 using CreatorFlow.Controls;
+using CreatorFlow.Controls.ContentLibrary;
+using CreatorFlow.Controls.MyTasks;
 using CreatorFlow.Forms.Board;
 using CreatorFlow.Forms.Projects;
 using CreatorFlow.Models;
+using CreatorFlow.Models.Enums;
 using CreatorFlow.Repositories.InMemory;
 using CreatorFlow.Repositories.Interfaces;
 using CreatorFlow.Services;
 using CreatorFlow.Services.AI;
 using CreatorFlow.Services.Backends;
-using CreatorFlow.Forms.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace CreatorFlow.IntegrationTests.ApiClients;
@@ -395,7 +399,7 @@ public sealed class ProjectShellTests
             var sidebar = Field<SidebarControl>(fixture.Shell, "_sidebarControl");
             var items = ((System.Collections.IEnumerable)Field<object>(sidebar, "_items")).Cast<object>().ToArray();
             var titles = items.Select(item => (string)item.GetType().GetField("Title")!.GetValue(item)!).ToArray();
-            foreach (string title in new[] { "Backlog", "Calendar", "My Tasks", "Invitations", "Project Settings" })
+            foreach (string title in new[] { "Kho Content", "Backlog", "Calendar", "My Tasks", "Invitations", "Project Settings" })
                 CollectionAssert.Contains(titles, title);
             Assert.AreEqual(admin, titles.Contains("Quản trị người dùng"));
             if (admin)
@@ -405,6 +409,36 @@ public sealed class ProjectShellTests
                     Assert.IsTrue((bool)typeof(SidebarControl).GetMethod("IsNavigationVisible", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(sidebar, [item])!);
             }
             fixture.Shell.Close();
+        });
+    }
+
+    [TestMethod]
+    public void ContentLibrary_LoadsProjectContentAndOpensArchivedContentDetailThroughApi()
+    {
+        RunSta(() =>
+        {
+            using var fixture = new UxFixture(contentBackends: true);
+            fixture.Projects.Context.Apply(new(81, "A", "OWNER", "ACTIVE"));
+
+            Complete(InvokeTask(fixture.Shell, "OpenContentLibraryAsync"));
+
+            var library = Field<Control>(fixture.Shell, "_projectPage") as ContentLibraryControl;
+            Assert.IsNotNull(library);
+            Assert.AreEqual(1, library.TotalContentCount);
+            CollectionAssert.Contains(fixture.Paths, "/api/projects/81/contents");
+            var row = Descendants(library).OfType<ContentLibraryRowControl>().Single();
+            Assert.AreEqual(ContentStatus.Archived, row.Content.Status);
+
+            typeof(BoardForm).GetMethod("OpenContentLibraryDetail", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .Invoke(fixture.Shell, [901L]);
+
+            var detail = Field<ContentDetailPanel>(fixture.Shell, "_contentDetailPanel");
+            var loadedContent = Field<ContentBoardCard?>(detail, "_current");
+            Assert.IsNotNull(loadedContent);
+            Assert.AreEqual(901L, loadedContent.ContentId);
+            Assert.AreEqual("Archived video", loadedContent.Title);
+            Assert.IsTrue(Field<bool>(detail, "_detailLoaded"));
+            CollectionAssert.Contains(fixture.Paths, "/api/contents/901");
         });
     }
     [TestMethod]
@@ -422,54 +456,64 @@ public sealed class ProjectShellTests
         });
     }
     [TestMethod]
-    public void MyTasksForm_UsesApiForCurrentProjectAndProgress_WithoutLocalContent()
+    public void MyTasksPage_UsesApiForCurrentProjectAndProgress_WithoutLocalContent()
     {
         RunSta(() =>
         {
             using var fixture = new UxFixture(); fixture.CurrentRole = "CREATOR";
             fixture.Projects.Context.Apply(new(81, "A", "CREATOR", "ACTIVE"));
-            using var form = new MyTasksForm(new ApiMyTaskBackend(fixture.Api, fixture.Session));
-            form.Show(); Application.DoEvents();
-            var list = Field<ListView>(form, "listViewTasks");
+            using var page = new MyTasksControl(new ApiMyTaskBackend(fixture.Api, fixture.Session)) { Dock = DockStyle.Fill };
+            using var host = new Form { ClientSize = new System.Drawing.Size(1120, 700) };
+            host.Controls.Add(page);
+            host.Show(); Application.DoEvents();
+            var list = Field<ListView>(page, "listViewTasks");
             Assert.AreEqual(1, list.Items.Count); StringAssert.Contains(list.Items[0].SubItems[1].Text, "Server task");
             CollectionAssert.Contains(fixture.Paths, "/api/projects/81/my-tasks");
             list.Items[0].Selected = true; list.Select(); Application.DoEvents();
-            Field<NumericUpDown>(form, "nudProgress").Value = 60;
-            Field<Button>(form, "btnSaveProgress").PerformClick(); Application.DoEvents();
+            Field<NumericUpDown>(page, "nudProgress").Value = 60;
+            Field<Button>(page, "btnSaveProgress").PerformClick(); Application.DoEvents();
             CollectionAssert.Contains(fixture.Paths, "/api/contents/101/progress");
-            Assert.IsFalse(Field<Button>(form, "btnSaveDeadline").Enabled);
-            form.Close();
+            Assert.IsFalse(Field<Button>(page, "btnSaveDeadline").Enabled);
+            host.Close();
         });
     }
     [TestMethod]
-    public void MyTasksForm_ReadErrorAndRetry_DoNotClaimEmptyOrClearAuth()
+    public void MyTasksPage_ReadErrorAndRetry_DoNotClaimEmptyOrClearAuth()
     {
         RunSta(() =>
         {
             using var fixture = new UxFixture(); fixture.Projects.Context.Apply(new(81, "A", "OWNER", "ACTIVE"));
             fixture.TaskResponse = () => Task.FromResult(Error(503));
-            using var form = new MyTasksForm(new ApiMyTaskBackend(fixture.Api, fixture.Session));
-            form.Show(); Application.DoEvents();
-            Assert.AreEqual("Không tải được công việc", Field<string>(form, "_emptyTitle"));
+            using var page = new MyTasksControl(new ApiMyTaskBackend(fixture.Api, fixture.Session)) { Dock = DockStyle.Fill };
+            using var host = new Form { ClientSize = new System.Drawing.Size(1120, 700) };
+            host.Controls.Add(page);
+            host.Show(); Application.DoEvents();
+            Assert.AreEqual("Không tải được công việc", Field<string>(page, "_emptyTitle"));
             Assert.IsTrue(fixture.Session.IsAuthenticated); Assert.AreEqual(81L, fixture.Projects.Context.Current!.ProjectId);
             fixture.TaskResponse = null;
-            Field<Button>(form, "btnRefresh").PerformClick(); Application.DoEvents();
-            Assert.AreEqual(1, Field<ListView>(form, "listViewTasks").Items.Count);
-            form.Close();
+            Field<Button>(page, "btnRefresh").PerformClick(); Application.DoEvents();
+            Assert.AreEqual(1, Field<ListView>(page, "listViewTasks").Items.Count);
+            host.Close();
         });
     }
     [TestMethod]
-    public void MyTasksForm_ContextChangeClosesOldFormBeforeAnotherRequest()
+    public void MyTasksPage_ContextChangeClearsOldProjectBeforeAnotherRequest()
     {
         RunSta(() =>
         {
             using var fixture = new UxFixture(); fixture.Projects.Context.Apply(new(81, "A", "OWNER", "ACTIVE"));
             long generation = fixture.Projects.Context.Generation;
-            using var form = new MyTasksForm(new ApiMyTaskBackend(fixture.Api, fixture.Session), () => generation == fixture.Projects.Context.Generation);
-            form.Show(); Application.DoEvents(); int requests = fixture.Paths.Count;
+            using var page = new MyTasksControl(new ApiMyTaskBackend(fixture.Api, fixture.Session), () => generation == fixture.Projects.Context.Generation)
+                { Dock = DockStyle.Fill };
+            using var host = new Form { ClientSize = new System.Drawing.Size(1120, 700) };
+            host.Controls.Add(page);
+            host.Show(); Application.DoEvents(); int requests = fixture.Paths.Count;
             fixture.Projects.Context.Apply(new(83, "C", "CREATOR", "ACTIVE"));
-            typeof(MyTasksForm).GetMethod("ReloadTasks", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(form, null);
-            Assert.IsTrue(form.IsDisposed); Assert.AreEqual(requests, fixture.Paths.Count);
+            typeof(MyTasksControl).GetMethod("ReloadTasks", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(page, null);
+            Assert.IsFalse(page.IsDisposed);
+            Assert.AreEqual("Project đã thay đổi", Field<string>(page, "_emptyTitle"));
+            Assert.AreEqual(requests, fixture.Paths.Count);
+            host.Close();
         });
     }
     [TestMethod]
@@ -540,8 +584,10 @@ public sealed class ProjectShellTests
         public static Task<HttpResponseMessage> Detail(long id, string role) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(new ProjectResponse(id, id == 81 ? "A" : id == 82 ? "Archived B" : "C", "Description", "Owner", role, id == 82 ? "ARCHIVED" : "ACTIVE", DateTimeOffset.UtcNow)) });
         public Func<Task<HttpResponseMessage>>? ListResponse { get; set; }
         public Func<Task<HttpResponseMessage>>? TaskResponse { get; set; }
-        public UxFixture(bool systemAdmin = false)
+        public bool ContentBackends { get; }
+        public UxFixture(bool systemAdmin = false, bool contentBackends = false)
         {
+            ContentBackends = contentBackends;
             http = new HttpClient(new UxHandler(this)) { BaseAddress = new("http://fixture.test/") }; api = new ApiClient(http);
             Session.TrySetLogin(new LoginResponse("fixture", DateTimeOffset.UtcNow.AddMinutes(30), new(42, "fixture@example.test", "Fixture", systemAdmin)), 0);
             CurrentSession.CurrentUserId = 42; CurrentSession.CurrentUserName = "Fixture";
@@ -555,7 +601,10 @@ public sealed class ProjectShellTests
                 new MyTaskService(tasks, members, uow),
                 new ScriptService(new InMemoryContentScriptRepository(), new InMemoryContentDetailsRepository(), new InMemoryPlatformRepository(), members, tasks, uow, new NotConfiguredAiService()),
                 new IdeaService(new InMemoryIdeaRepository(withSeed: false), members, history, uow),
-                auth: new AuthApiFacade(api, Session), projects: Projects, taskBackend: new ApiMyTaskBackend(api, Session));
+                auth: new AuthApiFacade(api, Session), projects: Projects, taskBackend: new ApiMyTaskBackend(api, Session),
+                boardBackend: contentBackends ? new ApiBoardBackend(api, Session) : null,
+                detailBackend: contentBackends ? new ApiContentDetailBackend(api, Session) : null,
+                assignmentBackend: contentBackends ? new ApiAssignmentBackend(api, Session) : null);
             Field<System.Windows.Forms.Timer>(Shell, "_projectTimer").Stop();
         }
         public void Dispose() { Field<System.Windows.Forms.Timer>(Shell, "_projectTimer").Dispose(); Shell.Dispose(); Projects.Dispose(); Session.Clear(); api.Dispose(); http.Dispose(); }
@@ -568,6 +617,14 @@ public sealed class ProjectShellTests
                 if (request.Method == HttpMethod.Get && path == "/api/users/me") return Reply(new ProfileResponse(42, "fixture@example.test", "Fixture", "Active", fixture.Session.CurrentUser!.IsSystemAdmin, null));
                 if (path.EndsWith("/my-role")) return Reply(new ProjectRoleResponse(fixture.CurrentRole == "OWNER" ? "Owner" : fixture.CurrentRole == "MANAGER" ? "Manager" : "Creator"));
                 if (path.EndsWith("/my-tasks")) return fixture.TaskResponse?.Invoke() ?? Reply(new MyTasksResponse([TaskItem(long.Parse(path.Split('/')[3]))]));
+                if (path == "/api/platforms") return Reply(new PlatformOptionsResponse(["TikTok", "YouTube"]));
+                if (path.EndsWith("/assignable-members")) return Reply(new AssignableMembersResponse([new(7, "Creator One", "Creator")]));
+                if (path == "/api/projects/81/contents" && fixture.ContentBackends)
+                    return Reply(new BoardResponse([new BoardCardResponse(901, 81, "CNT-901", "Archived video", "Card description", "Archived", "Low", null, null, ["TikTok"], [], false,
+                        [new BoardAssigneeResponse(901, 7, "Creator One", "InProgress", 45, null)])]));
+                if (path == "/api/contents/901") return Reply(new ContentDetailResponse(901, 81, "CNT-901", "Archived video detail", "Detail description", "Video", "Archived", "Low", null, null, 42, ["TikTok"], "Owner"));
+                if (path == "/api/contents/901/script") return Reply(new ScriptResponse(901, 81, string.Empty, "v1", true, false, null));
+                if (path == "/api/contents/901/activity") return Reply(new ActivityResponse(901, []));
                 if (path == "/api/contents/101/progress") return Reply(TaskItem(81, 60));
                 if (path.EndsWith("/access")) return fixture.AccessResponse?.Invoke() ?? Reply(new ProjectAccessResponse(long.Parse(path.Split('/')[3]), "Project " + path.Split('/')[3], fixture.CurrentRole, "ACTIVE"));
                 if (path == "/api/projects") return fixture.ListResponse?.Invoke() ?? Reply(new ProjectListResponse([new(81, "A", fixture.CurrentRole, "ACTIVE"), new(82, "Archived B", "OWNER", "ARCHIVED"), new(83, "C", "CREATOR", "ACTIVE")]));

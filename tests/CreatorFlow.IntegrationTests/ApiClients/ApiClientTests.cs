@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http;
 using CreatorFlow.ApiClients;
+using CreatorFlow.Contracts.Board;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace CreatorFlow.IntegrationTests.ApiClients;
@@ -21,6 +22,25 @@ public sealed class ApiClientTests
         using var http = new HttpClient(handler) { BaseAddress = configuration.BaseUrl };
         using var api = new ApiClient(http);
         Assert.AreEqual("ok", (await api.GetHealthAsync()).Status);
+    }
+
+    [TestMethod]
+    public async Task GetProjectContentLibraryAsync_UsesProjectContentsRouteAndBearerToken()
+    {
+        using var handler = new StubHandler((request, _) =>
+        {
+            Assert.AreEqual(HttpMethod.Get, request.Method);
+            Assert.AreEqual("https://example.test/api/projects/81/contents", request.RequestUri!.AbsoluteUri);
+            Assert.AreEqual("Bearer", request.Headers.Authorization?.Scheme);
+            Assert.AreEqual("fixture-token", request.Headers.Authorization?.Parameter);
+            return Task.FromResult(JsonResponse("{\"cards\":[]}"));
+        });
+        using var http = CreateHttpClient(handler);
+        using var api = new ApiClient(http);
+
+        BoardResponse response = await api.GetProjectContentLibraryAsync(81, "fixture-token");
+
+        Assert.AreEqual(0, response.Cards.Count);
     }
 
     [TestMethod]

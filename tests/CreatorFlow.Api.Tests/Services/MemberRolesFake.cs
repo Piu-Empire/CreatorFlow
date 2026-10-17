@@ -12,6 +12,7 @@ internal sealed class MemberRolesFake : ITaskRepository
     public Dictionary<(long Project, long User), ProjectRole> Roles { get; } = new();
     public Dictionary<(long Content, long User), TaskAssignment> Assignments { get; } = new();
     public List<(long ContentId, long Actor, IReadOnlyList<NewAssignment> Additions)> Applied { get; } = new();
+    public List<BoardAssignee> BoardAssignees { get; } = new();
 
     public void Assign(long contentId, long projectId, long userId) =>
         Assignments[(contentId, userId)] = new TaskAssignment(
@@ -35,7 +36,8 @@ internal sealed class MemberRolesFake : ITaskRepository
     public Task<ContentInfo?> GetContentAsync(long contentId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public Task<IReadOnlyList<TaskAssignment>> GetMyTasksAsync(long projectId, long userId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public Task<IReadOnlyList<TaskAssignment>> GetAssignmentsAsync(long contentId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    public Task<IReadOnlyList<BoardAssignee>> GetBoardAssigneesAsync(long projectId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<IReadOnlyList<BoardAssignee>> GetBoardAssigneesAsync(long projectId, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<BoardAssignee>>(BoardAssignees);
     public Task UpdateProgressAsync(long assignmentId, int percent, AssignmentStatus status, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public Task UpdateAssignmentDeadlineAsync(long assignmentId, DateOnly? deadline, CancellationToken cancellationToken = default) => throw new NotSupportedException();
 }

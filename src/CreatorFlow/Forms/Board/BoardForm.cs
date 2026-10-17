@@ -1,9 +1,9 @@
 using CreatorFlow.Models.Enums;
 using CreatorFlow.Controls;
-using CreatorFlow.Forms.IdeaBank;
+using CreatorFlow.Controls.IdeaBank;
+using CreatorFlow.Controls.MyTasks;
 using CreatorFlow.Forms.Invitations;
 using CreatorFlow.Forms.ProjectSettings;
-using CreatorFlow.Forms.Tasks;
 using CreatorFlow.Models;
 using CreatorFlow.Repositories.Interfaces;
 using CreatorFlow.Services;
@@ -138,7 +138,20 @@ public partial class BoardForm : Form, IMessageFilter
         _modulePageHeader.PlatformFilterChanged += (_, _) => ApplyFilters();
 
         _sidebarControl.ReviewQueueRequested += (_, _) => OpenReviewQueue();
-        _sidebarControl.BoardRequested += async (_, _) => { if (!CanLeaveProjectPage()) return; if (_projects is not null && !await ValidateProjectAsync()) return; CloseProjectPage(); CloseProfile(); CloseAdmin(); CloseReports(); CloseCalendar(); ReloadBoard(); };
+        _sidebarControl.ContentLibraryRequested += async (_, _) => await OpenContentLibraryAsync();
+        _sidebarControl.BoardRequested += async (_, _) =>
+        {
+            if (!CanLeaveProjectPage()) return;
+            if (_projects is not null && !await ValidateProjectAsync()) return;
+
+            CloseProjectPage();
+            CloseProfile();
+            CloseAdmin();
+            CloseReports();
+            CloseCalendar();
+            _sidebarControl.SetActiveMenu("Board");
+            ReloadBoard();
+        };
         _sidebarControl.MyTasksRequested += (_, _) => OpenMyTasks();
         _sidebarControl.IdeaBankRequested += (_, _) => OpenIdeaBank();
         if (projects is null) _sidebarControl.ProjectSettingsRequested += (_, _) => OpenProjectSettings();
@@ -446,12 +459,14 @@ public partial class BoardForm : Form, IMessageFilter
 
         List<ProjectMemberInfo> members;
         List<string> platforms;
+        string apiOperation = $"lấy danh sách Creator được giao (GET /api/projects/{CurrentSession.CurrentProjectId}/assignable-members)";
         try
         {
             // Chế độ API: danh sách người nhận việc và platform lấy từ API (quyền do Backend quyết định).
             members = viaApi
                 ? _assignmentBackend!.GetAssignableMembers(CurrentSession.CurrentProjectId)
                 : _contentService.GetAssignableMembers(CurrentSession.CurrentProjectId, CurrentSession.CurrentUserId);
+            apiOperation = "lấy danh sách nền tảng (GET /api/platforms)";
             platforms = viaApi ? _detailBackend!.GetAvailablePlatforms() : _contentService.GetAvailablePlatforms();
         }
         catch (ContentValidationException ex)
@@ -462,6 +477,12 @@ public partial class BoardForm : Form, IMessageFilter
         catch (UnauthorizedWorkflowActionException ex)
         {
             MessageBox.Show(this, ex.Message, "Không đủ quyền", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        catch (InvalidOperationException ex)
+        {
+            if (viaApi) ShowContentApiNotFound(apiOperation, ex);
+            else MessageBox.Show(this, ex.Message, "Không mở được hộp thoại tạo nội dung", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
 
@@ -484,56 +505,106 @@ public partial class BoardForm : Form, IMessageFilter
         {
             MessageBox.Show(this, ex.Message, "Không đủ quyền", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
+        catch (InvalidOperationException ex)
+        {
+            if (viaApi)
+                ShowContentApiNotFound($"tạo Content (POST /api/projects/{CurrentSession.CurrentProjectId}/contents)", ex);
+            else
+                MessageBox.Show(this, ex.Message, "Không tạo được Content", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
     }
 
-    /// <summary>Mở màn My Tasks; nếu người dùng bấm "Mở Content" thì mở drawer chi tiết Content đó trên Board.</summary>
+    private void ShowContentApiNotFound(string operation, InvalidOperationException error)
+    {
+        MessageBox.Show(this,
+            $"Không thể {operation}. API trả về HTTP 404.\r\n\r\n" +
+            "Board cũng đang nhận HTTP 404, nên API ở Api:BaseUrl có thể chưa được cập nhật cùng phiên bản với ứng dụng. " +
+            "Hãy kiểm tra appsettings.Local.json hoặc Api:BaseUrl, rồi chạy/redeploy CreatorFlow.Api mới nhất.\r\n\r\n" +
+            error.Message,
+            "CreatorFlow.Api chưa đồng bộ",
+            MessageBoxButtons.OK,
+            MessageBoxIcon.Warning);
+    }
+
+    /// <summary>Mở trang My Tasks trong vùng nội dung chính.</summary>
     private async void OpenMyTasks()
     {
         if (!HasProjectContext || !CanLeaveProjectPage()) return;
         if (_projects is not null && !await ValidateProjectAsync()) return;
-        CloseProfile(); CloseAdmin(); CloseReports(); CloseCalendar();
-        long? contentId;
         if (_projects is not null && _taskBackend is null) { ShowUnavailableModule("My Tasks"); return; }
-        CloseProjectPage();
+
         long generation = _projects?.Context.Generation ?? 0;
         long authGeneration = _auth?.Session.Generation ?? 0;
-        using (var tasksForm = _projects is null ? new MyTasksForm(_myTaskService) :
-            new MyTasksForm(_taskBackend!, () => !IsDisposed && _auth?.Session.IsAuthenticated == true &&
-                authGeneration == _auth.Session.Generation && generation == _projects.Context.Generation))
+        MyTasksControl page = _projects is null
+            ? new MyTasksControl(_myTaskService)
+            : new MyTasksControl(_taskBackend!, () => !IsDisposed && _auth?.Session.IsAuthenticated == true &&
+                authGeneration == _auth.Session.Generation && generation == _projects.Context.Generation);
+        page.Dock = DockStyle.Fill;
+        page.ContentOpenRequested += OpenMyTaskContent;
+        page.ActiveTaskCountChanged += count =>
         {
-            ShowWithActiveMenu("My Tasks", () => tasksForm.ShowDialog(this));
-            contentId = tasksForm.RequestedContentId;
-        }
+            _sidebarControl.MyWorkCount = count;
+            _sidebarControl.Invalidate();
+        };
 
-        ReloadBoard();
-        if (contentId.HasValue) OpenContentById(contentId.Value);
+        ShowProjectPage(page, "My Tasks");
+        _sidebarControl.SetActiveMenu("My Tasks");
     }
 
-    /// <summary>Mở màn Idea Bank (kho ý tưởng) của Project hiện hành; đóng xong thì cập nhật lại badge Backlog.</summary>
-    private void OpenIdeaBank()
+    /// <summary>Mở trang Idea Bank của Project hiện hành ngay trong vùng nội dung chính.</summary>
+    private async void OpenIdeaBank()
     {
+        if (!HasProjectContext || !CanLeaveProjectPage()) return;
+        if (_projects is not null && !await ValidateProjectAsync()) return;
         if (!HasProjectContext) return;
-        if (_projects is not null)
+
+        IIdeaBackend? backend = _projects is null ? _ideaService : _ideaBackend;
+        if (backend is null)
         {
-            // Đã đăng nhập: Idea Bank chạy qua API. Chưa có backend API thì giữ thông báo "chưa kết nối" như cũ.
-            if (_ideaBackend is null) { ShowUnavailableModule("Idea Bank"); return; }
-            if (!CanLeaveProjectPage()) return;
-            ShowIdeaBankDialog(_ideaBackend);
+            ShowUnavailableModule("Idea Bank");
             return;
         }
-        CloseProfile();
-        ShowIdeaBankDialog(_ideaService);
 
-        ReloadBoard();
+        long projectId = CurrentSession.CurrentProjectId;
+        var page = new IdeaBankControl(backend)
+        {
+            Dock = DockStyle.Fill,
+        };
+        page.IdeasChanged += (_, _) => RefreshBacklogCount();
+        page.CloseRequested += (_, _) => CloseIdeaBankPage(page);
+        ShowProjectPage(page, "Backlog");
+        _sidebarControl.SetActiveMenu("Backlog");
+        RefreshBacklogCount();
+
+        void RefreshBacklogCount()
+        {
+            try
+            {
+                _sidebarControl.BacklogCount = backend.CountBacklog(projectId, CurrentSession.CurrentUserId);
+            }
+            catch (Exception error) when (error is IdeaValidationException or UnauthorizedWorkflowActionException)
+            {
+                _sidebarControl.BacklogCount = 0;
+            }
+            _sidebarControl.Invalidate();
+        }
     }
 
-    /// <summary>Hiện Idea Bank và sáng mục Backlog trên sidebar trong lúc mở; đóng xong trả highlight về mục trước đó.</summary>
-    private void ShowIdeaBankDialog(IIdeaBackend backend) =>
-        ShowWithActiveMenu("Backlog", () =>
-        {
-            using var ideaForm = new IdeaBankForm(backend);
-            ideaForm.ShowDialog(this);
-        });
+    private void CloseIdeaBankPage(IdeaBankControl page)
+    {
+        if (!ReferenceEquals(_projectPage, page)) return;
+
+        CloseProjectPage();
+        _pnlBoardArea.Visible = true;
+        _modulePageHeader.Visible = true;
+        _flowColumns.Visible = true;
+        _pnlDrawerHost.Visible = false;
+        if (_pnlBoardArea.Controls["serverProjectState"] is Label serverState)
+            serverState.Visible = false;
+        _topHeaderControl.SetAuthenticatedPage("Board");
+        _sidebarControl.SetActiveMenu("Board");
+        ReloadBoard();
+    }
 
     /// <summary>Chạy một hộp thoại mở từ sidebar: sáng mục <paramref name="menu"/> trong lúc mở, đóng xong trả highlight về mục trước đó.</summary>
     private void ShowWithActiveMenu(string menu, Action show)

@@ -8,6 +8,7 @@ public enum RoundButtonStyle
     Primary,
     Secondary,
     Danger,
+    DangerGhost,
     Ghost
 }
 
@@ -116,6 +117,12 @@ public class RoundedButton : Button
                 case RoundButtonStyle.Danger:
                     bg = _isPressed ? ColorTranslator.FromHtml("#B91C1C") : (_isHovered ? ColorTranslator.FromHtml("#EF4444") : UITheme.Danger);
                     textColor = UITheme.White;
+                    break;
+
+                case RoundButtonStyle.DangerGhost:
+                    bg = _isPressed ? ColorTranslator.FromHtml("#FEF2F2") : (_isHovered ? ColorTranslator.FromHtml("#FFF7F7") : UITheme.White);
+                    textColor = UITheme.Danger;
+                    borderColor = ColorTranslator.FromHtml("#FECACA");
                     break;
 
                 case RoundButtonStyle.Ghost:

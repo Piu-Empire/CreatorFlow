@@ -5,19 +5,20 @@ using CreatorFlow.Services;
 using CreatorFlow.Services.Backends;
 using CreatorFlow.Services.Exceptions;
 using CreatorFlow.Theme;
+using System.Drawing.Drawing2D;
 
-namespace CreatorFlow.Forms.Tasks;
+namespace CreatorFlow.Controls.MyTasks;
 
 /// <summary>
-/// Màn My Tasks cho Creator: danh sách công việc được giao (status, priority, deadline, progress).
+/// Trang My Tasks cho Creator: danh sách công việc được giao (status, priority, deadline, progress).
 ///   - Chỉ hiện task của CurrentSession.CurrentUserId trong CurrentSession.CurrentProjectId (MyTaskService đảm bảo).
 ///   - Lọc theo trạng thái (Segmented Control) và khoảng deadline (ComboBox).
 ///   - Creator cập nhật progress; chỉ Owner/Manager đổi được deadline.
-///   - "Mở Content": đóng form với DialogResult.OK và <see cref="RequestedContentId"/> — BoardForm mở drawer chi tiết.
+///   - "Mở Content": phát yêu cầu để BoardForm mở drawer chi tiết Content đã chọn.
 /// Giao diện theo CreatorFlow UI Style Guide (Page Header, Card, bảng, Progress bar, Toast, validation dưới ô nhập).
-/// Layout tĩnh nằm trong MyTasksForm.Designer.cs, file này chỉ chứa dữ liệu, sự kiện và logic.
+/// Layout tĩnh nằm trong MyTasksControl.Designer.cs, file này chỉ chứa dữ liệu, sự kiện và logic.
 /// </summary>
-public partial class MyTasksForm : Form
+public partial class MyTasksControl : UserControl
 {
     private static readonly (string Label, AssignmentStatus? Value)[] StatusOptions =
     {
@@ -59,23 +60,27 @@ public partial class MyTasksForm : Form
     private List<MyTaskItem> _allTasks = new();
     private List<MyTaskItem> _visibleTasks = new();
     private bool _canChangeDeadline;
+    private bool _contextInvalidated;
     private int _hoverIndex = -1;
     private string _emptyTitle = string.Empty;
     private string _emptySub = string.Empty;
 
-    /// <summary>Content người dùng chọn mở (null nếu đóng form mà không chọn).</summary>
-    public long? RequestedContentId { get; private set; }
+    /// <summary>Yêu cầu mở Content trên Board khi người dùng chọn một công việc.</summary>
+    public event Action<long>? ContentOpenRequested;
 
-    /// <summary>Constructor không tham số CHỈ để Visual Studio Designer mở được form. Không dùng khi chạy thật.</summary>
+    /// <summary>Số công việc chưa hoàn thành để cập nhật badge trên thanh điều hướng.</summary>
+    public event Action<int>? ActiveTaskCountChanged;
+
+    /// <summary>Constructor không tham số CHỈ để Visual Studio Designer mở được control. Không dùng khi chạy thật.</summary>
     [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
-    public MyTasksForm()
+    public MyTasksControl()
     {
         InitializeComponent();
         _taskService = null!;
         InitFilters();
     }
 
-    public MyTasksForm(MyTaskService taskService)
+    public MyTasksControl(MyTaskService taskService)
     {
         InitializeComponent();
         _taskService = taskService;
@@ -93,7 +98,7 @@ public partial class MyTasksForm : Form
         };
     }
 
-    public MyTasksForm(IMyTaskBackend backend, Func<bool>? contextValid = null) : this((MyTaskService)null!)
+    public MyTasksControl(IMyTaskBackend backend, Func<bool>? contextValid = null) : this((MyTaskService)null!)
     {
         _backend = backend;
         _contextValid = contextValid;
@@ -102,8 +107,25 @@ public partial class MyTasksForm : Form
     private bool CheckContext()
     {
         if (_contextValid?.Invoke() != false) return true;
-        _allTasks.Clear(); _visibleTasks.Clear();
-        Close();
+        if (!_contextInvalidated)
+        {
+            _contextInvalidated = true;
+            _allTasks.Clear();
+            _visibleTasks.Clear();
+            listViewTasks.Items.Clear();
+            listViewTasks.Visible = false;
+            pnlEmpty.Visible = true;
+            _emptyTitle = "Project đã thay đổi";
+            _emptySub = "Mở lại My Tasks để xem công việc của Project hiện tại.";
+            lblSummary.Text = string.Empty;
+            btnOpenContent.Enabled = false;
+            nudProgress.Enabled = false;
+            btnSaveProgress.Enabled = false;
+            dtpDeadline.Enabled = false;
+            btnSaveDeadline.Enabled = false;
+            pnlEmpty.Invalidate();
+            ActiveTaskCountChanged?.Invoke(0);
+        }
         return false;
     }
 
@@ -187,6 +209,7 @@ public partial class MyTasksForm : Form
         lblSummary.Text = $"Hiển thị {_visibleTasks.Count}/{_allTasks.Count} công việc • {overdue} quá hạn";
         // Phát hiện overdue: số quá hạn của TOÀN BỘ task (không phụ thuộc bộ lọc) được tô đỏ để dễ thấy.
         lblSummary.ForeColor = overdue > 0 ? UITheme.OverdueText : UITheme.Neutral600;
+        ActiveTaskCountChanged?.Invoke(_allTasks.Count(t => t.Status != AssignmentStatus.Completed));
 
         bool hasRows = _visibleTasks.Count > 0;
         listViewTasks.Visible = hasRows;
@@ -213,6 +236,7 @@ public partial class MyTasksForm : Form
         bool hasTask = task != null;
 
         btnOpenContent.Enabled = hasTask;
+        btnOpenContent.Visible = hasTask;
         nudProgress.Enabled = hasTask;
         btnSaveProgress.Enabled = hasTask;
         dtpDeadline.Enabled = hasTask && _canChangeDeadline;
@@ -383,8 +407,7 @@ public partial class MyTasksForm : Form
         var task = SelectedTask;
         if (task is null || !CheckContext()) return;
 
-        RequestedContentId = task.ContentId;
-        DialogResult = DialogResult.OK; // đóng form (ShowDialog) — BoardForm đọc RequestedContentId để mở Content
+        ContentOpenRequested?.Invoke(task.ContentId);
     }
 
     /// <summary>Cột Tiêu đề co giãn lấp phần còn lại, các cột khác giữ chiều rộng cố định.</summary>
@@ -426,24 +449,69 @@ public partial class MyTasksForm : Form
         const string description = "Công việc được giao cho bạn: theo dõi trạng thái, tiến độ và deadline.";
 
         var g = e.Graphics;
-        TextRenderer.DrawText(g, title, UITheme.FontPageTitle, new Point(0, 0), UITheme.Ink, TextFormatFlags.NoPadding);
+        TextRenderer.DrawText(g, title, UITheme.FontPageTitle, new Point(0, 7), UITheme.Ink, TextFormatFlags.NoPadding);
 
         int titleWidth = TextRenderer.MeasureText(g, title, UITheme.FontPageTitle, new Size(int.MaxValue, 40), TextFormatFlags.NoPadding).Width;
         int badgeWidth = TextRenderer.MeasureText(g, badge, UITheme.FontLabelBold, new Size(int.MaxValue, 24), TextFormatFlags.NoPadding).Width + 24;
-        UITheme.DrawBadge(g, badge, UITheme.Neutral200, UITheme.Neutral700, new Rectangle(titleWidth + 12, 8, badgeWidth, 24));
+        UITheme.DrawBadge(g, badge, UITheme.Neutral200, UITheme.Neutral700, new Rectangle(titleWidth + 12, 15, badgeWidth, 24));
 
-        TextRenderer.DrawText(g, description, UITheme.FontBody, new Point(0, 50), UITheme.Neutral600, TextFormatFlags.NoPadding);
+        TextRenderer.DrawText(g, description, UITheme.FontBody, new Point(0, 54), UITheme.Neutral600, TextFormatFlags.NoPadding);
+        using var divider = new Pen(UITheme.Neutral200);
+        g.DrawLine(divider, 0, panelHeader.ClientSize.Height - 1, panelHeader.ClientSize.Width, panelHeader.ClientSize.Height - 1);
     }
 
     private void pnlEmpty_Paint(object? sender, PaintEventArgs e)
     {
         var area = pnlEmpty.ClientRectangle;
-        const TextFormatFlags flags = TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix | TextFormatFlags.EndEllipsis;
+        var g = e.Graphics;
+        g.SmoothingMode = SmoothingMode.AntiAlias;
 
-        TextRenderer.DrawText(e.Graphics, _emptyTitle, UITheme.FontH3,
-            new Rectangle(0, area.Height / 2 - 30, area.Width, 28), UITheme.Ink, flags);
-        TextRenderer.DrawText(e.Graphics, _emptySub, UITheme.FontBody,
-            new Rectangle(0, area.Height / 2 + 2, area.Width, 24), UITheme.Neutral600, flags);
+        int centerX = area.Width / 2;
+        int centerY = area.Height / 2;
+        var iconTile = new Rectangle(centerX - 36, centerY - 80, 72, 72);
+        using (var tilePath = UITheme.CreateRoundedRectanglePath(iconTile, 14))
+        using (var tileFill = new SolidBrush(UITheme.Neutral50))
+        using (var tileBorder = new Pen(Color.FromArgb(245, 245, 245)))
+        {
+            g.FillPath(tileFill, tilePath);
+            g.DrawPath(tileBorder, tilePath);
+        }
+
+        DrawEmptyTasksIcon(g, new Rectangle(centerX - 16, centerY - 59, 32, 32));
+
+        const TextFormatFlags centered = TextFormatFlags.HorizontalCenter | TextFormatFlags.NoPrefix | TextFormatFlags.EndEllipsis;
+        TextRenderer.DrawText(g, _emptyTitle, UITheme.FontH2,
+            new Rectangle(16, centerY + 16, Math.Max(0, area.Width - 32), 25), UITheme.Ink, centered);
+        TextRenderer.DrawText(g, _emptySub, UITheme.FontBody,
+            new Rectangle(Math.Max(16, centerX - 220), centerY + 46, Math.Min(440, Math.Max(0, area.Width - 32)), 44), UITheme.Neutral600,
+            centered | TextFormatFlags.WordBreak);
+    }
+
+    private static void DrawEmptyTasksIcon(Graphics g, Rectangle bounds)
+    {
+        using var pen = new Pen(UITheme.Neutral400, 1.6f)
+        {
+            StartCap = LineCap.Round,
+            EndCap = LineCap.Round,
+            LineJoin = LineJoin.Round,
+        };
+
+        var rearSheet = new Rectangle(bounds.X + 11, bounds.Y + 3, 15, 21);
+        using (var rearPath = UITheme.CreateRoundedRectanglePath(rearSheet, 2))
+            g.DrawPath(pen, rearPath);
+
+        var sheet = new Rectangle(bounds.X + 4, bounds.Y + 8, 17, 21);
+        using (var sheetPath = UITheme.CreateRoundedRectanglePath(sheet, 2))
+            g.DrawPath(pen, sheetPath);
+        using (var clip = UITheme.CreateRoundedRectanglePath(new Rectangle(bounds.X + 9, bounds.Y + 5, 7, 5), 2))
+            g.DrawPath(pen, clip);
+
+        g.DrawLine(pen, bounds.X + 8, bounds.Y + 15, bounds.X + 10, bounds.Y + 15);
+        g.DrawLine(pen, bounds.X + 13, bounds.Y + 15, bounds.X + 17, bounds.Y + 15);
+        g.DrawLine(pen, bounds.X + 8, bounds.Y + 19, bounds.X + 10, bounds.Y + 19);
+        g.DrawLine(pen, bounds.X + 13, bounds.Y + 19, bounds.X + 17, bounds.Y + 19);
+        g.DrawLine(pen, bounds.X + 8, bounds.Y + 23, bounds.X + 10, bounds.Y + 23);
+        g.DrawLine(pen, bounds.X + 13, bounds.Y + 23, bounds.X + 17, bounds.Y + 23);
     }
 
     private void listViewTasks_DrawColumnHeader(object? sender, DrawListViewColumnHeaderEventArgs e)

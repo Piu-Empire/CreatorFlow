@@ -51,15 +51,50 @@ public partial class BoardForm
     private void CloseProjectPage()
     {
         if (_projectPage is not { } page) return;
-        _projectPage = null; _pnlMain.Controls.Remove(page); page.Dispose();
+        _projectPage = null;
+        page.Parent?.Controls.Remove(page);
+        page.Dispose();
+        _pnlProjectPageHost.Visible = false;
+        _pnlBoardArea.Visible = true;
+        _topHeaderControl.SetAuthenticatedPage("Board");
     }
     private void ShowProjectPage(Control page, string title)
     {
-        _projectSwitch?.Cancel(); ++_switchSequence;
-        CloseProjectPage(); CloseProfile(); CloseAdmin(); CloseReports(); CloseCalendar(); _projectPage = page;
-        _pnlBoardArea.Visible = false; _pnlDrawerHost.Visible = false;
-        _pnlMain.Controls.Add(page); page.BringToFront();
-        _topHeaderControl.SetAuthenticatedPage(title);
+        _projectSwitch?.Cancel();
+        ++_switchSequence;
+
+        page.Dock = DockStyle.Fill;
+        page.Visible = false;
+        page.SuspendLayout();
+        _pnlMain.SuspendLayout();
+        _pnlProjectPageHost.SuspendLayout();
+        try
+        {
+            CloseProjectPage();
+            CloseProfile();
+            CloseAdmin();
+            CloseReports();
+            CloseCalendar();
+
+            _projectPage = page;
+            _pnlBoardArea.Visible = false;
+            _pnlDrawerHost.Visible = false;
+            _pnlProjectPageHost.Controls.Add(page);
+            _pnlProjectPageHost.Visible = true;
+            page.BringToFront();
+            _topHeaderControl.SetAuthenticatedPage(title);
+
+            // Lay out the entire destination while it is hidden, then expose it as one page.
+        }
+        finally
+        {
+            page.ResumeLayout(true);
+            _pnlProjectPageHost.ResumeLayout(true);
+            _pnlMain.ResumeLayout(true);
+        }
+
+        page.Visible = true;
+        page.Refresh();
     }
     private void CloseProjectMenu()
     {
@@ -263,7 +298,8 @@ public partial class BoardForm
         _pnlDrawerHost.Visible = false;
         bool current = _projects?.Context.Current is not null;
         _modulePageHeader.Visible = current; _flowColumns.Visible = current;
-        _modulePageHeader.SetContentCreationEnabled(false);
+        // Tạo Content gọi các endpoint riêng với Board, nên Board tải lỗi không nên khóa Add Ticket.
+        _modulePageHeader.SetContentCreationEnabled(current && CanCreateContentViaApi);
         foreach (var column in _columns.Values) column.SourceAvailable = false;
         ApplyFilters();
         if (_projectPage is not null || _profile is not null || _admin is not null || _reports is not null || _calendar is not null) return;
@@ -326,7 +362,7 @@ public partial class BoardForm
 
         _allCards = cards;
         foreach (var column in _columns.Values) column.SourceAvailable = true;
-        _modulePageHeader.SetContentCreationEnabled(_detailBackend is not null); // nút Add Ticket chỉ bật khi tạo Content đã nối API
+        _modulePageHeader.SetContentCreationEnabled(CanCreateContentViaApi);
         _topHeaderControl.UpdateStats(_allCards.Count, _allCards.Count(c => c.IsOverdue));
         long me = CurrentSession.CurrentUserId;
         _sidebarControl.ReviewQueueCount = _allCards.Count(c => c.HasPendingReview);
