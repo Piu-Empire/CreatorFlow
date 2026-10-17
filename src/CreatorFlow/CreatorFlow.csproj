@@ -17,6 +17,18 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<!-- Partial BoardForm designer resources need distinct manifest names to avoid .resources output collisions. -->
+		<EmbeddedResource Update="Forms\Board\BoardForm.ContentLibrary.resx">
+			<ManifestResourceName>CreatorFlow.Forms.Board.BoardForm.ContentLibrary</ManifestResourceName>
+			<LogicalName>CreatorFlow.Forms.Board.BoardForm.ContentLibrary.resources</LogicalName>
+		</EmbeddedResource>
+		<EmbeddedResource Update="Forms\Board\BoardForm.Projects.resx">
+			<ManifestResourceName>CreatorFlow.Forms.Board.BoardForm.Projects</ManifestResourceName>
+			<LogicalName>CreatorFlow.Forms.Board.BoardForm.Projects.resources</LogicalName>
+		</EmbeddedResource>
+	</ItemGroup>
+
+	<ItemGroup>
 		<Folder Include="Models\Enums\" />
 	</ItemGroup>
 

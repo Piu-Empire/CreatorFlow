@@ -10,4 +10,7 @@ public sealed partial class ApiClient
 {
     public Task<BoardResponse> GetBoardAsync(long projectId, string bearer, CancellationToken token = default) =>
         SendTasksAsync<BoardResponse>(HttpMethod.Get, $"api/projects/{projectId}/board", null, bearer, token);
+
+    public Task<BoardResponse> GetProjectContentLibraryAsync(long projectId, string bearer, CancellationToken token = default) =>
+        SendTasksAsync<BoardResponse>(HttpMethod.Get, $"api/projects/{projectId}/contents", null, bearer, token);
 }

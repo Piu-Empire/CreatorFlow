@@ -9,13 +9,13 @@ public sealed class ApiAssignmentBackend(ApiClient api, UserSession session) : I
 {
     public List<ProjectMemberInfo> GetAssignableMembers(long projectId)
     {
-        var response = ApiTaskCall.Run(() => api.GetAssignableMembersAsync(projectId, ApiTaskCall.BearerOf(session)));
+        var response = ApiTaskCall.Run(() => api.GetAssignableMembersAsync(projectId, ApiTaskCall.BearerOf(session)), session);
         return response.Members.Select(ApiTaskMapper.ToMember).ToList();
     }
 
     public List<MyTaskItem> GetAssignments(long contentId)
     {
-        var response = ApiTaskCall.Run(() => api.GetAssignmentsAsync(contentId, ApiTaskCall.BearerOf(session)));
+        var response = ApiTaskCall.Run(() => api.GetAssignmentsAsync(contentId, ApiTaskCall.BearerOf(session)), session);
         return response.Assignments.Select(ApiTaskMapper.ToItem).ToList();
     }
 
@@ -24,6 +24,6 @@ public sealed class ApiAssignmentBackend(ApiClient api, UserSession session) : I
         var request = new AssignContentRequest(assignments
             .Select(a => new AssigneeDeadlineRequest(a.UserId, ApiTaskMapper.ToDateOnly(a.Deadline)))
             .ToList());
-        ApiTaskCall.Run(() => api.AssignContentAsync(contentId, request, ApiTaskCall.BearerOf(session)));
+        ApiTaskCall.Run(() => api.AssignContentAsync(contentId, request, ApiTaskCall.BearerOf(session)), session);
     }
 }

@@ -80,7 +80,7 @@ public sealed partial class ApiClient : IDisposable
         HttpStatusCode.BadRequest => "The API rejected the request.",
         HttpStatusCode.Unauthorized => "Please sign in to continue.",
         HttpStatusCode.Forbidden => "You do not have permission for this operation.",
-        HttpStatusCode.NotFound => "The requested API resource was not found.",
+        HttpStatusCode.NotFound => "API phản hồi HTTP 404: Không tìm thấy endpoint hoặc dữ liệu yêu cầu.",
         HttpStatusCode.Conflict => "The operation conflicts with the current state.",
         _ => "The API request could not be completed."
     };

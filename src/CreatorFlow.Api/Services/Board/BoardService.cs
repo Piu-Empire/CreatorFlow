@@ -14,13 +14,21 @@ namespace CreatorFlow.Api.Services.Board;
 public sealed class BoardService(IBoardCardRepository cards, ITaskRepository tasks, CurrentAuthenticatedUser current)
 {
     public async Task<AuthOperationResult<BoardResponse>> GetBoardAsync(long projectId, CancellationToken token = default)
+        => await GetProjectContentsAsync(projectId, includeArchived: false, token);
+
+    public async Task<AuthOperationResult<BoardResponse>> GetContentLibraryAsync(long projectId, CancellationToken token = default)
+        => await GetProjectContentsAsync(projectId, includeArchived: true, token);
+
+    private async Task<AuthOperationResult<BoardResponse>> GetProjectContentsAsync(long projectId, bool includeArchived, CancellationToken token)
     {
         if (current.User is not { } user)
             return AuthOperationResult<BoardResponse>.Fail("unauthorized", "Vui lòng đăng nhập lại.", status: 401);
         if (await tasks.GetRoleAsync(projectId, user.UserId, token) is null)
             return AuthOperationResult<BoardResponse>.Fail("forbidden", "Bạn không thuộc Project này.", status: 403);
 
-        var rows = await cards.GetCardsAsync(projectId, token);
+        var rows = includeArchived
+            ? await cards.GetProjectContentsAsync(projectId, token)
+            : await cards.GetCardsAsync(projectId, token);
         var assignees = (await tasks.GetBoardAssigneesAsync(projectId, token))
             .GroupBy(a => a.ContentId)
             .ToDictionary(

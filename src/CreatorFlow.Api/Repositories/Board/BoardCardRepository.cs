@@ -30,15 +30,22 @@ public sealed class BoardCardRepository(IDbConnectionFactory connectionFactory) 
             EXISTS (SELECT 1 FROM reviews r WHERE r.content_id = c.content_id AND r.status = 'PENDING') AS has_pending_review
         FROM contents c
         WHERE c.project_id = @project_id
-          AND c.status <> 'ARCHIVED'
+          AND (@include_archived OR c.status <> 'ARCHIVED')
         ORDER BY c.content_id;
         """;
 
-    public async Task<IReadOnlyList<BoardCard>> GetCardsAsync(long projectId, CancellationToken cancellationToken = default)
+    public Task<IReadOnlyList<BoardCard>> GetCardsAsync(long projectId, CancellationToken cancellationToken = default) =>
+        QueryCardsAsync(projectId, includeArchived: false, cancellationToken);
+
+    public Task<IReadOnlyList<BoardCard>> GetProjectContentsAsync(long projectId, CancellationToken cancellationToken = default) =>
+        QueryCardsAsync(projectId, includeArchived: true, cancellationToken);
+
+    private async Task<IReadOnlyList<BoardCard>> QueryCardsAsync(long projectId, bool includeArchived, CancellationToken cancellationToken)
     {
         await using NpgsqlConnection connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
         await using var command = new NpgsqlCommand(Sql, connection);
         command.Parameters.AddWithValue("project_id", NpgsqlDbType.Bigint, projectId);
+        command.Parameters.AddWithValue("include_archived", NpgsqlDbType.Boolean, includeArchived);
 
         var rows = new List<BoardCard>();
         await using NpgsqlDataReader reader = await command.ExecuteReaderAsync(cancellationToken);

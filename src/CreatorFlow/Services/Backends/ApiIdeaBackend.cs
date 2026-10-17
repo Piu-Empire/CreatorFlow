@@ -10,7 +10,7 @@ namespace CreatorFlow.Services.Backends;
 /// <summary>
 /// Idea Bank chạy qua CreatorFlow.Api (quyền và validation kiểm tra ở Backend; người thao tác lấy từ JWT).
 /// Vai trò trong Project được nhớ từ lần tải danh sách gần nhất để bật/tắt nút mà không gọi API mỗi lần chọn dòng.
-/// Lỗi API được đổi sang IdeaValidationException / UnauthorizedWorkflowActionException — đúng các ngoại lệ IdeaBankForm đã xử lý.
+/// Lỗi API được đổi sang IdeaValidationException / UnauthorizedWorkflowActionException — đúng các ngoại lệ IdeaBankControl đã xử lý.
 /// </summary>
 public sealed class ApiIdeaBackend(ApiClient api, UserSession session) : IIdeaBackend
 {

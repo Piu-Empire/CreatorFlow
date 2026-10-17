@@ -5,6 +5,8 @@ using CreatorFlow.Api.Models.Tasks;
 using CreatorFlow.Api.Repositories.Invitations;
 using CreatorFlow.Api.Services.Invitations;
 using CreatorFlow.Contracts.Invitations;
+using CreatorFlow.Api.Tests.Services;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace CreatorFlow.Api.Tests.Invitations;
@@ -139,6 +141,40 @@ public sealed class InvitationServiceTests
         Assert.AreEqual(1, f.Repo.Invitations.Count);
         Assert.AreEqual(OwnerId, f.Repo.InvitedBy.Single());
         Assert.AreEqual(43, f.Repo.Tokens.Single().Length);      // 256 bit base64url
+        var sent = f.EmailSender.Invitations.Single();
+        Assert.AreEqual("New@X.vn", sent.Email);
+        Assert.AreEqual(ProjectId, sent.ProjectId);
+        Assert.AreEqual(result.Value.Role, sent.Role);
+        Assert.AreEqual("User 1", sent.InviterName);
+        Assert.AreEqual(result.Value.ExpiresAt, sent.ExpiresAtUtc);
+    }
+
+    [TestMethod]
+    public async Task Invite_EmailNotConfigured_Returns503AndDoesNotPersistInvitation()
+    {
+        var f = new Fixture(OwnerId);
+        f.EmailSender.Configured = false;
+
+        var result = await f.Service.InviteAsync(ProjectId, Invite());
+
+        Assert.AreEqual(503, result.Status);
+        Assert.AreEqual("email_not_configured", result.ErrorCode);
+        Assert.AreEqual(0, f.Repo.Invitations.Count);
+        Assert.AreEqual(0, f.EmailSender.Invitations.Count);
+    }
+
+    [TestMethod]
+    public async Task Invite_EmailDeliveryFails_CancelsPendingInvitationAndReturns503()
+    {
+        var f = new Fixture(OwnerId);
+        f.EmailSender.Fail = true;
+
+        var result = await f.Service.InviteAsync(ProjectId, Invite());
+
+        Assert.AreEqual(503, result.Status);
+        Assert.AreEqual("email_delivery_failed", result.ErrorCode);
+        Assert.AreEqual(InvitationStatus.Cancelled, f.Repo.Invitations.Single().Status);
+        Assert.IsNotNull(f.Repo.Invitations.Single().RespondedAt);
     }
 
     [TestMethod]
@@ -283,6 +319,7 @@ public sealed class InvitationServiceTests
         private readonly bool _ownsOtherProject;
         private InvitationService? _service;
         private FakeInvitationRepository? _repo;
+        public TestEmailSender EmailSender { get; } = new();
 
         public Fixture(long? actingUserId, bool ownsOtherProject = true)
         {
@@ -300,7 +337,7 @@ public sealed class InvitationServiceTests
                     ? new User { UserId = id, Email = $"u{id}@x.vn", DisplayName = $"User {id}", PasswordHash = "x" }
                     : null,
             },
-            new FixedTimeProvider());
+            new FixedTimeProvider(), EmailSender, NullLogger<InvitationService>.Instance);
     }
 
     private sealed class FixedTimeProvider : TimeProvider
@@ -358,5 +395,13 @@ public sealed class InvitationServiceTests
 
         public Task<IReadOnlyList<ProjectInvitation>> GetByProjectAsync(long projectId, CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<ProjectInvitation>>(Invitations.Where(i => i.ProjectId == projectId).OrderBy(i => i.InvitationId).ToList());
+
+        public Task<bool> CancelPendingAsync(long invitationId, DateTime respondedAtUtc, CancellationToken cancellationToken = default)
+        {
+            int index = Invitations.FindIndex(i => i.InvitationId == invitationId && i.Status == InvitationStatus.Pending);
+            if (index < 0) return Task.FromResult(false);
+            Invitations[index] = Invitations[index] with { Status = InvitationStatus.Cancelled, RespondedAt = respondedAtUtc };
+            return Task.FromResult(true);
+        }
     }
 }

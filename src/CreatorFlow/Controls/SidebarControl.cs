@@ -15,6 +15,7 @@ public class SidebarControl : UserControl
 
     public event EventHandler? ReviewQueueRequested;
     public event EventHandler? BoardRequested;
+    public event EventHandler? ContentLibraryRequested;
     public event EventHandler? MyTasksRequested;
     public event EventHandler? IdeaBankRequested;
     public event EventHandler? AdminWorkspaceRequested;
@@ -45,7 +46,7 @@ public class SidebarControl : UserControl
         Invalidate();
     }
 
-    private enum NavIcon { Summary, Board, List, Calendar, Chart, Check, Review, Sparkle, Gear, Shield, Flag }
+    private enum NavIcon { Summary, Board, Library, List, Calendar, Chart, Check, Review, Sparkle, Gear, Shield, Flag }
 
     private sealed class NavItem
     {
@@ -121,6 +122,7 @@ public class SidebarControl : UserControl
         _groups.Add(("PROJECT", y)); y += 26;
         _items.Add(new NavItem { Title = "Summary", Icon = NavIcon.Summary, Y = y }); y += ItemStep;
         _items.Add(new NavItem { Title = "Board", Icon = NavIcon.Board, Y = y, IsActive = true, AlwaysEnabled = true, Action = () => BoardRequested?.Invoke(this, EventArgs.Empty) }); y += ItemStep;
+        _items.Add(new NavItem { Title = "Kho Content", Icon = NavIcon.Library, Y = y, Action = () => ContentLibraryRequested?.Invoke(this, EventArgs.Empty) }); y += ItemStep;
         _items.Add(new NavItem { Title = "Backlog", Icon = NavIcon.List, Y = y, Badge = () => BacklogCount, Action = () => IdeaBankRequested?.Invoke(this, EventArgs.Empty) }); y += ItemStep;
         _items.Add(new NavItem { Title = "Calendar", Icon = NavIcon.Calendar, Y = y, AlwaysEnabled = true, Action = () => CalendarRequested?.Invoke(this, EventArgs.Empty) }); y += ItemStep;
         _items.Add(new NavItem { Title = "Reports", Icon = NavIcon.Chart, Y = y }); y += ItemStep;
@@ -299,6 +301,7 @@ public class SidebarControl : UserControl
         {
             case NavIcon.Summary: UIIcons.Summary(g, r, c); break;
             case NavIcon.Board: UIIcons.Board(g, r, c); break;
+            case NavIcon.Library: UIIcons.List(g, r, c); break;
             case NavIcon.List: UIIcons.List(g, r, c); break;
             case NavIcon.Calendar: UIIcons.Calendar(g, r, c); break;
             case NavIcon.Chart: UIIcons.Chart(g, r, c); break;

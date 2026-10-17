@@ -4,21 +4,25 @@ using CreatorFlow.Models.Enums;
 using CreatorFlow.Services;
 using CreatorFlow.Services.Backends;
 using CreatorFlow.Services.Exceptions;
+using CreatorFlow.Theme;
+using CreatorFlow.Forms.IdeaBank;
+using System.Drawing.Drawing2D;
 
-namespace CreatorFlow.Forms.IdeaBank;
+namespace CreatorFlow.Controls.IdeaBank;
 
 /// <summary>
-/// Màn Idea Bank (kho ý tưởng) của Project hiện hành:
+/// Trang Idea Bank (kho ý tưởng) của Project hiện hành:
 ///   - Danh sách Idea với trạng thái, tag, người tạo; chọn một dòng để xem mô tả + ghi chú ở khung dưới.
 ///   - Tìm kiếm theo từ khóa (có trễ ngắn để không truy vấn mỗi phím), lọc theo trạng thái và tag.
 ///   - Chuyển Idea thành Content (SCRUM-31): Content mới nằm ở cột Idea của Production Board, Idea gốc được giữ lại.
 ///   - Thêm / sửa / xóa theo quyền: nút bị tắt khi người dùng không có quyền (IdeaService vẫn kiểm tra lại khi ghi).
-/// Layout tĩnh nằm trong IdeaBankForm.Designer.cs, file này chỉ chứa dữ liệu, sự kiện và logic.
+/// Layout tĩnh nằm trong IdeaBankControl.Designer.cs, file này chỉ chứa dữ liệu, sự kiện và logic.
 /// </summary>
-public partial class IdeaBankForm : Form
+public partial class IdeaBankControl : UserControl
 {
     private const string AllStatusLabel = "Tất cả trạng thái";
     private const string AllTagLabel = "Tất cả tag";
+    private const string NoIdeasMessage = "Chưa có ý tưởng phù hợp\r\nThử thay đổi bộ lọc hoặc thêm ý tưởng mới.";
 
     // Null only in the parameterless constructor used by the Visual Studio Designer.
     private readonly IIdeaBackend? _ideaService;
@@ -27,18 +31,22 @@ public partial class IdeaBankForm : Form
     private List<Idea> _ideas = new();
     private bool _loading;
 
-    /// <summary>Constructor không tham số CHỈ để Visual Studio Designer mở được form. Không dùng khi chạy thật.</summary>
+    public event EventHandler? IdeasChanged;
+    public event EventHandler? CloseRequested;
+
+    /// <summary>Constructor không tham số CHỈ để Visual Studio Designer mở được control. Không dùng khi chạy thật.</summary>
     [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
-    public IdeaBankForm()
+    public IdeaBankControl()
     {
         InitializeComponent();
         _ideaService = null!;
     }
 
-    public IdeaBankForm(IIdeaBackend ideaService)
+    public IdeaBankControl(IIdeaBackend ideaService)
     {
         InitializeComponent();
         _ideaService = ideaService;
+        lblSubtitle.Text = "Kho ý tưởng của Project: thêm, sửa, gắn tag, ghi chú, tìm kiếm và lọc theo trạng thái.";
 
         _toast = new ToastNotification();
         Controls.Add(_toast);
@@ -58,7 +66,7 @@ public partial class IdeaBankForm : Form
             ReloadTagFilter();
             ReloadIdeas();
         };
-        FormClosed += (_, _) => _searchTimer.Dispose();
+        Disposed += (_, _) => _searchTimer.Dispose();
     }
 
     private Idea? SelectedIdea =>
@@ -114,6 +122,7 @@ public partial class IdeaBankForm : Form
         if (_loading || _ideaService is null) return;
 
         long? selectedId = SelectedIdea?.IdeaId;
+        string? loadError = null;
         try
         {
             _ideas = _ideaService.GetIdeas(ProjectId, UserId, BuildFilter());
@@ -121,13 +130,14 @@ public partial class IdeaBankForm : Form
         catch (UnauthorizedWorkflowActionException ex)
         {
             _ideas = new List<Idea>();
-            MessageBox.Show(this, ex.Message, "Không đủ quyền", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            loadError = ex.Message;
         }
         catch (IdeaValidationException ex)
         {
-            // Lỗi từ API (mất kết nối, quá thời gian chờ...): hiện thông báo thay vì làm sập form.
+            // Lỗi tải dữ liệu được hiển thị ngay trong trang. MessageBox modal ở đây làm
+            // trang nền bị đổi kích thước khi form cha đang chuyển/đo lại layout.
             _ideas = new List<Idea>();
-            MessageBox.Show(this, ex.Message, "Không tải được ý tưởng", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            loadError = ex.Message;
         }
 
         listViewIdeas.BeginUpdate();
@@ -139,7 +149,7 @@ public partial class IdeaBankForm : Form
                 var item = new ListViewItem(idea.Code) { Tag = idea };
                 item.SubItems.Add(idea.Title);
                 item.SubItems.Add(IdeaRules.StatusLabel(idea.Status));
-                item.SubItems.Add(string.Join(", ", idea.Tags));
+                item.SubItems.Add(idea.Tags.Count == 0 ? "—" : string.Join(", ", idea.Tags));
                 item.SubItems.Add(idea.CreatedByName);
                 item.SubItems.Add(idea.UpdatedAt.ToString("dd/MM/yyyy"));
                 listViewIdeas.Items.Add(item);
@@ -151,10 +161,16 @@ public partial class IdeaBankForm : Form
             listViewIdeas.EndUpdate();
         }
 
-        lblCount.Text = _ideas.Count == 0
-            ? "Không có ý tưởng phù hợp."
-            : $"{_ideas.Count} ý tưởng";
+        lblCount.Text = loadError is not null
+            ? "Không tải được ý tưởng."
+            : _ideas.Count == 0 ? "Không có ý tưởng phù hợp." : $"{_ideas.Count} ý tưởng";
+        lblEmptyState.Text = loadError ?? NoIdeasMessage;
+        lblEmptyState.ForeColor = loadError is null ? UITheme.Neutral600 : UITheme.Danger;
+        lblEmptyState.Font = loadError is null ? UITheme.FontH2 : UITheme.FontBody;
+        lblEmptyState.Visible = _ideas.Count == 0;
+        listViewIdeas.Visible = _ideas.Count > 0;
         UpdateDetailAndButtons();
+        ResizeIdeaColumns();
     }
 
     private void UpdateDetailAndButtons()
@@ -169,9 +185,13 @@ public partial class IdeaBankForm : Form
         if (idea is null)
         {
             txtDetail.Text = string.Empty;
+            txtDetail.Visible = false;
+            detailPlaceholder.Visible = true;
             return;
         }
 
+        txtDetail.Visible = true;
+        detailPlaceholder.Visible = false;
         txtDetail.Text =
             $"{idea.Code} — {idea.Title}" + Environment.NewLine +
             "Mô tả: " + (idea.Description.Length == 0 ? "(chưa có)" : idea.Description) + Environment.NewLine +
@@ -190,6 +210,117 @@ public partial class IdeaBankForm : Form
     {
         if (btnEdit.Enabled) btnEdit_Click(sender, e);
     }
+
+    private void listViewIdeas_DrawColumnHeader(object? sender, DrawListViewColumnHeaderEventArgs e)
+    {
+        using var background = new SolidBrush(Color.FromArgb(248, 250, 253));
+        e.Graphics.FillRectangle(background, e.Bounds);
+        TextRenderer.DrawText(e.Graphics, e.Header?.Text ?? string.Empty, UITheme.FontLabelBold,
+            Rectangle.Inflate(e.Bounds, -12, 0), Color.FromArgb(91, 111, 143),
+            TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+        using var divider = new Pen(Color.FromArgb(232, 237, 245));
+        e.Graphics.DrawLine(divider, e.Bounds.Left, e.Bounds.Bottom - 1, e.Bounds.Right, e.Bounds.Bottom - 1);
+    }
+
+    private void listViewIdeas_DrawItem(object? sender, DrawListViewItemEventArgs e)
+    {
+        // The item background is painted with each subitem so the selected row fills the full width.
+    }
+
+    private void listViewIdeas_DrawSubItem(object? sender, DrawListViewSubItemEventArgs e)
+    {
+        bool selected = e.Item?.Selected == true;
+        Color rowColor = selected ? Color.FromArgb(245, 243, 255) : Color.White;
+        using (var background = new SolidBrush(rowColor))
+            e.Graphics.FillRectangle(background, e.Bounds);
+
+        if (e.ColumnIndex == 2 && e.Item?.Tag is Idea idea)
+        {
+            DrawStatusPill(e.Graphics, e.Bounds, idea.Status);
+        }
+        else if (e.ColumnIndex == 3 && e.Item?.Tag is Idea taggedIdea)
+        {
+            DrawTagPills(e.Graphics, e.Bounds, taggedIdea.Tags);
+        }
+        else
+        {
+            Font font = e.ColumnIndex == 0 ? UITheme.FontMono : e.ColumnIndex == 1 ? UITheme.FontBodyBold : UITheme.FontBody;
+            Color color = e.ColumnIndex == 0 ? Color.FromArgb(132, 150, 177) : Color.FromArgb(48, 63, 88);
+            TextRenderer.DrawText(e.Graphics, e.SubItem?.Text ?? string.Empty, font,
+                Rectangle.Inflate(e.Bounds, -12, 0), color,
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+        }
+
+        using var divider = new Pen(Color.FromArgb(239, 243, 248));
+        e.Graphics.DrawLine(divider, e.Bounds.Left, e.Bounds.Bottom - 1, e.Bounds.Right, e.Bounds.Bottom - 1);
+    }
+
+    private static void DrawTagPills(Graphics graphics, Rectangle cellBounds, IReadOnlyList<string> tags)
+    {
+        if (tags.Count == 0)
+        {
+            TextRenderer.DrawText(graphics, "—", UITheme.FontBody, Rectangle.Inflate(cellBounds, -12, 0),
+                Color.FromArgb(151, 165, 187), TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
+            return;
+        }
+
+        int x = cellBounds.Left + 10;
+        int y = cellBounds.Top + (cellBounds.Height - 24) / 2;
+        foreach (string tag in tags)
+        {
+            int width = Math.Min(cellBounds.Right - x - 8, TextRenderer.MeasureText(tag, UITheme.FontMicro).Width + 18);
+            if (width < 20) break;
+            var badge = new Rectangle(x, y, width, 24);
+            using var path = UITheme.CreateRoundedRectanglePath(badge, 6);
+            using var fill = new SolidBrush(Color.FromArgb(23, 32, 51));
+            graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            graphics.FillPath(fill, path);
+            TextRenderer.DrawText(graphics, tag, UITheme.FontMicro,
+                new Rectangle(badge.X + 8, badge.Y, badge.Width - 16, badge.Height), Color.White,
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+            x += width + 6;
+        }
+    }
+
+    private static void DrawStatusPill(Graphics graphics, Rectangle cellBounds, IdeaStatus status)
+    {
+        (Color background, Color foreground) = status switch
+        {
+            IdeaStatus.Backlog => (Color.FromArgb(243, 238, 255), Color.FromArgb(109, 40, 217)),
+            IdeaStatus.Converted => (Color.FromArgb(245, 245, 247), Color.FromArgb(71, 85, 105)),
+            IdeaStatus.Archived => (Color.FromArgb(245, 245, 245), Color.FromArgb(107, 114, 128)),
+            _ => (Color.FromArgb(241, 245, 249), Color.FromArgb(91, 111, 143)),
+        };
+
+        string text = IdeaRules.StatusLabel(status);
+        int width = Math.Min(cellBounds.Width - 16, TextRenderer.MeasureText(text, UITheme.FontLabel).Width + 24);
+        int height = 24;
+        if (width < 8 || cellBounds.Height < height) return;
+        var pill = new Rectangle(cellBounds.Left + 10, cellBounds.Top + (cellBounds.Height - height) / 2, width, height);
+        graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        using var path = UITheme.CreateRoundedRectanglePath(pill, height / 2);
+        using var fill = new SolidBrush(background);
+        graphics.FillPath(fill, path);
+        using var dot = new SolidBrush(foreground);
+        graphics.FillEllipse(dot, pill.X + 8, pill.Y + 9, 6, 6);
+        TextRenderer.DrawText(graphics, text, UITheme.FontLabel,
+            new Rectangle(pill.X + 18, pill.Y, pill.Width - 20, pill.Height), foreground,
+            TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+    }
+
+    private void ResizeIdeaColumns()
+    {
+        if (listViewIdeas.Columns.Count != 6 || listViewIdeas.ClientSize.Width <= 0) return;
+        int width = Math.Max(0, listViewIdeas.ClientSize.Width - SystemInformation.VerticalScrollBarWidth);
+        listViewIdeas.Columns[0].Width = Math.Max(82, (int)(width * 0.10));
+        listViewIdeas.Columns[1].Width = Math.Max(220, (int)(width * 0.38));
+        listViewIdeas.Columns[2].Width = Math.Max(150, (int)(width * 0.15));
+        listViewIdeas.Columns[3].Width = Math.Max(100, (int)(width * 0.10));
+        listViewIdeas.Columns[4].Width = Math.Max(140, (int)(width * 0.15));
+        listViewIdeas.Columns[5].Width = Math.Max(105, width - listViewIdeas.Columns.Cast<ColumnHeader>().Take(5).Sum(column => column.Width));
+    }
+
+    private void btnClose_Click(object? sender, EventArgs e) => CloseRequested?.Invoke(this, EventArgs.Empty);
 
     private void btnClearFilter_Click(object? sender, EventArgs e)
     {
@@ -271,6 +402,7 @@ public partial class IdeaBankForm : Form
 
         ReloadTagFilter();
         ReloadIdeas();
+        IdeasChanged?.Invoke(this, EventArgs.Empty);
         _toast?.ShowToast(this, successToast);
     }
 

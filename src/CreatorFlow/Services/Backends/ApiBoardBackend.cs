@@ -15,6 +15,13 @@ public sealed class ApiBoardBackend(ApiClient api, UserSession session) : IBoard
         return response.Cards.Select(ToCard).ToList();
     }
 
+    public async Task<List<ContentBoardCard>> GetProjectContentsAsync(long projectId, CancellationToken token = default)
+    {
+        string bearer = ApiTaskCall.BearerOf(session);
+        var response = await ApiTaskCall.RunAsync(() => api.GetProjectContentLibraryAsync(projectId, bearer, token), session);
+        return response.Cards.Select(ToCard).ToList();
+    }
+
     internal static ContentBoardCard ToCard(BoardCardResponse r)
     {
         var assignees = r.Assignees.Select(ApiTaskMapper.ToCardAssignee).ToList();

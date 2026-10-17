@@ -13,6 +13,7 @@ partial class BoardForm
     private System.Windows.Forms.Panel _pnlMain;
     private TopHeaderControl _topHeaderControl;
     private System.Windows.Forms.Panel _pnlBoardArea;
+    private System.Windows.Forms.Panel _pnlProjectPageHost;
     private ModulePageHeaderControl _modulePageHeader;
     private System.Windows.Forms.FlowLayoutPanel _flowColumns;   // Chứa 7 cột Kanban, cuộn ngang
 
@@ -38,6 +39,7 @@ partial class BoardForm
         _pnlMain = new System.Windows.Forms.Panel();
         _topHeaderControl = new TopHeaderControl();
         _pnlBoardArea = new System.Windows.Forms.Panel();
+        _pnlProjectPageHost = new System.Windows.Forms.Panel();
         _modulePageHeader = new ModulePageHeaderControl();
         _flowColumns = new System.Windows.Forms.FlowLayoutPanel();
         _pnlDrawerHost = new System.Windows.Forms.Panel();
@@ -84,6 +86,13 @@ partial class BoardForm
         _pnlBoardArea.Padding = new Padding(32, 24, 0, 0);
         _pnlBoardArea.Controls.Add(_flowColumns);        // Fill: Add trước
         _pnlBoardArea.Controls.Add(_modulePageHeader);   // Top: Add sau → dock trước
+        //
+        // _pnlProjectPageHost: page content occupies the same area as Board, below the persistent top header.
+        //
+        _pnlProjectPageHost.BackColor = UITheme.Neutral50;
+        _pnlProjectPageHost.Dock = DockStyle.Fill;
+        _pnlProjectPageHost.Name = "_pnlProjectPageHost";
+        _pnlProjectPageHost.Visible = false;
         // 
         // _pnlMain
         // 
@@ -91,6 +100,7 @@ partial class BoardForm
         _pnlMain.Dock = DockStyle.Fill;
         _pnlMain.Name = "_pnlMain";
         _pnlMain.Controls.Add(_pnlBoardArea);
+        _pnlMain.Controls.Add(_pnlProjectPageHost);
         _pnlMain.Controls.Add(_topHeaderControl);
         // 
         // _contentDetailPanel

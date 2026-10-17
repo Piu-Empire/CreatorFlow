@@ -15,9 +15,9 @@ public sealed class ProjectInvitationService(ApiClient api, UserSession session)
     /// <summary>Owner mời <paramref name="email"/> với vai trò "Manager" hoặc "Creator". Trả về lời mời vừa tạo (Pending).</summary>
     public InvitationResponse Invite(long projectId, string email, string role) =>
         ApiTaskCall.Run(() => api.InviteMemberAsync(
-            projectId, new InviteMemberRequest(email, role), ApiTaskCall.BearerOf(session)));
+            projectId, new InviteMemberRequest(email, role), ApiTaskCall.BearerOf(session)), session);
 
     /// <summary>Các lời mời của Project, mới nhất trước (chỉ Owner xem được).</summary>
     public IReadOnlyList<InvitationResponse> GetInvitations(long projectId) =>
-        ApiTaskCall.Run(() => api.GetInvitationsAsync(projectId, ApiTaskCall.BearerOf(session))).Invitations;
+        ApiTaskCall.Run(() => api.GetInvitationsAsync(projectId, ApiTaskCall.BearerOf(session)), session).Invitations;
 }

@@ -2,14 +2,15 @@
 using CreatorFlow.Controls;
 using CreatorFlow.Theme;
 
-namespace CreatorFlow.Forms.Tasks;
+namespace CreatorFlow.Controls.MyTasks;
 
-partial class MyTasksForm
+partial class MyTasksControl
 {
     private System.ComponentModel.IContainer components = null;
 
     // Page Header (style guide mục 26)
     private System.Windows.Forms.Panel panelHeader;
+    private System.Windows.Forms.Panel panelHeaderGap;
     private CreatorFlow.Controls.SegmentedControl segStatus;
     private System.Windows.Forms.ComboBox cboDeadline;
     private CreatorFlow.Controls.RoundedButton btnRefresh;
@@ -54,6 +55,7 @@ partial class MyTasksForm
     {
         components = new System.ComponentModel.Container();
         panelHeader = new Panel();
+        panelHeaderGap = new Panel();
         lblSummary = new Label();
         btnRefresh = new RoundedButton();
         cboDeadline = new ComboBox();
@@ -96,10 +98,16 @@ partial class MyTasksForm
         panelHeader.Controls.Add(segStatus);
         panelHeader.Dock = DockStyle.Top;
         panelHeader.Name = "panelHeader";
-        panelHeader.Size = new Size(1056, 88);
+        panelHeader.Size = new Size(1080, 78);
         panelHeader.TabIndex = 0;
         panelHeader.Paint += panelHeader_Paint;
         panelHeader.Resize += panelHeader_Resize;
+        // Khoảng trắng 22px dưới đường kẻ, giống bố cục trong ảnh tham chiếu.
+        panelHeaderGap.BackColor = UITheme.Neutral50;
+        panelHeaderGap.Dock = DockStyle.Top;
+        panelHeaderGap.Name = "panelHeaderGap";
+        panelHeaderGap.Size = new Size(1080, 22);
+        panelHeaderGap.TabIndex = 1;
         // 
         // segStatus  (bộ lọc nhanh theo trạng thái — Segmented Control, mục 18)
         // 
@@ -307,6 +315,7 @@ partial class MyTasksForm
         // 
         btnOpenContent.Anchor = AnchorStyles.Top | AnchorStyles.Right;
         btnOpenContent.Enabled = false;
+        btnOpenContent.Visible = false;
         btnOpenContent.Location = new Point(886, 14);
         btnOpenContent.Name = "btnOpenContent";
         btnOpenContent.Size = new Size(150, 36);
@@ -326,21 +335,19 @@ partial class MyTasksForm
         lblHint.TabIndex = 7;
         lblHint.UseMnemonic = false;
         // 
-        // MyTasksForm
+        // MyTasksControl
         // 
         AutoScaleDimensions = new SizeF(96F, 96F);
         AutoScaleMode = AutoScaleMode.Dpi;
         BackColor = UITheme.Neutral50;
-        ClientSize = new Size(1120, 700);
-        // Add SAU CÙNG được dock TRƯỚC: panelHeader (Top) → panelBottomHost (Bottom) → cardList (Fill)
+        Size = new Size(1120, 700);
+        // Thứ tự Dock: header → khoảng trắng → footer → card chiếm phần còn lại.
         Controls.Add(cardList);
         Controls.Add(panelBottomHost);
+        Controls.Add(panelHeaderGap);
         Controls.Add(panelHeader);
-        MinimumSize = new Size(960, 600);
-        Name = "MyTasksForm";
-        Padding = new Padding(32, 24, 32, 24); // Content area: padding 32px (mục 27)
-        StartPosition = FormStartPosition.CenterParent;
-        Text = "My Tasks — CreatorFlow";
+        Name = "MyTasksControl";
+        Padding = new Padding(20, 26, 20, 28);
         panelHeader.ResumeLayout(false);
         cardList.ResumeLayout(false);
         panelEdit.ResumeLayout(false);
