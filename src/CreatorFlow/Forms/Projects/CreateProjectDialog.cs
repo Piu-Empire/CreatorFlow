@@ -7,7 +7,7 @@ using CreatorFlow.Theme;
 
 namespace CreatorFlow.Forms.Projects;
 
-public sealed class CreateProjectDialog : Form
+public sealed partial class CreateProjectDialog : Form
 {
     private readonly ProjectApiFacade projects;
     private readonly CancellationTokenSource lifetime = new();
@@ -27,13 +27,6 @@ public sealed class CreateProjectDialog : Form
         ForeColor = UITheme.Danger,
         Font = UITheme.FontBody
     };
-    private readonly ProjectActionButton confirm = new()
-    {
-        Name = "createProjectConfirm",
-        Text = "Tạo Project",
-        Width = 162,
-        Height = 52
-    };
     private Panel nameField = null!;
     private Panel descriptionField = null!;
     private bool released;
@@ -43,90 +36,24 @@ public sealed class CreateProjectDialog : Form
     public CreateProjectDialog(ProjectApiFacade projects, bool discardDraft = false)
     {
         this.projects = projects;
-
-        Name = nameof(CreateProjectDialog);
-        Text = "Tạo Project";
+        InitializeComponent();
         Font = UITheme.FontBody;
         BackColor = UITheme.White;
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        StartPosition = FormStartPosition.CenterParent;
-        ShowInTaskbar = false;
-        MaximizeBox = false;
-        MinimizeBox = false;
-        AutoScaleMode = AutoScaleMode.Dpi;
-        ClientSize = new Size(760, 590);
+        titleLabel.Font = UITheme.FontPageTitle;
+        titleLabel.ForeColor = UITheme.Ink;
+        explanationLabel.ForeColor = UITheme.Neutral600;
 
         var subtitle = discardDraft
             ? "Project mới sẽ được mở sau khi tạo. Bản nháp chưa lưu sẽ bị bỏ."
             : "Tạo không gian làm việc cho nội dung và thành viên của bạn.";
-        var header = BuildHeader(subtitle);
-        var body = BuildBody();
-        var footer = BuildFooter();
-
-        Controls.Add(body);
-        Controls.Add(footer);
-        Controls.Add(header);
-
-        CancelButton = footer.Controls.OfType<FlowLayoutPanel>()
-            .SelectMany(buttons => buttons.Controls.OfType<ProjectActionButton>())
-            .First(button => button.Name == "createProjectCancel");
-        AcceptButton = confirm;
+        explanationLabel.Text = subtitle;
+        BuildFields();
         confirm.Click += Save;
         Shown += (_, _) => name.Focus();
     }
 
-    private Panel BuildHeader(string subtitle)
+    private void BuildFields()
     {
-        var header = new Panel
-        {
-            Dock = DockStyle.Top,
-            Height = 130,
-            BackColor = UITheme.White,
-        };
-        var title = new Label
-        {
-            Text = "Tạo Project",
-            Location = new Point(38, 24),
-            Size = new Size(header.ClientSize.Width - 76, 34),
-            Font = UITheme.FontPageTitle,
-            ForeColor = UITheme.Ink,
-            AutoEllipsis = true
-        };
-        var explanation = new Label
-        {
-            Text = subtitle,
-            Location = new Point(38, 68),
-            Size = new Size(header.ClientSize.Width - 76, 30),
-            Font = new Font("Segoe UI", 12F),
-            ForeColor = UITheme.Neutral600,
-            AutoEllipsis = true
-        };
-
-        header.Controls.Add(title);
-        header.Controls.Add(explanation);
-        header.SizeChanged += (_, _) =>
-        {
-            title.Width = Math.Max(1, header.ClientSize.Width - 76);
-            explanation.Width = Math.Max(1, header.ClientSize.Width - 76);
-        };
-        header.Paint += (_, e) =>
-        {
-            using var pen = new Pen(UITheme.Neutral100);
-            e.Graphics.DrawLine(pen, 0, header.ClientSize.Height - 1,
-                header.ClientSize.Width, header.ClientSize.Height - 1);
-        };
-        return header;
-    }
-
-    private Panel BuildBody()
-    {
-        var body = new Panel
-        {
-            Dock = DockStyle.Fill,
-            Padding = new Padding(38, 24, 38, 20),
-            BackColor = UITheme.White,
-            AutoScroll = true
-        };
         var fields = UiTheme.CreateFormBody();
         fields.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
@@ -139,8 +66,7 @@ public sealed class CreateProjectDialog : Form
         StyleField(descriptionField);
         UiTheme.AddRow(fields, message, 0);
         fields.SizeChanged += (_, _) => message.MaximumSize = new Size(Math.Max(1, fields.ClientSize.Width), 0);
-        body.Controls.Add(fields);
-        return body;
+        bodyPanel.Controls.Add(fields);
     }
 
     private static void StyleField(Panel field)
@@ -158,43 +84,17 @@ public sealed class CreateProjectDialog : Form
         }
     }
 
-    private Panel BuildFooter()
+    private void HeaderPanel_Paint(object? sender, PaintEventArgs e)
     {
-        var footer = new Panel
-        {
-            Dock = DockStyle.Bottom,
-            Height = 88,
-            Padding = new Padding(38, 17, 38, 17),
-            BackColor = UITheme.Neutral50
-        };
-        var buttons = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Right,
-            Width = 274,
-            FlowDirection = FlowDirection.LeftToRight,
-            WrapContents = false,
-            Margin = Padding.Empty
-        };
-        var cancel = new ProjectActionButton
-        {
-            Name = "createProjectCancel",
-            Text = "Hủy",
-            Style = RoundButtonStyle.Secondary,
-            DialogResult = DialogResult.Cancel,
-            Width = 96,
-            Height = 52,
-            Margin = new Padding(0, 0, 16, 0)
-        };
-        confirm.Margin = Padding.Empty;
-        buttons.Controls.Add(cancel);
-        buttons.Controls.Add(confirm);
-        footer.Controls.Add(buttons);
-        footer.Paint += (_, e) =>
-        {
-            using var pen = new Pen(UITheme.Neutral100);
-            e.Graphics.DrawLine(pen, 0, 0, footer.ClientSize.Width, 0);
-        };
-        return footer;
+        using var pen = new Pen(UITheme.Neutral100);
+        e.Graphics.DrawLine(pen, 0, headerPanel.ClientSize.Height - 1,
+            headerPanel.ClientSize.Width, headerPanel.ClientSize.Height - 1);
+    }
+
+    private void FooterPanel_Paint(object? sender, PaintEventArgs e)
+    {
+        using var pen = new Pen(UITheme.Neutral100);
+        e.Graphics.DrawLine(pen, 0, 0, footerPanel.ClientSize.Width, 0);
     }
 
     private async void Save(object? sender, EventArgs e)

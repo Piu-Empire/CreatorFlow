@@ -10,7 +10,7 @@ using CreatorFlow.Theme;
 namespace CreatorFlow.Forms.ProjectSettings;
 
 /// <summary>Owner view for the active members of one Project and their project-scoped roles.</summary>
-public sealed class ProjectMembersDialog : Form
+public sealed partial class ProjectMembersDialog : Form
 {
     private static readonly Color[] AvatarColors =
     [
@@ -25,41 +25,6 @@ public sealed class ProjectMembersDialog : Form
     private readonly long projectId;
     private readonly CancellationTokenSource lifetime = new();
     private readonly ToolTip toolTip = new();
-    private readonly TableLayoutPanel members = new()
-    {
-        Dock = DockStyle.Top,
-        AutoSize = true,
-        ColumnCount = 1,
-        BackColor = UITheme.White,
-        Margin = Padding.Empty,
-    };
-    private readonly Label message = new()
-    {
-        AutoSize = false,
-        Dock = DockStyle.Fill,
-        TextAlign = ContentAlignment.MiddleLeft,
-        ForeColor = UITheme.Neutral600,
-        Visible = false,
-        AutoEllipsis = true,
-        Margin = Padding.Empty,
-    };
-    private readonly ProjectActionButton reload = new()
-    {
-        Text = "Tải lại",
-        Width = 112,
-        Height = 40,
-        Style = RoundButtonStyle.Secondary,
-        AccessibleName = "Tải lại danh sách thành viên",
-    };
-    private readonly ProjectActionButton close = new()
-    {
-        Text = "Đóng",
-        Width = 96,
-        Height = 40,
-        Style = RoundButtonStyle.Primary,
-        DialogResult = DialogResult.Cancel,
-    };
-    private readonly Panel listHost;
     private int ownerCount;
     private int sequence;
     private bool released;
@@ -68,162 +33,23 @@ public sealed class ProjectMembersDialog : Form
     {
         this.projects = projects;
         this.projectId = projectId;
-        Text = "Thành viên Project";
-        AccessibleName = Text;
-        StartPosition = FormStartPosition.CenterParent;
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        MinimizeBox = false;
-        MaximizeBox = false;
-        ShowInTaskbar = false;
-        KeyPreview = true;
-        ClientSize = new Size(860, 650);
-        MinimumSize = new Size(760, 560);
+        InitializeComponent();
         Font = UITheme.FontBody;
         BackColor = UITheme.White;
-
-        var footer = BuildFooter();
-        listHost = new Panel
-        {
-            Dock = DockStyle.Fill,
-            AutoScroll = true,
-            BackColor = UITheme.White,
-            Margin = Padding.Empty,
-        };
-        members.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        listHost.Controls.Add(members);
-
-        var body = BuildBody(projectName, projectId, listHost);
-        Controls.Add(body);
-        Controls.Add(footer);
-        CancelButton = close;
+        AccessibleName = Text;
+        headingLabel.Font = UITheme.FontPageTitle;
+        headingLabel.ForeColor = UITheme.Ink;
+        projectLabel.Text = string.IsNullOrWhiteSpace(projectName) ? $"Project #{projectId}" : projectName;
+        projectLabel.Font = UITheme.FontBodyBold;
+        noticeText.Font = UITheme.FontBody;
+        message.ForeColor = UITheme.Neutral600;
+        reload.Style = RoundButtonStyle.Secondary;
+        close.Style = RoundButtonStyle.Primary;
 
         reload.Click += async (_, _) => await LoadMembersAsync();
         close.Click += (_, _) => Close();
         Shown += async (_, _) => await LoadMembersAsync();
         FormClosed += (_, _) => lifetime.Cancel();
-    }
-
-    private Panel BuildFooter()
-    {
-        var footer = new Panel
-        {
-            Dock = DockStyle.Bottom,
-            Height = 76,
-            Padding = new Padding(32, 12, 32, 12),
-            BackColor = Color.FromArgb(248, 250, 252),
-        };
-        var actions = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Right,
-            AutoSize = true,
-            WrapContents = false,
-            FlowDirection = FlowDirection.LeftToRight,
-            BackColor = footer.BackColor,
-            Margin = Padding.Empty,
-        };
-        reload.Margin = new Padding(0, 0, 12, 0);
-        close.Margin = Padding.Empty;
-        actions.Controls.Add(reload);
-        actions.Controls.Add(close);
-        footer.Controls.Add(message);
-        footer.Controls.Add(actions);
-        footer.Paint += (_, e) => e.Graphics.DrawLine(new Pen(UITheme.Neutral100), 0, 0, footer.Width, 0);
-        return footer;
-    }
-
-    private static TableLayoutPanel BuildBody(string projectName, long projectId, Panel listHost)
-    {
-        var body = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            Padding = new Padding(36, 22, 36, 20),
-            ColumnCount = 1,
-            RowCount = 4,
-            BackColor = UITheme.White,
-        };
-        body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        body.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
-        body.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
-        body.RowStyles.Add(new RowStyle(SizeType.Absolute, 82));
-        body.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-
-        var heading = new Label
-        {
-            Text = "Thành viên",
-            Dock = DockStyle.Fill,
-            Font = UITheme.FontPageTitle,
-            ForeColor = UITheme.Ink,
-            TextAlign = ContentAlignment.MiddleLeft,
-            Margin = Padding.Empty,
-        };
-        var project = new Label
-        {
-            Text = string.IsNullOrWhiteSpace(projectName) ? $"Project #{projectId}" : projectName,
-            Dock = DockStyle.Fill,
-            Font = UITheme.FontBodyBold,
-            ForeColor = Color.FromArgb(71, 85, 105),
-            TextAlign = ContentAlignment.TopLeft,
-            Margin = new Padding(0, 0, 0, 14),
-            AutoEllipsis = true,
-        };
-        var notice = BuildNotice();
-        listHost.Margin = Padding.Empty;
-        body.Controls.Add(heading, 0, 0);
-        body.Controls.Add(project, 0, 1);
-        body.Controls.Add(notice, 0, 2);
-        body.Controls.Add(listHost, 0, 3);
-        return body;
-    }
-
-    private static Panel BuildNotice()
-    {
-        var notice = new Panel
-        {
-            Dock = DockStyle.Fill,
-            BackColor = Color.FromArgb(255, 251, 235),
-            Padding = new Padding(18, 12, 18, 12),
-            Margin = new Padding(0, 0, 0, 14),
-        };
-        var content = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 2,
-            RowCount = 1,
-            BackColor = notice.BackColor,
-            Margin = Padding.Empty,
-        };
-        content.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 30));
-        content.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        var icon = new Label
-        {
-            Text = "ⓘ",
-            Dock = DockStyle.Fill,
-            Font = new Font("Segoe UI", 14F, FontStyle.Bold),
-            ForeColor = Color.FromArgb(217, 119, 6),
-            TextAlign = ContentAlignment.MiddleLeft,
-            Margin = Padding.Empty,
-        };
-        var text = new Label
-        {
-            Text = "Chỉ Owner có thể đổi vai trò hoặc gỡ thành viên. Mỗi Project lưu vai trò riêng và phải luôn giữ ít nhất một Owner.",
-            Dock = DockStyle.Fill,
-            Font = UITheme.FontBody,
-            ForeColor = Color.FromArgb(146, 64, 14),
-            TextAlign = ContentAlignment.MiddleLeft,
-            Margin = Padding.Empty,
-        };
-        content.Controls.Add(icon, 0, 0);
-        content.Controls.Add(text, 1, 0);
-        notice.Controls.Add(content);
-        notice.SizeChanged += (_, _) => SetRoundedRegion(notice, 12);
-        notice.Paint += (_, e) =>
-        {
-            using var path = UITheme.CreateRoundedRectanglePath(new Rectangle(0, 0, notice.Width - 1, notice.Height - 1), 12);
-            using var pen = new Pen(Color.FromArgb(253, 230, 138));
-            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-            e.Graphics.DrawPath(pen, path);
-        };
-        return notice;
     }
 
     private bool IsCurrent(int version, long generation) => !IsDisposed && !lifetime.IsCancellationRequested &&
@@ -496,6 +322,24 @@ public sealed class ProjectMembersDialog : Form
         message.Text = text ?? string.Empty;
         message.Visible = !string.IsNullOrWhiteSpace(text);
         message.ForeColor = color ?? UITheme.Neutral600;
+    }
+
+    private void NoticePanel_SizeChanged(object? sender, EventArgs e) => SetRoundedRegion(noticePanel, 12);
+
+    private void NoticePanel_Paint(object? sender, PaintEventArgs e)
+    {
+        if (noticePanel.Width <= 1 || noticePanel.Height <= 1) return;
+        using var path = UITheme.CreateRoundedRectanglePath(
+            new Rectangle(0, 0, noticePanel.Width - 1, noticePanel.Height - 1), 12);
+        using var pen = new Pen(Color.FromArgb(253, 230, 138));
+        e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        e.Graphics.DrawPath(pen, path);
+    }
+
+    private void FooterPanel_Paint(object? sender, PaintEventArgs e)
+    {
+        using var pen = new Pen(UITheme.Neutral100);
+        e.Graphics.DrawLine(pen, 0, 0, footerPanel.ClientSize.Width, 0);
     }
 
     private static void SetRoundedRegion(Control control, int radius)
