@@ -38,6 +38,42 @@ public sealed class ContentLibraryQueryRulesTests
     }
 
     [TestMethod]
+    public void Apply_TitleSearchIsCaseInsensitiveAndMatchesCode()
+    {
+        CollectionAssert.AreEqual(new long[] { 2 }, ContentLibraryQueryRules.Apply(Cards,
+            new ContentLibraryQuery { Title = "aLP" }).Select(card => card.ContentId).ToArray());
+        CollectionAssert.AreEqual(new long[] { 3 }, ContentLibraryQueryRules.Apply(Cards,
+            new ContentLibraryQuery { Title = "cnt-003" }).Select(card => card.ContentId).ToArray());
+    }
+
+    [TestMethod]
+    public void Apply_NoMatchingTitle_ReturnsEmptyList()
+    {
+        CollectionAssert.AreEqual(Array.Empty<long>(), ContentLibraryQueryRules.Apply(Cards,
+            new ContentLibraryQuery { Title = "does-not-exist" }).Select(card => card.ContentId).ToArray());
+    }
+
+    [TestMethod]
+    public void Apply_HasDeadlineFalse_ReturnsOnlyContentWithoutDeadline()
+    {
+        CollectionAssert.AreEqual(new long[] { 3 }, ContentLibraryQueryRules.Apply(Cards,
+            new ContentLibraryQuery { HasDeadline = false }).Select(card => card.ContentId).ToArray());
+    }
+
+    [TestMethod]
+    public void Apply_CombinesFiltersWithDescendingSort()
+    {
+        CollectionAssert.AreEqual(new long[] { 1, 2 }, ContentLibraryQueryRules.Apply(Cards,
+            new ContentLibraryQuery
+            {
+                Title = "a",
+                HasDeadline = true,
+                SortBy = "title",
+                SortDescending = true,
+            }).Select(card => card.ContentId).ToArray());
+    }
+
+    [TestMethod]
     public void Apply_SortsAllSupportedFieldsAndKeepsMissingDeadlinesLast()
     {
         AssertSort("title", [2, 1, 3]);
@@ -49,6 +85,13 @@ public sealed class ContentLibraryQueryRulesTests
         AssertSort("tag", [3, 1, 2]);
         CollectionAssert.AreEqual(new long[] { 1, 2, 3 }, ContentLibraryQueryRules.Apply(Cards,
             new ContentLibraryQuery { SortBy = "deadline", SortDescending = true }).Select(card => card.ContentId).ToArray());
+    }
+
+    [TestMethod]
+    public void Apply_WithoutSortField_ShowsNewestContentFirst()
+    {
+        CollectionAssert.AreEqual(new long[] { 3, 2, 1 }, ContentLibraryQueryRules.Apply(Cards,
+            new ContentLibraryQuery()).Select(card => card.ContentId).ToArray());
     }
 
     [TestMethod]

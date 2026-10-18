@@ -45,6 +45,8 @@ public sealed class BoardRoutingTests
         using JsonDocument json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         JsonElement cards = json.RootElement.GetProperty("cards");
         Assert.AreEqual(2, cards.GetArrayLength());
+        CollectionAssert.AreEqual(new long[] { 901, 900 }, cards.EnumerateArray()
+            .Select(card => card.GetProperty("contentId").GetInt64()).ToArray());
         JsonElement archived = cards.EnumerateArray().Single(card => card.GetProperty("status").GetString() == "Archived");
         Assert.AreEqual("TikTok", archived.GetProperty("platforms")[0].GetString());
         JsonElement assignee = archived.GetProperty("assignees")[0];

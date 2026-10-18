@@ -81,6 +81,80 @@ public sealed class ContentLibraryTests
     }
 
     [TestMethod]
+    public void Library_SearchIsCaseInsensitive_AndNoMatchShowsEmptyState()
+    {
+        RunSta(() =>
+        {
+            using var library = new ContentLibraryControl("Project Alpha");
+            library.SetContents(
+            [
+                new ContentBoardCard { ContentId = 901, Code = "CNT-901", Title = "Weekly Video", Status = ContentStatus.Ready },
+                new ContentBoardCard { ContentId = 902, Code = "CNT-902", Title = "Other draft", Status = ContentStatus.Script },
+            ]);
+            TextBox search = Descendants(library).OfType<TextBox>().Single(control => control.Name == "search");
+            TableLayoutPanel rows = Descendants(library).OfType<TableLayoutPanel>().Single(control => control.Name == "rows");
+            Label state = Descendants(library).OfType<Label>().Single(control => control.Name == "stateLabel");
+
+            search.Text = "wEEKly vIDEO";
+            Assert.AreEqual(1, rows.Controls.Count);
+            Assert.AreEqual(901L, ((ContentLibraryRowControl)rows.Controls[0]).Content.ContentId);
+
+            search.Text = "does-not-exist";
+            Assert.AreEqual(0, rows.Controls.Count);
+            Assert.IsTrue(state.Visible);
+            StringAssert.Contains(state.Text, "Không tìm thấy");
+        });
+    }
+
+    [TestMethod]
+    public void Library_NoDeadlineFilter_ShowsOnlyContentWithoutDeadline()
+    {
+        RunSta(() =>
+        {
+            using var library = new ContentLibraryControl("Project Alpha");
+            library.SetContents(
+            [
+                new ContentBoardCard { ContentId = 901, Code = "CNT-901", Title = "Dated", Deadline = new DateTime(2026, 11, 10) },
+                new ContentBoardCard { ContentId = 902, Code = "CNT-902", Title = "Unplanned", Deadline = null },
+            ]);
+            ComboBox deadline = Combo(library, "deadlineModeFilter");
+            deadline.SelectedItem = FindItem(deadline, "Chưa có");
+
+            TableLayoutPanel rows = Descendants(library).OfType<TableLayoutPanel>().Single(control => control.Name == "rows");
+            Assert.AreEqual(1, rows.Controls.Count);
+            Assert.AreEqual(902L, ((ContentLibraryRowControl)rows.Controls[0]).Content.ContentId);
+        });
+    }
+
+    [TestMethod]
+    public void Library_CombinesFiltersAndSortsDescending()
+    {
+        RunSta(() =>
+        {
+            using var library = new ContentLibraryControl("Project Alpha");
+            library.SetContents(
+            [
+                new ContentBoardCard { ContentId = 901, Code = "CNT-901", Title = "Bravo", Deadline = new DateTime(2026, 11, 10) },
+                new ContentBoardCard { ContentId = 902, Code = "CNT-902", Title = "Alpha", Deadline = new DateTime(2026, 11, 11) },
+                new ContentBoardCard { ContentId = 903, Code = "CNT-903", Title = "Charlie", Deadline = null },
+            ]);
+            TextBox search = Descendants(library).OfType<TextBox>().Single(control => control.Name == "search");
+            ComboBox deadline = Combo(library, "deadlineModeFilter");
+            ComboBox sort = Combo(library, "sortFilter");
+            Button direction = Descendants(library).OfType<Button>().Single(button => button.Name == "sortDirection");
+
+            search.Text = "a";
+            deadline.SelectedItem = FindItem(deadline, "Có deadline");
+            sort.SelectedItem = FindItem(sort, "Tiêu đề");
+            direction.PerformClick();
+
+            TableLayoutPanel rows = Descendants(library).OfType<TableLayoutPanel>().Single(control => control.Name == "rows");
+            CollectionAssert.AreEqual(new long[] { 901, 902 }, rows.Controls.Cast<ContentLibraryRowControl>()
+                .Select(row => row.Content.ContentId).ToArray());
+        });
+    }
+
+    [TestMethod]
     public void Library_CombinesLiveProjectFiltersAndDeadlineRange()
     {
         RunSta(() =>

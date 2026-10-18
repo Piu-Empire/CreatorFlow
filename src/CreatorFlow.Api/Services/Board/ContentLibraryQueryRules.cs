@@ -70,7 +70,7 @@ public static class ContentLibraryQueryRules
 
         string? sortBy = string.IsNullOrWhiteSpace(query.SortBy) ? null : query.SortBy.Trim().ToLowerInvariant();
         if (sortBy is null)
-            return filtered.ToArray();
+            return filtered.OrderByDescending(card => card.ContentId).ToArray();
 
         if (sortBy == "deadline")
         {

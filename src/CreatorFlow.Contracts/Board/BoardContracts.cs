@@ -28,7 +28,7 @@ public sealed record BoardResponse(IReadOnlyList<BoardCardResponse> Cards);
 /// <summary>
 /// Query của Kho Content. Các tiêu chí được kết hợp bằng AND; null/rỗng nghĩa là bỏ qua tiêu chí đó.
 /// CreatorId là UserId của Creator được giao. DeadlineFrom/DeadlineTo là hai đầu bao gồm.
-/// SortBy hợp lệ: title, platform, status, creator, priority, deadline, tag.
+/// SortBy hợp lệ: title, platform, status, creator, priority, deadline, tag. Mặc định mới thêm trước.
 /// </summary>
 public sealed class ContentLibraryQuery
 {
