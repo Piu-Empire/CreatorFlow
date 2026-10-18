@@ -1,5 +1,6 @@
 using CreatorFlow.Forms;
 using CreatorFlow.Forms.Board;
+using CreatorFlow.Forms.Projects;
 using CreatorFlow.Services;
 
 namespace CreatorFlow;
@@ -8,26 +9,61 @@ internal sealed class AuthenticationApplicationContext : ApplicationContext
 {
     private readonly AuthApiFacade auth;
     private readonly Func<BoardForm> createShell;
+    private readonly ProjectApiFacade projects;
+    private readonly InvitationInboxService? invitationInbox;
     private AuthenticationHostForm? authenticationHost;
     private bool switching;
     private readonly System.Windows.Forms.Timer expiryTimer = new() { Interval = 1000 };
-    public AuthenticationApplicationContext(AuthApiFacade auth, Func<BoardForm> createShell)
+
+    public AuthenticationApplicationContext(
+        AuthApiFacade auth,
+        Func<BoardForm> createShell,
+        ProjectApiFacade projects,
+        InvitationInboxService? invitationInbox = null)
     {
         this.auth = auth;
         this.createShell = createShell;
+        this.projects = projects;
+        this.invitationInbox = invitationInbox;
         auth.Session.Cleared += SessionCleared;
-        expiryTimer.Tick += (_, _) => { if (!switching && MainForm is BoardForm && !auth.Session.IsAuthenticated) auth.Logout(); };
+        projects.Context.Changed += ProjectContextChanged;
+        expiryTimer.Tick += (_, _) =>
+        {
+            if (!switching && (MainForm is BoardForm or ProjectSelectionForm) && !auth.Session.IsAuthenticated)
+                auth.Logout();
+        };
         expiryTimer.Start();
         ShowLogin();
     }
+
     private void SessionCleared(object? sender, EventArgs e)
     {
         CurrentSession.CurrentUserId = 0;
         CurrentSession.CurrentUserName = string.Empty;
         CurrentSession.CurrentProjectId = 0;
         CurrentSession.CurrentProjectName = string.Empty;
-        if (!switching && MainForm is BoardForm) ShowLogin();
+        CurrentSession.CurrentUserRole = null;
+        if (MainForm is not (BoardForm or ProjectSelectionForm)) return;
+        if (!switching) ShowLogin();
+        else if (MainForm is { IsHandleCreated: true, IsDisposed: false } pending)
+            pending.BeginInvoke(new Action(() =>
+            {
+                if (ReferenceEquals(MainForm, pending) && !auth.Session.IsAuthenticated) ShowLogin();
+            }));
     }
+
+    private void ProjectContextChanged(object? sender, EventArgs e)
+    {
+        if (projects.Context.Current is not null || !auth.Session.IsAuthenticated || MainForm is not BoardForm) return;
+        if (!switching) ShowProjectSelection();
+        else if (MainForm is { IsHandleCreated: true, IsDisposed: false } pending)
+            pending.BeginInvoke(new Action(() =>
+            {
+                if (ReferenceEquals(MainForm, pending) && projects.Context.Current is null && auth.Session.IsAuthenticated)
+                    ShowProjectSelection();
+            }));
+    }
+
     private void ShowLogin(string? email = null, string? message = null)
     {
         var form = new LoginForm(auth, email, message);
@@ -37,10 +73,27 @@ internal sealed class AuthenticationApplicationContext : ApplicationContext
         form.LoginSucceeded += (_, _) =>
         {
             if (!auth.Session.IsAuthenticated || auth.Session.CurrentUser is not { } user) return;
-            OpenBoard(user.UserId, user.DisplayName);
+            CurrentSession.CurrentUserId = user.UserId;
+            CurrentSession.CurrentUserName = user.DisplayName;
+            CurrentSession.CurrentProjectId = 0;
+            CurrentSession.CurrentProjectName = string.Empty;
+            CurrentSession.CurrentUserRole = null;
+            ShowProjectSelection();
         };
         ShowAuthenticationPage(form);
     }
+
+    private void ShowProjectSelection()
+    {
+        var form = new ProjectSelectionForm(auth, projects, invitationInbox);
+        form.ProjectReady += (_, _) =>
+        {
+            if (!ReferenceEquals(MainForm, form) || !auth.Session.IsAuthenticated || projects.Context.Current is null) return;
+            SwitchMainForm(createShell());
+        };
+        SwitchMainForm(form);
+    }
+
     private void ShowRegister()
     {
         var form = new RegisterForm(auth);
@@ -48,6 +101,7 @@ internal sealed class AuthenticationApplicationContext : ApplicationContext
         form.Registered += ShowVerify;
         ShowAuthenticationPage(form);
     }
+
     private void ShowVerify(string email)
     {
         var form = new VerifyEmailForm(auth, email);
@@ -55,6 +109,7 @@ internal sealed class AuthenticationApplicationContext : ApplicationContext
         form.EmailVerified += (value, message) => ShowLogin(value, message);
         ShowAuthenticationPage(form);
     }
+
     private void ShowForgot(string email)
     {
         var form = new ForgotPasswordForm(auth, email);
@@ -62,6 +117,7 @@ internal sealed class AuthenticationApplicationContext : ApplicationContext
         form.CodeRequested += (value, id) => ShowReset(value, id);
         ShowAuthenticationPage(form);
     }
+
     private void ShowReset(string email, Guid id)
     {
         var form = new ResetPasswordForm(auth, email, id);
@@ -95,20 +151,14 @@ internal sealed class AuthenticationApplicationContext : ApplicationContext
         finally { switching = false; }
     }
 
-    private void OpenBoard(long userId, string displayName)
+    private void SwitchMainForm(Form next)
     {
         switching = true;
         try
         {
-            CurrentSession.CurrentUserId = userId;
-            CurrentSession.CurrentUserName = displayName;
-            CurrentSession.CurrentProjectId = 0;
-            CurrentSession.CurrentProjectName = string.Empty;
-
-            var board = createShell();
             Form? previous = MainForm;
-            MainForm = board;
-            board.Show();
+            MainForm = next;
+            next.Show();
             previous?.Close();
             previous?.Dispose();
             authenticationHost = null;
@@ -122,6 +172,7 @@ internal sealed class AuthenticationApplicationContext : ApplicationContext
         expiryTimer.Stop();
         expiryTimer.Dispose();
         auth.Session.Cleared -= SessionCleared;
+        projects.Context.Changed -= ProjectContextChanged;
         auth.Logout();
         SessionCleared(this, EventArgs.Empty);
         base.ExitThreadCore();

@@ -32,6 +32,8 @@ public class TopHeaderControl : UserControl
         Invalidate();
     }
 
+    public void ClearStats() { _statsText = string.Empty; Invalidate(); }
+
     public event EventHandler? NewContentClicked;
 
     public TopHeaderControl()

@@ -40,6 +40,13 @@ public partial class CreateContentDialog : Form
 
         _dtpDeadline.Value = DateTime.Today.AddDays(7);
 
+        // Ngày dự kiến đăng là tùy chọn: để bỏ tick = chưa lên lịch đăng. Gán Value trước rồi mới bỏ tick.
+        _dtpPlannedPublish.Value = DateTime.Today.AddDays(10);
+        _dtpPlannedPublish.Checked = false;
+
+        _cboContentType.Items.AddRange(ContentService.AvailableContentTypes);
+        _cboContentType.SelectedIndex = Math.Max(0, Array.IndexOf(ContentService.AvailableContentTypes, ContentService.DefaultContentType));
+
         AcceptButton = btnSubmit;
     }
 
@@ -52,17 +59,25 @@ public partial class CreateContentDialog : Form
             Priority = (Priority)_cboPriority.SelectedItem!,
             Sprint = _cboSprint.SelectedItem as string ?? "",
             Deadline = _dtpDeadline.Value.Date,
+            PlannedPublishAt = _dtpPlannedPublish.Checked ? _dtpPlannedPublish.Value.Date : null,
+            ContentType = _cboContentType.SelectedItem as string ?? string.Empty,
             EstimatedDuration = _txtDuration.Text,
             AssigneeUserId = (_cboAssignee.SelectedItem as ProjectMemberInfo)?.UserId,
             Platforms = CollectPlatforms(),
         };
 
-        if (string.IsNullOrWhiteSpace(draft.Title))
+        // Dùng cùng bộ quy tắc với ContentService để báo lỗi ngay trong dialog (không đóng dialog, không mất dữ liệu đã nhập).
+        ContentService.Normalize(draft);
+        string? error = ContentService.GetValidationError(draft);
+        if (error != null)
         {
-            _lblError.Text = "Vui lòng nhập tiêu đề!";
-            _txtTitle.Focus();
+            _lblError.Text = error;
+            if (draft.Title.Length == 0 || draft.Title.Length > ContentService.MaxTitleLength)
+                _txtTitle.Focus();
             return;
         }
+
+        _lblError.Text = string.Empty;
 
         Draft = draft;
         DialogResult = DialogResult.OK;

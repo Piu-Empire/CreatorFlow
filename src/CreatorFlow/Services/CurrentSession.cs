@@ -1,8 +1,8 @@
-﻿namespace CreatorFlow.Services;
+namespace CreatorFlow.Services;
 
 /// <summary>
 /// Giữ tạm thông tin User/Project đang thao tác trong phiên làm việc.
-/// TODO: thay bằng AuthService/Session thật khi có màn Login + chọn Project (mục 18 UX spec: Login → Select Project).
+/// ProjectContext đồng bộ snapshot đã được API xác minh để tương thích module legacy.
 /// Hiện tại BoardForm/ReviewQueueForm đọc trực tiếp từ đây để biết ProjectId/UserId hiện hành.
 /// </summary>
 public static class CurrentSession
@@ -11,4 +11,5 @@ public static class CurrentSession
     public static string CurrentUserName { get; set; } = string.Empty;
     public static long CurrentProjectId { get; set; }
     public static string CurrentProjectName { get; set; } = string.Empty;
+    public static CreatorFlow.Models.Enums.ProjectRole? CurrentUserRole { get; internal set; }
 }

@@ -35,6 +35,9 @@ public class ContentBoardCard
     /// <summary>Thời lượng dự kiến dạng chữ tự do (VD "24 min", "60 sec").</summary>
     public string EstimatedDuration { get; set; } = string.Empty;
     public DateTime? Deadline { get; set; }
+
+    /// <summary>Mốc xuất bản dự kiến, dùng cho Calendar (Board không dùng).</summary>
+    public DateTime? PlannedPublishAt { get; set; }
     public List<string> Tags { get; set; } = new();
 
     /// <summary>Có Review đang PENDING hay không (hiện icon Review trên card).</summary>

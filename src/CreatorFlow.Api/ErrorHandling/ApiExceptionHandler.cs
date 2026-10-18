@@ -17,7 +17,8 @@ public sealed class ApiExceptionHandler(
         }
 
         // Do not log exception messages that could contain SQL or credentials.
-        logger.LogError("API request failed. TraceId: {TraceId}", context.TraceIdentifier);
+        logger.LogError("API request failed. TraceId: {TraceId}; FailureType: {FailureType}",
+            context.TraceIdentifier, exception.GetType().Name);
         bool authUnavailable = exception is AuthBackendUnavailableException;
         context.Response.StatusCode = authUnavailable ? StatusCodes.Status503ServiceUnavailable : StatusCodes.Status500InternalServerError;
         var problem = new ProblemDetails

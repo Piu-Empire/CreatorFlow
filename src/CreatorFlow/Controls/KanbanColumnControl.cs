@@ -1,4 +1,4 @@
-﻿using CreatorFlow.Models.Enums;
+using CreatorFlow.Models.Enums;
 using System.Drawing.Drawing2D;
 using CreatorFlow.Models;
 using CreatorFlow.Theme;
@@ -25,6 +25,8 @@ public class KanbanColumnControl : UserControl
     private Rectangle _addButtonRect;
     private bool _addButtonHover;
 
+    private bool _sourceAvailable = true;
+    public bool SourceAvailable { get => _sourceAvailable; set { _sourceAvailable = value; Invalidate(); } }
     public ContentStatus Status => _status;
     public FlowLayoutPanel CardsFlow => _cardsFlow;
 
@@ -56,7 +58,7 @@ public class KanbanColumnControl : UserControl
     }
 
     /// <summary>Cột Review không cho tạo trực tiếp — phải đi qua Submit for Review từ Editing.</summary>
-    private bool CanAddDirectly => _status != ContentStatus.Review;
+    private bool CanAddDirectly => SourceAvailable && _status != ContentStatus.Review;
 
     protected override void OnResize(EventArgs e)
     {
@@ -150,7 +152,7 @@ public class KanbanColumnControl : UserControl
         TextRenderer.DrawText(g, title, titleFont, new Rectangle(16, 16, Width - 80, 22), UITheme.Ink,
             TextFormatFlags.Left | TextFormatFlags.VerticalCenter | flags);
 
-        string countStr = _cardCount.ToString();
+        string countStr = SourceAvailable ? _cardCount.ToString() : "—";
         var countSize = TextRenderer.MeasureText(g, countStr, UITheme.FontMicro, new Size(int.MaxValue, 20), TextFormatFlags.NoPadding);
         var countRect = new Rectangle(16 + titleSize.Width + 8, 18, Math.Max(22, countSize.Width + 12), 18);
         using (var countBrush = new SolidBrush(UITheme.Neutral100))
@@ -177,7 +179,7 @@ public class KanbanColumnControl : UserControl
         if (_cardCount == 0)
         {
             using var italic = new Font("Segoe UI", 9.5F, FontStyle.Italic);
-            TextRenderer.DrawText(g, "No items in this stage", italic,
+            TextRenderer.DrawText(g, SourceAvailable ? "No items in this stage" : "Chưa kết nối nguồn dữ liệu", italic,
                 new Rectangle(1, HeaderH, Width - 2, EmptyBodyH), UITheme.Neutral400,
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | flags);
         }

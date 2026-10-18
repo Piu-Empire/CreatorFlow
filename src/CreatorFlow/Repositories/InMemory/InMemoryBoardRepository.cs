@@ -38,6 +38,7 @@ public class InMemoryBoardRepository : IBoardRepository
                     Status = c.Status,
                     Priority = c.Priority,
                     Deadline = c.Deadline, // deadline chung của Content (mỗi Creator có deadline riêng ở assignment)
+                    PlannedPublishAt = c.PlannedPublishAt,
                     Platforms = new List<string>(c.Platforms),
                     Tags = new List<string>(c.Tags),
                     HasPendingReview = InMemoryDataStore.Reviews.Any(r => r.ContentId == c.Id && r.Status == ReviewStatus.Pending),

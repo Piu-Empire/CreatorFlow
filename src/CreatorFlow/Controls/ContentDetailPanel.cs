@@ -1,9 +1,10 @@
-﻿using CreatorFlow.Models.Enums;
+using CreatorFlow.Models.Enums;
 using System.Drawing.Drawing2D;
 using CreatorFlow.Forms.Board;
 using CreatorFlow.Models;
 using CreatorFlow.Repositories.Interfaces;
 using CreatorFlow.Services;
+using CreatorFlow.Services.Backends;
 using CreatorFlow.Services.Exceptions;
 using CreatorFlow.Theme;
 
@@ -23,13 +24,18 @@ public partial class ContentDetailPanel : UserControl
     private IActivityRepository? _activityRepo;
     private IProjectMemberRepository? _memberRepo;
     private ContentService? _contentService;
+    private IContentDetailBackend? _detailBackend;       // chế độ API: chi tiết/sửa/script/activity/workflow chạy qua CreatorFlow.Api
+    private IAssignmentBackend? _assignmentBackend;      // chế độ API: giao việc
+    private bool _apiPlatformsLoaded;
+    private readonly Dictionary<long, ProjectRole?> _roleCache = new(); // chế độ API: 1 lần gọi vai trò cho mỗi lần mở Content (xoá ở đầu LoadContent)
 
     private ContentBoardCard? _current;
     private List<ProjectMemberInfo> _members = new();
-    private int _selectedTabIndex = 0; // 0: Overview, 1: Script, 2: Checklist, 3: Activity
+    private int _selectedTabIndex = 0; // 0: Overview, 1: Script, 2: Checklist, 3: Activity, 4: Metrics
     private bool _isDirty;
     private bool _deadlineEdited; // true khi người dùng thật sự đổi ô Deadline (tránh vô tình ghi deadline mặc định khi chỉ sửa tiêu đề)
     private bool _isLoading; // true trong lúc LoadContent() đang gán giá trị → bỏ qua sự kiện TextChanged/SelectedIndexChanged
+    private bool _detailLoaded; // false nếu đọc chi tiết (script, loại, ngày đăng) từ DB thất bại → chặn Lưu để không ghi đè dữ liệu bằng giá trị rỗng
 
     public event EventHandler? ContentChanged;
     public event EventHandler? CloseRequested;
@@ -51,10 +57,10 @@ public partial class ContentDetailPanel : UserControl
     private readonly TextBox _txtTitleVal;
     private readonly TextBox _txtHookVal;
     private readonly RoundedPanel _boxMeta;
-    private readonly Label[] _metaCaptions = new Label[6];
-    private readonly RoundedPanel[] _metaBoxes = new RoundedPanel[6];
+    private readonly Label[] _metaCaptions = new Label[8];
+    private readonly RoundedPanel[] _metaBoxes = new RoundedPanel[8];
 
-    // Index: 0 Pipeline Stage (chỉ đọc) · 1 Platform · 2 Priority · 3 Sprint · 4 Target Week · 5 Estimated Duration
+    // Index: 0 Pipeline Stage (chỉ đọc) · 1 Platform · 2 Priority · 3 Sprint · 4 Target Week · 5 Estimated Duration · 6 Content Type · 7 Planned Publish Date
     private readonly Label _lblStageVal;
     private readonly Button _btnPlatforms;
     private readonly ContextMenuStrip _mnuPlatforms;
@@ -62,6 +68,8 @@ public partial class ContentDetailPanel : UserControl
     private readonly ComboBox _cboSprintEdit;
     private readonly DateTimePicker _dtpTargetWeek;
     private readonly TextBox _txtDurationEdit;
+    private readonly ComboBox _cboTypeEdit;
+    private readonly DateTimePicker _dtpPlannedPublish;
 
     private readonly RoundedPanel _boxLead;
     private readonly ComboBox _cboAssigneeEdit;
@@ -71,7 +79,8 @@ public partial class ContentDetailPanel : UserControl
 
     // Tab 2: Script
     private readonly Panel _pnlTabScript;
-    private readonly TextBox _txtScript;
+    private readonly ScriptEditorControl _scriptEditor;
+    private string _persistedScript = string.Empty; // script đang lưu trong DB; "Lưu thay đổi" ghi lại đúng bản này để không đụng tới script (script lưu riêng ở tab Script)
 
     // Tab 3: Checklist
     private readonly Panel _pnlTabChecklist;
@@ -80,6 +89,12 @@ public partial class ContentDetailPanel : UserControl
     // Tab 4: Activity
     private readonly Panel _pnlTabActivity;
     private readonly ActivityTimelineControl _activityTimeline;
+
+    // Tab 5: Metrics (theo ContentPlatform, qua IMetricBackend; null = chưa đấu nối API)
+    private IMetricBackend? _metricBackend;
+    private readonly Panel _pnlTabMetrics;
+    private readonly Panel _metricsHost;
+    private long? _metricsLoadedFor; // ContentId đã nạp Metrics; null = cần nạp lại khi mở tab
 
     // Empty state
     private readonly Panel _pnlEmptyState;
@@ -191,9 +206,9 @@ public partial class ContentDetailPanel : UserControl
         _txtHookVal.TextChanged += (_, _) => MarkDirty();
         AddOverviewRow(MakeBox(104, Pad(_txtHookVal, 16, 12)), 20);
 
-        _boxMeta = new RoundedPanel { Height = 18 + 3 * 78 + 6, FillColor = UITheme.Neutral50, Radius = 10 };
-        string[] captions = { "Pipeline Stage", "Platform", "Priority", "Sprint Allocation", "Target Week", "Estimated Duration" };
-        for (int i = 0; i < 6; i++)
+        _boxMeta = new RoundedPanel { Height = 18 + 4 * 78 + 6, FillColor = UITheme.Neutral50, Radius = 10 };
+        string[] captions = { "Pipeline Stage", "Platform", "Priority", "Sprint Allocation", "Target Week", "Estimated Duration", "Content Type", "Planned Publish Date" };
+        for (int i = 0; i < 8; i++)
         {
             _metaCaptions[i] = new Label
             {
@@ -281,6 +296,24 @@ public partial class ContentDetailPanel : UserControl
         _txtDurationEdit.TextChanged += (_, _) => MarkDirty();
         _metaBoxes[5].Controls.Add(Pad(_txtDurationEdit, 14, 11));
 
+        // 6. Content Type — danh sách cố định ContentService.AvailableContentTypes
+        _cboTypeEdit = MakeFlatCombo();
+        _cboTypeEdit.Items.AddRange(ContentService.AvailableContentTypes);
+        _cboTypeEdit.SelectedIndexChanged += (_, _) => MarkDirty();
+        _metaBoxes[6].Controls.Add(Pad(_cboTypeEdit, 12, 7));
+
+        // 7. Planned Publish Date — tùy chọn: bỏ tick = chưa lên lịch đăng
+        _dtpPlannedPublish = new DateTimePicker
+        {
+            Dock = DockStyle.Fill,
+            Font = new Font("Segoe UI", 10F),
+            Format = DateTimePickerFormat.Short,
+            ShowCheckBox = true,
+            Checked = false,
+        };
+        _dtpPlannedPublish.ValueChanged += (_, _) => MarkDirty();
+        _metaBoxes[7].Controls.Add(Pad(_dtpPlannedPublish, 10, 7));
+
         AddOverviewRow(_boxMeta, 20);
 
         AddOverviewRow(MakeSectionLabel("DIRECTOR & CREATOR LEAD"), 6);
@@ -317,16 +350,10 @@ public partial class ContentDetailPanel : UserControl
 
         // ---- TAB 2: SCRIPT ----
         _pnlTabScript = new Panel { Dock = DockStyle.Fill, Padding = new Padding(PadX, 20, PadX, 20), Visible = false };
-        _txtScript = new TextBox
-        {
-            Dock = DockStyle.Fill,
-            Multiline = true,
-            ScrollBars = ScrollBars.Vertical,
-            Font = new Font("Segoe UI", 10.5F),
-            BorderStyle = BorderStyle.FixedSingle,
-            Text = "Kịch bản / Screenplay Notes:\r\n\r\n[Hook 0-3s]: Giới thiệu điểm ấn tượng nhất của sản phẩm.\r\n[Body 3-30s]: Chi tiết tính năng nổi bật + góc quay cận.\r\n[Call To Action]: Đăng ký và theo dõi Studio!",
-        };
-        _pnlTabScript.Controls.Add(_txtScript);
+        // Khu vực script (SCRUM-33): lưu riêng qua ScriptService, có phân quyền, Ctrl+S và thống kê.
+        _scriptEditor = new ScriptEditorControl { Dock = DockStyle.Fill };
+        _scriptEditor.ScriptSaved += (_, text) => _persistedScript = text;
+        _pnlTabScript.Controls.Add(_scriptEditor);
 
         // ---- TAB 3: CHECKLIST ----
         _pnlTabChecklist = new Panel { Dock = DockStyle.Fill, Padding = new Padding(PadX, 20, PadX, 20), Visible = false };
@@ -358,10 +385,16 @@ public partial class ContentDetailPanel : UserControl
         _activityTimeline = new ActivityTimelineControl { Dock = DockStyle.Fill };
         _pnlTabActivity.Controls.Add(_activityTimeline);
 
+        // ---- TAB 5: METRICS ----
+        _pnlTabMetrics = new Panel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = UITheme.White, Padding = new Padding(PadX, 20, PadX, 20), Visible = false };
+        _metricsHost = new Panel { Dock = DockStyle.Top, AutoSize = true, BackColor = UITheme.White };
+        _pnlTabMetrics.Controls.Add(_metricsHost);
+
         _pnlContent.Controls.Add(_pnlTabOverview);
         _pnlContent.Controls.Add(_pnlTabScript);
         _pnlContent.Controls.Add(_pnlTabChecklist);
         _pnlContent.Controls.Add(_pnlTabActivity);
+        _pnlContent.Controls.Add(_pnlTabMetrics);
 
         // 5. Empty state
         _pnlEmptyState = new Panel { Dock = DockStyle.Fill, BackColor = UITheme.White };
@@ -519,7 +552,7 @@ public partial class ContentDetailPanel : UserControl
         // Lưới 2 cột trong khung meta
         int inner = w - 40;
         int colW = (inner - 16) / 2;
-        for (int i = 0; i < 6; i++)
+        for (int i = 0; i < _metaBoxes.Length; i++)
         {
             int x = 20 + (i % 2) * (colW + 16);
             int cy = 18 + (i / 2) * 78;
@@ -559,33 +592,75 @@ public partial class ContentDetailPanel : UserControl
     {
         int total = _chkChecklist?.Items.Count ?? 0;
         int done = _chkChecklist?.CheckedItems.Count ?? 0;
-        return new[] { "Overview", "Script", $"Checklist ({done}/{total})", "Activity" };
+        return new[] { "Overview", "Script", $"Checklist ({done}/{total})", "Activity", "Metrics" };
     }
 
     // ---------- API công khai ----------
 
-    public void Initialize(WorkflowService workflowService, IActivityRepository activityRepo, IProjectMemberRepository memberRepo, ContentService contentService)
+    public void Initialize(WorkflowService workflowService, IActivityRepository activityRepo, IProjectMemberRepository memberRepo, ContentService contentService, ScriptService scriptService, IMetricBackend? metricBackend = null, bool loadLocalPlatforms = true, IContentDetailBackend? detailBackend = null, IAssignmentBackend? assignmentBackend = null)
     {
+        _scriptEditor.Initialize(scriptService, detailBackend);
+        _detailBackend = detailBackend;
+        _assignmentBackend = assignmentBackend;
+        _apiPlatformsLoaded = false;
         _workflowService = workflowService;
         _activityRepo = activityRepo;
         _memberRepo = memberRepo;
         _contentService = contentService;
+        _metricBackend = metricBackend;
 
         _mnuPlatforms.Items.Clear();
+        if (detailBackend != null) return; // chế độ API: danh sách platform nạp ở lần LoadContent đầu tiên (EnsureApiPlatforms)
+        if (!loadLocalPlatforms) return;
         foreach (string name in contentService.GetAvailablePlatforms())
+            AddPlatformMenuItem(name);
+    }
+
+    private void AddPlatformMenuItem(string name)
+    {
+        var item = new ToolStripMenuItem(name) { CheckOnClick = true };
+        item.CheckedChanged += (_, _) =>
         {
-            var item = new ToolStripMenuItem(name) { CheckOnClick = true };
-            item.CheckedChanged += (_, _) =>
-            {
-                UpdatePlatformButtonText();
-                MarkDirty();
-            };
-            _mnuPlatforms.Items.Add(item);
+            UpdatePlatformButtonText();
+            MarkDirty();
+        };
+        _mnuPlatforms.Items.Add(item);
+    }
+
+    /// <summary>Chế độ API: nạp menu platform từ API một lần (lỗi thì thử lại ở lần mở sau, không chặn việc mở drawer).</summary>
+    private void EnsureApiPlatforms()
+    {
+        if (_detailBackend == null || _apiPlatformsLoaded) return;
+        try
+        {
+            foreach (string name in _detailBackend.GetAvailablePlatforms())
+                AddPlatformMenuItem(name);
+            _apiPlatformsLoaded = true;
+        }
+        catch (Exception ex) when (ex is ContentValidationException or UnauthorizedWorkflowActionException or InvalidOperationException)
+        {
+            _mnuPlatforms.Items.Clear();
         }
     }
 
+    /// <summary>Vai trò của người đăng nhập trong Project: qua API ở chế độ API, ngược lại đọc từ repository cục bộ.</summary>
+    private ProjectRole? GetMyRole(long projectId)
+    {
+        if (_detailBackend == null)
+            return _memberRepo!.GetRole(projectId, CurrentSession.CurrentUserId);
+
+        if (_roleCache.TryGetValue(projectId, out var cached)) return cached;
+        try
+        {
+            var role = _detailBackend.GetMyRole(projectId);
+            _roleCache[projectId] = role;
+            return role;
+        }
+        catch (Exception ex) when (ex is ContentValidationException or UnauthorizedWorkflowActionException or InvalidOperationException) { return null; }
+    }
+
     private List<string> SelectedPlatformNames() =>
-        _mnuPlatforms.Items.OfType<ToolStripMenuItem>().Where(i => i.Checked).Select(i => i.Text).ToList();
+        _mnuPlatforms.Items.OfType<ToolStripMenuItem>().Where(i => i.Checked).Select(i => i.Text ?? string.Empty).ToList();
 
     private void UpdatePlatformButtonText()
     {
@@ -600,7 +675,11 @@ public partial class ContentDetailPanel : UserControl
 
         _isLoading = true;
         _current = card;
-        _members = _memberRepo.GetMembers(card.ProjectId);
+        _metricsLoadedFor = null;
+        _metricsHost.Controls.Clear();
+        _roleCache.Clear();
+        EnsureApiPlatforms();
+        _members = LoadMembers(card.ProjectId);
 
         _pnlEmptyState.Visible = false;
         _pnlHeader.Visible = true;
@@ -627,10 +706,18 @@ public partial class ContentDetailPanel : UserControl
 
         _dtpTargetWeek.Value = (card.Deadline ?? DateTime.Today.AddDays(7)).Date;
         // Phân quyền deadline: chỉ Owner/Manager được sửa; Creator chỉ xem.
-        _dtpTargetWeek.Enabled = TaskRules.CanChangeDeadline(_memberRepo.GetRole(card.ProjectId, CurrentSession.CurrentUserId));
+        _dtpTargetWeek.Enabled = TaskRules.CanChangeDeadline(GetMyRole(card.ProjectId));
         _deadlineEdited = false;
 
         _txtDurationEdit.Text = card.EstimatedDuration;
+
+        // Script, loại nội dung và ngày dự kiến đăng không nằm trong thẻ Board nên đọc riêng từ DB khi mở Content Detail.
+        var detail = TryLoadDetail(card.ContentId);
+        _detailLoaded = detail != null;
+        _persistedScript = detail?.Script ?? string.Empty;
+        _scriptEditor.LoadScript(card.ContentId, CurrentSession.CurrentUserId);
+        SelectContentType(detail?.ContentType);
+        SetPlannedPublish(detail?.PlannedPublishAt);
 
         // Gán lại DataSource = null rồi DataSource mới đôi khi làm ComboBox quên mất DisplayMember đã đặt
         // (WinForms quirk), khiến nó tự hiện Object.ToString() — tức tên đầy đủ của class thay vì tên người.
@@ -659,6 +746,7 @@ public partial class ContentDetailPanel : UserControl
         LayoutOverview();
         _pnlTabOverview.AutoScrollPosition = new Point(0, 0);
         RefreshActivity();
+        if (_selectedTabIndex == 4) LoadMetricsIfNeeded();
         _pnlTabBar.Invalidate();
 
         _isLoading = false;
@@ -667,10 +755,55 @@ public partial class ContentDetailPanel : UserControl
         _lblSaveHint.Text = "";
     }
 
+    /// <summary>Danh sách thành viên để hiển thị người phụ trách. Chế độ API lấy từ danh sách có thể giao việc (lỗi → rỗng, không chặn mở drawer).</summary>
+    private List<ProjectMemberInfo> LoadMembers(long projectId)
+    {
+        if (_detailBackend == null || _assignmentBackend == null)
+            return _memberRepo!.GetMembers(projectId);
+
+        try { return _assignmentBackend.GetAssignableMembers(projectId); }
+        catch (Exception ex) when (ex is ContentValidationException or UnauthorizedWorkflowActionException or InvalidOperationException) { return new List<ProjectMemberInfo>(); }
+    }
+
+    /// <summary>Đọc chi tiết Content qua ContentService. Lỗi (không có quyền, không tìm thấy, lỗi DB) được báo cho người dùng và trả về null.</summary>
+    private Content? TryLoadDetail(long contentId)
+    {
+        try
+        {
+            return _detailBackend != null
+                ? _detailBackend.GetDetail(contentId)
+                : _contentService!.GetDetail(contentId, CurrentSession.CurrentUserId);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "Không tải được chi tiết nội dung", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return null;
+        }
+    }
+
+    /// <summary>Chọn loại nội dung; để trống → loại mặc định; loại lạ (dữ liệu cũ) được thêm tạm vào danh sách để không bị đổi âm thầm.</summary>
+    private void SelectContentType(string? contentType)
+    {
+        string type = string.IsNullOrWhiteSpace(contentType) ? ContentService.DefaultContentType : contentType.Trim();
+
+        int index = _cboTypeEdit.FindStringExact(type);
+        if (index < 0)
+            index = _cboTypeEdit.Items.Add(type);
+
+        _cboTypeEdit.SelectedIndex = index;
+    }
+
+    /// <summary>Gán Value trước rồi mới đặt Checked, vì WinForms có thể tự bật tick khi gán Value.</summary>
+    private void SetPlannedPublish(DateTime? plannedPublishAt)
+    {
+        _dtpPlannedPublish.Value = (plannedPublishAt ?? DateTime.Today).Date;
+        _dtpPlannedPublish.Checked = plannedPublishAt.HasValue;
+    }
+
     /// <summary>Trả về false (và không xoá gì) nếu người dùng chọn giữ lại thay đổi chưa lưu.</summary>
     public bool Clear()
     {
-        if (_isDirty && _current != null)
+        if (HasUnsavedChanges && _current != null)
         {
             var result = MessageBox.Show(this,
                 "Bạn có thay đổi chưa lưu. Đóng và bỏ qua thay đổi?",
@@ -680,21 +813,43 @@ public partial class ContentDetailPanel : UserControl
 
         _current = null;
         _isDirty = false;
+        _scriptEditor.Reset();
         ShowEmptyState();
         return true;
     }
 
     /// <summary>true nếu có thay đổi chưa lưu — BoardForm dùng để hỏi trước khi reload/đóng.</summary>
-    public bool HasUnsavedChanges => _isDirty;
+    public bool HasUnsavedChanges => _isDirty || _scriptEditor.IsDirty;
+
+    public void ResetProject()
+    {
+        _current = null;
+        _isDirty = false;
+        _detailLoaded = false;
+        _scriptEditor.Reset();
+        _metricsLoadedFor = null;
+        _metricsHost.Controls.Clear();
+        ShowEmptyState();
+    }
 
     private void SaveChanges()
     {
         if (_current == null || _contentService == null) return;
 
+        if (!_detailLoaded)
+        {
+            MessageBox.Show(this, "Chưa tải được chi tiết nội dung (script, loại nội dung, ngày dự kiến đăng) nên không thể lưu. Hãy đóng và mở lại nội dung này.",
+                "Không thể lưu", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
         var draft = new ContentDraft
         {
             Title = _txtTitleVal.Text,
             Description = _txtHookVal.Text,
+            Script = _persistedScript, // không sửa script ở đây: tab Script lưu riêng qua ScriptService
+            ContentType = _cboTypeEdit.SelectedItem as string ?? string.Empty,
+            PlannedPublishAt = _dtpPlannedPublish.Checked ? _dtpPlannedPublish.Value.Date : null,
             Priority = _cboPriorityEdit.SelectedItem is Priority p ? p : _current.Priority,
             Platforms = SelectedPlatformNames(),
             Sprint = _cboSprintEdit.SelectedItem as string ?? _current.Sprint,
@@ -705,7 +860,10 @@ public partial class ContentDetailPanel : UserControl
 
         try
         {
-            _contentService.Update(_current.ContentId, draft, CurrentSession.CurrentUserId);
+            if (_detailBackend != null)
+                _detailBackend.Update(_current.ContentId, draft);
+            else
+                _contentService.Update(_current.ContentId, draft, CurrentSession.CurrentUserId);
             _deadlineEdited = false;
             _isDirty = false;
             _btnSave.Enabled = false;
@@ -720,6 +878,10 @@ public partial class ContentDetailPanel : UserControl
         catch (UnauthorizedWorkflowActionException ex)
         {
             MessageBox.Show(this, ex.Message, "Không đủ quyền", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        catch (InvalidOperationException ex)
+        {
+            MessageBox.Show(this, ex.Message, "Không lưu được Content", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
     }
 
@@ -740,14 +902,198 @@ public partial class ContentDetailPanel : UserControl
         _pnlTabScript.Visible = (tabIndex == 1);
         _pnlTabChecklist.Visible = (tabIndex == 2);
         _pnlTabActivity.Visible = (tabIndex == 3);
+        _pnlTabMetrics.Visible = (tabIndex == 4);
         _pnlTabBar.Invalidate();
+        if (tabIndex == 4) LoadMetricsIfNeeded();
     }
 
     private void RefreshActivity()
     {
         if (_current == null) return;
-        _activityTimeline.LoadActivity(_activityRepo!.GetActivity(_current.ContentId));
+        if (_detailBackend == null)
+        {
+            _activityTimeline.LoadActivity(_activityRepo!.GetActivity(_current.ContentId));
+            return;
+        }
+
+        try
+        {
+            _activityTimeline.LoadActivity(_detailBackend.GetActivity(_current.ContentId));
+        }
+        catch (Exception ex) when (ex is ContentValidationException or UnauthorizedWorkflowActionException or InvalidOperationException)
+        {
+            _activityTimeline.LoadActivity(new List<ActivityItem>()); // không tải được: để trống, không chặn mở drawer
+        }
     }
+
+    // ---------- Tab Metrics (theo ContentPlatform, qua API) ----------
+
+    /// <summary>Nạp Metrics khi mở tab lần đầu cho mỗi Content. Quyền/nút Lưu lấy từ cờ CanRecord của API, không tự suy ở client.</summary>
+    private void LoadMetricsIfNeeded()
+    {
+        if (_current == null || _metricsLoadedFor == _current.ContentId) return;
+        _metricsHost.Controls.Clear();
+        if (_metricBackend == null)
+        {
+            _metricsHost.Controls.Add(MakeMetricsInfo("Chưa kết nối API nên không tải được số liệu."));
+            return;
+        }
+        try
+        {
+            var rows = _metricBackend.GetContentMetrics(_current.ContentId).Platforms
+                .Select(ContentMetric.FromResponse).ToList();
+            if (rows.Count == 0)
+                _metricsHost.Controls.Add(MakeMetricsInfo("Content này chưa gắn platform nào."));
+            else
+                foreach (var row in rows) // Dock=Top: thêm trước hiện trước, giữ đúng thứ tự API
+                    _metricsHost.Controls.Add(MakeMetricRow(row));
+            _metricsLoadedFor = _current.ContentId;
+        }
+        catch (Exception ex)
+        {
+            _metricsHost.Controls.Add(MakeMetricsInfo("Không tải được số liệu: " + ex.Message));
+            MessageBox.Show(this, ex.Message, "Không tải được số liệu", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
+    private static Label MakeMetricsInfo(string text) => new Label
+    {
+        Text = text,
+        Font = UITheme.FontBody,
+        ForeColor = UITheme.Neutral600,
+        AutoSize = true,
+        Dock = DockStyle.Top,
+        Padding = new Padding(0, 8, 0, 8),
+        UseMnemonic = false,
+    };
+
+    private sealed class MetricRowState
+    {
+        public ContentMetric Metric = null!;
+        public TextBox TxtViews = null!;
+        public TextBox TxtLikes = null!;
+        public TextBox TxtComments = null!;
+        public TextBox TxtShares = null!;
+        public Label LblUpdated = null!;
+    }
+
+    /// <summary>Mỗi platform một hàng: tên + trạng thái, 4 ô số (trống = giữ nguyên), nút Lưu riêng, nhãn cập nhật lần cuối.</summary>
+    private Panel MakeMetricRow(ContentMetric metric)
+    {
+        var state = new MetricRowState { Metric = metric };
+        var row = new Panel { Dock = DockStyle.Top, Height = 172, BackColor = UITheme.White, Padding = new Padding(0, 10, 0, 10) };
+
+        var header = new Label
+        {
+            Text = $"{metric.PlatformName} · {metric.PublicationStatus}",
+            Font = UITheme.FontLabelBold,
+            ForeColor = UITheme.Neutral600,
+            AutoSize = false,
+            Height = 22,
+            Dock = DockStyle.Top,
+            UseMnemonic = false,
+        };
+        row.Controls.Add(header);
+
+        var grid = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            Height = 62,
+            ColumnCount = 4,
+            RowCount = 2,
+            BackColor = UITheme.White,
+        };
+        for (int i = 0; i < 4; i++) grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
+        grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 20F));
+        grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
+        string[] names = { "Views", "Likes", "Comments", "Shares" };
+        TextBox[] boxes = new TextBox[4];
+        for (int i = 0; i < 4; i++)
+        {
+            grid.Controls.Add(new Label
+            {
+                Text = names[i],
+                Font = UITheme.FontLabel,
+                ForeColor = UITheme.Neutral600,
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.BottomLeft,
+                UseMnemonic = false,
+            }, i, 0);
+            boxes[i] = new TextBox { Font = new Font("Segoe UI", 10F), Dock = DockStyle.Fill, Margin = new Padding(0, 0, 12, 0) };
+            grid.Controls.Add(boxes[i], i, 1);
+        }
+        state.TxtViews = boxes[0];
+        state.TxtLikes = boxes[1];
+        state.TxtComments = boxes[2];
+        state.TxtShares = boxes[3];
+        row.Controls.Add(grid);
+
+        var bottom = new Panel { Dock = DockStyle.Top, Height = 44, BackColor = UITheme.White };
+        var btnSave = new RoundedButton
+        {
+            Text = "Lưu",
+            Style = RoundButtonStyle.Primary,
+            Size = new Size(110, 36),
+            Location = new Point(0, 4),
+            Enabled = metric.CanRecord && _metricBackend != null,
+        };
+        btnSave.Click += (_, _) => OnMetricSave(state);
+        bottom.Controls.Add(btnSave);
+        state.LblUpdated = new Label
+        {
+            Font = UITheme.FontLabel,
+            ForeColor = UITheme.Neutral400,
+            AutoSize = false,
+            Location = new Point(122, 4),
+            Size = new Size(600, 36),
+            TextAlign = ContentAlignment.MiddleLeft,
+            UseMnemonic = false,
+        };
+        RefreshMetricLabel(state);
+        bottom.Controls.Add(state.LblUpdated);
+        row.Controls.Add(bottom);
+        // Dock=Top xếp theo reverse z-order: control thêm trước nằm trên (header → grid → bottom).
+        return row;
+    }
+
+    private static void RefreshMetricLabel(MetricRowState state)
+    {
+        string text = ContentMetric.UpdatedLabel(state.Metric);
+        if (!state.Metric.CanRecord && state.Metric.HasData)
+            text += " Chỉ Owner/Manager được nhập sau Published.";
+        else if (!state.Metric.CanRecord)
+            text = "Chưa có số liệu. Chỉ Owner/Manager được nhập sau Published.";
+        state.LblUpdated.Text = text;
+    }
+
+    private void OnMetricSave(MetricRowState state)
+    {
+        if (_current == null || _metricBackend == null) return;
+        if (!ContentMetric.TryParseField(state.TxtViews.Text, out long? views))
+        { WarnMetric("Views phải là số nguyên ≥ 0 (để trống = giữ nguyên)."); return; }
+        if (!ContentMetric.TryParseField(state.TxtLikes.Text, out long? likes))
+        { WarnMetric("Likes phải là số nguyên ≥ 0 (để trống = giữ nguyên)."); return; }
+        if (!ContentMetric.TryParseField(state.TxtComments.Text, out long? comments))
+        { WarnMetric("Comments phải là số nguyên ≥ 0 (để trống = giữ nguyên)."); return; }
+        if (!ContentMetric.TryParseField(state.TxtShares.Text, out long? shares))
+        { WarnMetric("Shares phải là số nguyên ≥ 0 (để trống = giữ nguyên)."); return; }
+        if (views is null && likes is null && comments is null && shares is null)
+        { WarnMetric("Cần nhập ít nhất một chỉ số."); return; }
+        try
+        {
+            var saved = _metricBackend.RecordMetric(_current.ContentId, state.Metric.PlatformId, views, likes, comments, shares);
+            state.Metric = ContentMetric.FromResponse(saved);
+            state.TxtViews.Text = state.TxtLikes.Text = state.TxtComments.Text = state.TxtShares.Text = "";
+            RefreshMetricLabel(state);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "Không lưu được số liệu", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
+    private void WarnMetric(string message) =>
+        MessageBox.Show(this, message, "Số liệu chưa hợp lệ", MessageBoxButtons.OK, MessageBoxIcon.Warning);
 
     // ---------- Logic Workflow (GIỮ NGUYÊN) ----------
 
@@ -756,7 +1102,7 @@ public partial class ContentDetailPanel : UserControl
         _flowActions.Controls.Clear();
         if (_current == null) return;
 
-        var role = _memberRepo!.GetRole(_current.ProjectId, CurrentSession.CurrentUserId);
+        var role = GetMyRole(_current.ProjectId);
         var canReview = role == ProjectRole.Owner || role == ProjectRole.Manager;
 
         if (TaskRules.CanAssign(role) && _current.Status is not (ContentStatus.Published or ContentStatus.Archived))
@@ -821,20 +1167,53 @@ public partial class ContentDetailPanel : UserControl
         if (_current == null || _contentService == null) return;
 
         // Sau khi giao, drawer được tải lại → thay đổi chưa lưu sẽ mất, nên hỏi trước.
-        if (_isDirty && MessageBox.Show(this,
+        if (HasUnsavedChanges && MessageBox.Show(this,
                 "Có thay đổi chưa lưu. Giao việc sẽ tải lại nội dung và bỏ các thay đổi này. Tiếp tục?",
                 "Giao việc", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
             return;
 
-        var creators = _contentService.GetAssignableMembers(_current.ProjectId, CurrentSession.CurrentUserId);
+        List<ProjectMemberInfo> creators;
+        List<MyTaskItem> assignments;
+        try
+        {
+            if (_assignmentBackend != null)
+            {
+                creators = _assignmentBackend.GetAssignableMembers(_current.ProjectId);
+                assignments = _assignmentBackend.GetAssignments(_current.ContentId);
+            }
+            else
+            {
+                creators = _contentService.GetAssignableMembers(_current.ProjectId, CurrentSession.CurrentUserId);
+                assignments = _contentService.GetAssignments(_current.ContentId);
+            }
+        }
+        catch (ContentValidationException ex)
+        {
+            MessageBox.Show(this, ex.Message, "Không tải được danh sách giao việc", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        catch (UnauthorizedWorkflowActionException ex)
+        {
+            MessageBox.Show(this, ex.Message, "Không đủ quyền", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        catch (InvalidOperationException ex)
+        {
+            MessageBox.Show(this, ex.Message, "Không tải được danh sách giao việc", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
         using var dlg = new AssignContentDialog(
             $"CNT-{_current.ContentId:000}", _current.Title, creators,
-            _contentService.GetAssignments(_current.ContentId), _current.Deadline);
+            assignments, _current.Deadline);
         if (dlg.ShowDialog(FindForm()) != DialogResult.OK) return;
 
         try
         {
-            _contentService.AssignContent(_current.ContentId, dlg.Assignments, CurrentSession.CurrentUserId);
+            if (_assignmentBackend != null)
+                _assignmentBackend.AssignContent(_current.ContentId, dlg.Assignments);
+            else
+                _contentService.AssignContent(_current.ContentId, dlg.Assignments, CurrentSession.CurrentUserId);
             ContentChanged?.Invoke(this, EventArgs.Empty);
         }
         catch (ContentValidationException ex)
@@ -845,6 +1224,10 @@ public partial class ContentDetailPanel : UserControl
         {
             MessageBox.Show(this, ex.Message, "Không đủ quyền", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
+        catch (InvalidOperationException ex)
+        {
+            MessageBox.Show(this, ex.Message, "Không lưu được giao việc", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
     }
 
     private void OnMoveNextClicked(object? sender, EventArgs e)
@@ -853,13 +1236,23 @@ public partial class ContentDetailPanel : UserControl
         var next = _workflowService!.GetNextSimpleStatus(_current.Status);
         if (!next.HasValue) return;
 
-        RunWorkflowAction(() => _workflowService!.ChangeStatus(_current.ContentId, next.Value, CurrentSession.CurrentUserId));
+        var contentId = _current.ContentId;
+        RunWorkflowAction(() =>
+        {
+            if (_detailBackend != null) _detailBackend.ChangeStatus(contentId, next.Value);
+            else _workflowService!.ChangeStatus(contentId, next.Value, CurrentSession.CurrentUserId);
+        });
     }
 
     private void OnSubmitReviewClicked(object? sender, EventArgs e)
     {
         if (_current == null) return;
-        RunWorkflowAction(() => _workflowService!.SubmitForReview(_current.ContentId, CurrentSession.CurrentUserId));
+        var contentId = _current.ContentId;
+        RunWorkflowAction(() =>
+        {
+            if (_detailBackend != null) _detailBackend.SubmitForReview(contentId);
+            else _workflowService!.SubmitForReview(contentId, CurrentSession.CurrentUserId);
+        });
     }
 
     private void OnReviewDecisionClicked(object? sender, EventArgs e)
@@ -876,11 +1269,19 @@ public partial class ContentDetailPanel : UserControl
         var contentId = _current.ContentId;
         if (dialog.Approved)
         {
-            RunWorkflowAction(() => _workflowService!.ApproveReview(contentId, CurrentSession.CurrentUserId, dialog.Feedback));
+            RunWorkflowAction(() =>
+            {
+                if (_detailBackend != null) _detailBackend.DecideReview(contentId, true, dialog.Feedback);
+                else _workflowService!.ApproveReview(contentId, CurrentSession.CurrentUserId, dialog.Feedback);
+            });
         }
         else
         {
-            RunWorkflowAction(() => _workflowService!.RejectReview(contentId, CurrentSession.CurrentUserId, dialog.Feedback));
+            RunWorkflowAction(() =>
+            {
+                if (_detailBackend != null) _detailBackend.DecideReview(contentId, false, dialog.Feedback);
+                else _workflowService!.RejectReview(contentId, CurrentSession.CurrentUserId, dialog.Feedback);
+            });
         }
     }
 
@@ -895,9 +1296,17 @@ public partial class ContentDetailPanel : UserControl
         {
             MessageBox.Show(this, ex.Message, "Không thể chuyển trạng thái", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
+        catch (ContentValidationException ex) // chế độ API: lỗi nghiệp vụ/mạng từ Backend
+        {
+            MessageBox.Show(this, ex.Message, "Không thể chuyển trạng thái", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
         catch (UnauthorizedWorkflowActionException ex)
         {
             MessageBox.Show(this, ex.Message, "Không đủ quyền", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        catch (InvalidOperationException ex)
+        {
+            MessageBox.Show(this, ex.Message, "Không thể chuyển trạng thái", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
     }
 

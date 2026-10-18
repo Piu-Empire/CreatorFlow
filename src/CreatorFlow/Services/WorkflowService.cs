@@ -155,7 +155,7 @@ public class WorkflowService
         DecideReview(contentId, reviewerUserId, feedback, approve: false);
     }
 
-    private void DecideReview(long contentId, long reviewerUserId, string feedback, bool approve)
+    private void DecideReview(long contentId, long reviewerUserId, string? feedback, bool approve)
     {
         var content = GetContentOrThrow(contentId);
 
@@ -211,7 +211,7 @@ public class WorkflowService
     }
 
     /// <summary>Đổi trạng thái + ghi lịch sử, tự mở/đóng transaction riêng (dùng cho ChangeStatus).</summary>
-    private void ApplyStatusChange(Content content, ContentStatus newStatus, long changedByUserId, string note)
+    private void ApplyStatusChange(Content content, ContentStatus newStatus, long changedByUserId, string? note)
     {
         _unitOfWork.Begin();
         try
@@ -227,7 +227,7 @@ public class WorkflowService
     }
 
     /// <summary>Đổi trạng thái + ghi lịch sử, KHÔNG tự mở transaction (dùng khi đã có transaction bên ngoài).</summary>
-    private void ApplyStatusChangeNoTransaction(Content content, ContentStatus newStatus, long changedByUserId, string note)
+    private void ApplyStatusChangeNoTransaction(Content content, ContentStatus newStatus, long changedByUserId, string? note)
     {
         var oldStatus = content.Status;
 
