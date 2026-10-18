@@ -8,6 +8,7 @@ internal sealed class AuthenticationApplicationContext : ApplicationContext
 {
     private readonly AuthApiFacade auth;
     private readonly Func<BoardForm> createShell;
+    private AuthenticationHostForm? authenticationHost;
     private bool switching;
     private readonly System.Windows.Forms.Timer expiryTimer = new() { Interval = 1000 };
     public AuthenticationApplicationContext(AuthApiFacade auth, Func<BoardForm> createShell)
@@ -36,55 +37,85 @@ internal sealed class AuthenticationApplicationContext : ApplicationContext
         form.LoginSucceeded += (_, _) =>
         {
             if (!auth.Session.IsAuthenticated || auth.Session.CurrentUser is not { } user) return;
-            CurrentSession.CurrentUserId = user.UserId;
-            CurrentSession.CurrentUserName = user.DisplayName;
-            CurrentSession.CurrentProjectId = 0;
-            CurrentSession.CurrentProjectName = string.Empty;
-            Switch(createShell());
+            OpenBoard(user.UserId, user.DisplayName);
         };
-        Switch(form);
+        ShowAuthenticationPage(form);
     }
     private void ShowRegister()
     {
         var form = new RegisterForm(auth);
         form.LoginRequested += (_, _) => ShowLogin();
         form.Registered += ShowVerify;
-        Switch(form);
+        ShowAuthenticationPage(form);
     }
     private void ShowVerify(string email)
     {
         var form = new VerifyEmailForm(auth, email);
         form.LoginRequested += value => ShowLogin(value);
         form.EmailVerified += (value, message) => ShowLogin(value, message);
-        Switch(form);
+        ShowAuthenticationPage(form);
     }
     private void ShowForgot(string email)
     {
         var form = new ForgotPasswordForm(auth, email);
         form.LoginRequested += value => ShowLogin(value);
         form.CodeRequested += (value, id) => ShowReset(value, id);
-        Switch(form);
+        ShowAuthenticationPage(form);
     }
     private void ShowReset(string email, Guid id)
     {
         var form = new ResetPasswordForm(auth, email, id);
         form.LoginRequested += value => ShowLogin(value);
         form.PasswordReset += (value, message) => ShowLogin(value, message);
-        Switch(form);
+        ShowAuthenticationPage(form);
     }
-    private void Switch(Form next)
+
+    private void ShowAuthenticationPage(Form page)
     {
         switching = true;
         try
         {
-            Form? previous = MainForm;
-            MainForm = next;
-            next.Show();
-            previous?.Close();
-            previous?.Dispose();
+            Form? previousMainForm = null;
+            if (authenticationHost is null || authenticationHost.IsDisposed)
+            {
+                previousMainForm = MainForm;
+                authenticationHost = new AuthenticationHostForm();
+                MainForm = authenticationHost;
+            }
+
+            authenticationHost.ShowPage(page);
+            if (!authenticationHost.Visible) authenticationHost.Show();
+            authenticationHost.WindowState = FormWindowState.Maximized;
+            if (previousMainForm is not null)
+            {
+                previousMainForm.Close();
+                previousMainForm.Dispose();
+            }
         }
         finally { switching = false; }
     }
+
+    private void OpenBoard(long userId, string displayName)
+    {
+        switching = true;
+        try
+        {
+            CurrentSession.CurrentUserId = userId;
+            CurrentSession.CurrentUserName = displayName;
+            CurrentSession.CurrentProjectId = 0;
+            CurrentSession.CurrentProjectName = string.Empty;
+
+            var board = createShell();
+            Form? previous = MainForm;
+            MainForm = board;
+            board.Show();
+            previous?.Close();
+            previous?.Dispose();
+            authenticationHost = null;
+        }
+        finally { switching = false; }
+    }
+
     protected override void ExitThreadCore()
     {
         switching = true;

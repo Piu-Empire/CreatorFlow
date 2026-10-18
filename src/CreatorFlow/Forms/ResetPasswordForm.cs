@@ -1,32 +1,80 @@
 using CreatorFlow.Helpers;
 using CreatorFlow.Services;
+using CreatorFlow.Controls;
 
 namespace CreatorFlow.Forms;
 
 public partial class ResetPasswordForm : Form
 {
-    private readonly AuthApiFacade _authService;
-    private readonly string _email;
+    private AuthApiFacade? _authService;
+    private string _email = string.Empty;
     private Guid _requestId;
     private CancellationTokenSource? _pending;
     private bool _closing;
     private long _resendAt;
+    private readonly Dictionary<string, Panel> fields = new();
     public event Action<string>? LoginRequested;
     public event Action<string, string>? PasswordReset;
 
-    public ResetPasswordForm(AuthApiFacade authService, string email, Guid requestId)
+    public ResetPasswordForm()
+    {
+        InitializeComponent();
+        ConfigureDesignableControls();
+    }
+
+    public ResetPasswordForm(AuthApiFacade authService, string email, Guid requestId) : this()
     {
         _authService = authService;
         _email = email;
         _requestId = requestId;
-        InitializeComponent();
         emailTextBox.Text = email;
         StartCooldown();
     }
 
+    private void ConfigureDesignableControls()
+    {
+        AuthenticationLayout.ConfigureResponsiveLayout(columns, brandingPanel, formArea, formColumn);
+        UiTheme.StyleField(emailFieldBorder, emailTextBox);
+        UiTheme.StyleField(codeFieldBorder, codeTextBox);
+        UiTheme.StyleField(passwordFieldBorder, passwordTextBox);
+        UiTheme.StyleField(confirmFieldBorder, confirmTextBox);
+        UiTheme.StyleButton(resetButton);
+        fields.Add("Code", codeField);
+        fields.Add("NewPassword", passwordField);
+        fields.Add("ConfirmPassword", confirmField);
+        resetButton.Click += ResetButton_Click;
+        resendLink.LinkClicked += ResendLink_Click;
+        backLink.LinkClicked += BackLink_LinkClicked;
+        showPassword.CheckedChanged += ShowPassword_CheckedChanged;
+        cooldownTimer.Tick += CooldownTimer_Tick;
+        emailTextBox.TextChanged += (_, _) => UiTheme.SetFieldError(emailField, null);
+        codeTextBox.TextChanged += (_, _) => UiTheme.SetFieldError(fields["Code"], null);
+        passwordTextBox.TextChanged += (_, _) => UiTheme.SetFieldError(fields["NewPassword"], null);
+        confirmTextBox.TextChanged += (_, _) => UiTheme.SetFieldError(fields["ConfirmPassword"], null);
+        formColumn.SizeChanged += FormColumn_SizeChanged;
+        FormColumn_SizeChanged(this, EventArgs.Empty);
+    }
+
+    private void FormColumn_SizeChanged(object? sender, EventArgs e)
+    {
+        foreach (Panel field in new[] { emailField, fields["Code"], fields["NewPassword"], fields["ConfirmPassword"] })
+        {
+            if (field.Controls["fieldError"] is Label error)
+                error.MaximumSize = new Size(Math.Max(1, formColumn.ClientSize.Width), 0);
+        }
+    }
+
+    private void BackLink_LinkClicked(object? sender, LinkLabelLinkClickedEventArgs e) =>
+        LoginRequested?.Invoke(_email);
+
+    private void ShowPassword_CheckedChanged(object? sender, EventArgs e) =>
+        passwordTextBox.UseSystemPasswordChar = confirmTextBox.UseSystemPasswordChar = !showPassword.Checked;
+
+    private void CooldownTimer_Tick(object? sender, EventArgs e) => UpdateCooldown();
+
     private async void ResetButton_Click(object? sender, EventArgs e)
     {
-        if (_closing || _pending is not null) return;
+        if (_closing || _pending is not null || _authService is null) return;
         using var cancellation = new CancellationTokenSource();
         _pending = cancellation;
         SetBusy(true);
@@ -53,7 +101,7 @@ public partial class ResetPasswordForm : Form
 
     private async void ResendLink_Click(object? sender, LinkLabelLinkClickedEventArgs e)
     {
-        if (_closing || _pending is not null || Environment.TickCount64 < _resendAt) return;
+        if (_closing || _pending is not null || Environment.TickCount64 < _resendAt || _authService is null) return;
         using var cancellation = new CancellationTokenSource();
         _pending = cancellation;
         SetBusy(true);
