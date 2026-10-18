@@ -30,6 +30,7 @@ public partial class IdeaBankControl : UserControl
     private readonly System.Windows.Forms.Timer _searchTimer = new() { Interval = 300 };
     private List<Idea> _ideas = new();
     private bool _loading;
+    private long? _pendingFocusIdeaId;
 
     public event EventHandler? IdeasChanged;
     public event EventHandler? CloseRequested;
@@ -71,6 +72,45 @@ public partial class IdeaBankControl : UserControl
 
     private Idea? SelectedIdea =>
         listViewIdeas.SelectedItems.Count > 0 ? listViewIdeas.SelectedItems[0].Tag as Idea : null;
+
+    /// <summary>Chọn một Idea cụ thể, dùng khi điều hướng từ kết quả tìm kiếm toàn cục.</summary>
+    public bool FocusIdea(long ideaId)
+    {
+        if (ideaId <= 0 || _ideaService is null) return false;
+        _pendingFocusIdeaId = ideaId;
+        if (!IsHandleCreated) return true;
+
+        if (_ideas.All(idea => idea.IdeaId != ideaId))
+        {
+            _loading = true;
+            try
+            {
+                txtSearch.Clear();
+                cboStatus.SelectedIndex = 0;
+                cboTag.SelectedIndex = 0;
+            }
+            finally { _loading = false; }
+            ReloadIdeas();
+        }
+
+        FocusPendingIdea();
+        return _ideas.Any(idea => idea.IdeaId == ideaId);
+    }
+
+    private void FocusPendingIdea()
+    {
+        if (_pendingFocusIdeaId is not long ideaId) return;
+        ListViewItem? item = listViewIdeas.Items.Cast<ListViewItem>()
+            .FirstOrDefault(row => (row.Tag as Idea)?.IdeaId == ideaId);
+        if (item is null) return;
+
+        item.Selected = true;
+        item.Focused = true;
+        item.EnsureVisible();
+        listViewIdeas.Focus();
+        _pendingFocusIdeaId = null;
+        UpdateDetailAndButtons();
+    }
 
     private static long ProjectId => CurrentSession.CurrentProjectId;
     private static long UserId => CurrentSession.CurrentUserId;
@@ -153,7 +193,7 @@ public partial class IdeaBankControl : UserControl
                 item.SubItems.Add(idea.CreatedByName);
                 item.SubItems.Add(idea.UpdatedAt.ToString("dd/MM/yyyy"));
                 listViewIdeas.Items.Add(item);
-                if (idea.IdeaId == selectedId) item.Selected = true;
+                if (idea.IdeaId == selectedId || idea.IdeaId == _pendingFocusIdeaId) item.Selected = true;
             }
         }
         finally
@@ -171,6 +211,7 @@ public partial class IdeaBankControl : UserControl
         listViewIdeas.Visible = _ideas.Count > 0;
         UpdateDetailAndButtons();
         ResizeIdeaColumns();
+        FocusPendingIdea();
     }
 
     private void UpdateDetailAndButtons()

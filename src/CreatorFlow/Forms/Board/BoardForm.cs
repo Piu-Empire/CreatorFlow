@@ -1,4 +1,5 @@
 using CreatorFlow.Models.Enums;
+using CreatorFlow.Contracts.Search;
 using CreatorFlow.Controls;
 using CreatorFlow.Controls.IdeaBank;
 using CreatorFlow.Controls.MyTasks;
@@ -51,6 +52,8 @@ public partial class BoardForm : Form, IMessageFilter
     private CalendarControl? _calendar;
     private readonly CancellationTokenSource _authLifetime = new();
     private int _avatarGeneration;
+    private int _globalSearchGeneration;
+    private CancellationTokenSource? _globalSearchRequest;
 
     private readonly Dictionary<ContentStatus, KanbanColumnControl> _columns = new();
     private List<ContentBoardCard> _allCards = new();
@@ -132,6 +135,9 @@ public partial class BoardForm : Form, IMessageFilter
         _contentDetailPanel.CloseRequested += (_, _) => CloseDrawer();
 
         _topHeaderControl.NewContentClicked += (_, _) => OpenCreateContentDialog();
+        _topHeaderControl.GlobalSearchRequested += async (_, args) => await SearchGloballyAsync(args.Query);
+        _topHeaderControl.GlobalSearchResultSelected += async (_, args) => await OpenGlobalSearchResultAsync(args.Result);
+        _topHeaderControl.SetGlobalSearchEnabled(auth is not null && projects is not null);
 
         _modulePageHeader.CreateContentClicked += (_, _) => OpenCreateContentDialog();
         _modulePageHeader.SearchTextChanged += (_, _) => ApplyFilters();
@@ -177,6 +183,9 @@ public partial class BoardForm : Form, IMessageFilter
     protected override void OnFormClosed(FormClosedEventArgs e)
     {
         _authLifetime.Cancel();
+        _globalSearchRequest?.Cancel();
+        _globalSearchRequest?.Dispose();
+        _globalSearchRequest = null;
         _authLifetime.Dispose();
         Application.RemoveMessageFilter(this);
         base.OnFormClosed(e);
@@ -557,17 +566,19 @@ public partial class BoardForm : Form, IMessageFilter
     }
 
     /// <summary>Mở trang Idea Bank của Project hiện hành ngay trong vùng nội dung chính.</summary>
-    private async void OpenIdeaBank()
+    private async void OpenIdeaBank() => await OpenIdeaBankPageAsync();
+
+    private async Task<IdeaBankControl?> OpenIdeaBankPageAsync(long? focusIdeaId = null)
     {
-        if (!HasProjectContext || !CanLeaveProjectPage()) return;
-        if (_projects is not null && !await ValidateProjectAsync()) return;
-        if (!HasProjectContext) return;
+        if (!HasProjectContext || !CanLeaveProjectPage()) return null;
+        if (_projects is not null && !await ValidateProjectAsync()) return null;
+        if (!HasProjectContext) return null;
 
         IIdeaBackend? backend = _projects is null ? _ideaService : _ideaBackend;
         if (backend is null)
         {
             ShowUnavailableModule("Idea Bank");
-            return;
+            return null;
         }
 
         long projectId = CurrentSession.CurrentProjectId;
@@ -579,6 +590,8 @@ public partial class BoardForm : Form, IMessageFilter
         page.CloseRequested += (_, _) => CloseIdeaBankPage(page);
         ShowProjectPage(page, "Backlog");
         _sidebarControl.SetActiveMenu("Backlog");
+        if (focusIdeaId is long ideaId && !page.FocusIdea(ideaId))
+            _toast.ShowToast(this, "Không còn tìm thấy ý tưởng này trong Project.");
         RefreshBacklogCount();
 
         void RefreshBacklogCount()
@@ -593,6 +606,7 @@ public partial class BoardForm : Form, IMessageFilter
             }
             _sidebarControl.Invalidate();
         }
+        return page;
     }
 
     private void CloseIdeaBankPage(IdeaBankControl page)
