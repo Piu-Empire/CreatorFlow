@@ -1,28 +1,75 @@
 using CreatorFlow.Helpers;
 using CreatorFlow.Services;
+using CreatorFlow.Controls;
 
 namespace CreatorFlow.Forms;
 
 public partial class RegisterForm : Form
 {
-    private readonly AuthApiFacade _authService;
+    private AuthApiFacade? _authService;
     private CancellationTokenSource? _pending;
     private bool _closing;
     private bool _verificationAvailable;
     private CancellationTokenSource? _readiness;
+    private readonly Dictionary<string, Panel> fields = new();
     public event EventHandler? LoginRequested;
     public event Action<string>? Registered;
 
-    public RegisterForm(AuthApiFacade authService)
+    public RegisterForm()
+    {
+        InitializeComponent();
+        ConfigureDesignableControls();
+    }
+
+    public RegisterForm(AuthApiFacade authService) : this()
     {
         _authService = authService;
-        InitializeComponent();
         registerButton.Enabled = false;
     }
+
+    private void ConfigureDesignableControls()
+    {
+        AuthenticationLayout.ConfigureResponsiveLayout(columns, brandingPanel, formArea, formColumn);
+        UiTheme.StyleField(nameFieldBorder, nameTextBox);
+        UiTheme.StyleField(emailFieldBorder, emailTextBox);
+        UiTheme.StyleField(passwordFieldBorder, passwordTextBox);
+        UiTheme.StyleField(confirmFieldBorder, confirmTextBox);
+        UiTheme.StyleButton(registerButton);
+        fields.Add("DisplayName", nameField);
+        fields.Add("Email", emailField);
+        fields.Add("Password", passwordField);
+        fields.Add("ConfirmPassword", confirmField);
+        showPassword.CheckedChanged += ShowPassword_CheckedChanged;
+        registerButton.Click += RegisterButton_Click;
+        loginLink.LinkClicked += LoginLink_LinkClicked;
+        nameTextBox.TextChanged += (_, _) => UiTheme.SetFieldError(nameField, null);
+        emailTextBox.TextChanged += (_, _) => UiTheme.SetFieldError(emailField, null);
+        passwordTextBox.TextChanged += (_, _) => UiTheme.SetFieldError(passwordField, null);
+        confirmTextBox.TextChanged += (_, _) => UiTheme.SetFieldError(confirmField, null);
+        formColumn.SizeChanged += FormColumn_SizeChanged;
+        FormColumn_SizeChanged(this, EventArgs.Empty);
+        registerButton.Enabled = false;
+    }
+
+    private void FormColumn_SizeChanged(object? sender, EventArgs e)
+    {
+        foreach (Panel field in fields.Values)
+        {
+            if (field.Controls["fieldError"] is Label error)
+                error.MaximumSize = new Size(Math.Max(1, formColumn.ClientSize.Width), 0);
+        }
+    }
+
+    private void ShowPassword_CheckedChanged(object? sender, EventArgs e) =>
+        passwordTextBox.UseSystemPasswordChar = confirmTextBox.UseSystemPasswordChar = !showPassword.Checked;
+
+    private void LoginLink_LinkClicked(object? sender, LinkLabelLinkClickedEventArgs e) =>
+        LoginRequested?.Invoke(this, EventArgs.Empty);
 
     protected override async void OnShown(EventArgs e)
     {
         base.OnShown(e);
+        if (_authService is null) return;
         using var cancellation = new CancellationTokenSource();
         _readiness = cancellation;
         try
@@ -38,7 +85,7 @@ public partial class RegisterForm : Form
 
     private async void RegisterButton_Click(object? sender, EventArgs e)
     {
-        if (_pending is not null || _closing || !_verificationAvailable) return;
+        if (_pending is not null || _closing || !_verificationAvailable || _authService is null) return;
         using var cancellation = new CancellationTokenSource();
         _pending = cancellation;
         SetBusy(true);

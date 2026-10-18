@@ -115,10 +115,11 @@ public partial class BoardForm : Form, IMessageFilter
         InitializeProjects(projects);
         if (auth is not null)
         {
-            _topHeaderControl.SetAuthenticatedAccount(auth.Session.CurrentUser?.DisplayName ?? string.Empty, null);
+            _sidebarControl.SetAuthenticatedAccount(auth.Session.CurrentUser?.DisplayName ?? string.Empty,
+                auth.Session.CurrentUser?.Email ?? string.Empty, null);
             _sidebarControl.SetSystemAdmin(auth.Session.CurrentUser?.IsSystemAdmin == true);
             Shown += async (_, _) => await RefreshAuthenticatedAvatarAsync();
-            _topHeaderControl.ProfileRequested += async (_, _) => await OpenProfileAsync();
+            _sidebarControl.ProfileRequested += async (_, _) => await OpenProfileAsync();
             _sidebarControl.AdminWorkspaceRequested += async (_, _) => await OpenAdminAsync();
             _sidebarControl.AdminReportsRequested += async (_, _) => await OpenReportsAsync();
             _sidebarControl.CalendarRequested += (_, _) => OpenCalendar();
@@ -222,9 +223,6 @@ public partial class BoardForm : Form, IMessageFilter
     private bool HasProjectContext => CurrentSession.CurrentProjectId > 0 &&
         (_auth is null || _auth.Session.IsAuthenticated);
 
-    /// <summary>Chế độ API: nút New Content chỉ bật khi tạo Content và lấy danh sách người nhận việc đã nối API.</summary>
-    private bool CanCreateContentViaApi => _detailBackend is not null && _assignmentBackend is not null;
-
     private void UpdateProjectContext()
     {
         _topHeaderControl.SetProjectContext(HasProjectContext ? CurrentSession.CurrentProjectName : null,
@@ -233,6 +231,9 @@ public partial class BoardForm : Form, IMessageFilter
         _sidebarControl.ProjectActionsEnabled = HasProjectContext;
         _sidebarControl.Invalidate();
     }
+
+    /// <summary>Chế độ API: nút New Content chỉ bật khi tạo Content và lấy danh sách người nhận việc đã nối API.</summary>
+    private bool CanCreateContentViaApi => _detailBackend is not null && _assignmentBackend is not null;
 
     private void ReloadBoard()
     {
@@ -852,8 +853,8 @@ public partial class BoardForm : Form, IMessageFilter
                 !_auth.Session.IsAuthenticated || _auth.Session.Generation != sessionGeneration)
             { return; }
             var currentUser = _auth.Session.CurrentUser!;
-            _topHeaderControl.SetAuthenticatedAccount(currentUser.DisplayName, avatar);
-            avatar = null; // Top bar now owns the image.
+            _sidebarControl.SetAuthenticatedAccount(currentUser.DisplayName, currentUser.Email, avatar);
+            avatar = null; // Sidebar now owns the image.
         }
         catch (OperationCanceledException) when (_authLifetime.IsCancellationRequested) { }
         finally { avatar?.Dispose(); }
