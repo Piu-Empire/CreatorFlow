@@ -10,6 +10,9 @@ public sealed partial class RestoreProjectDialog : Form
 
         Font = UITheme.FontBody;
         BackColor = UITheme.White;
+        headerPanel.BackColor = UITheme.White;
+        bodyPanel.BackColor = UITheme.White;
+        footerPanel.BackColor = UITheme.Neutral50;
         titleLabel.Font = UITheme.FontH2;
         titleLabel.ForeColor = UITheme.Ink;
         subtitleLabel.ForeColor = UITheme.Neutral600;

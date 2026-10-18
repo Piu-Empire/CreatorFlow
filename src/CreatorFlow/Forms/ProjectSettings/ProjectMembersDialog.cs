@@ -37,6 +37,8 @@ public sealed partial class ProjectMembersDialog : Form
         Font = UITheme.FontBody;
         BackColor = UITheme.White;
         AccessibleName = Text;
+        bodyLayout.BackColor = UITheme.White;
+        listHost.BackColor = members.BackColor = UITheme.White;
         headingLabel.Font = UITheme.FontPageTitle;
         headingLabel.ForeColor = UITheme.Ink;
         projectLabel.Text = string.IsNullOrWhiteSpace(projectName) ? $"Project #{projectId}" : projectName;
