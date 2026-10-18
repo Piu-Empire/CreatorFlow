@@ -136,6 +136,7 @@ public partial class BoardForm : Form, IMessageFilter
         _modulePageHeader.CreateContentClicked += (_, _) => OpenCreateContentDialog();
         _modulePageHeader.SearchTextChanged += (_, _) => ApplyFilters();
         _modulePageHeader.PlatformFilterChanged += (_, _) => ApplyFilters();
+        _modulePageHeader.SprintFilterChanged += (_, _) => ApplyFilters();
 
         _sidebarControl.ReviewQueueRequested += (_, _) => OpenReviewQueue();
         _sidebarControl.ContentLibraryRequested += async (_, _) => await OpenContentLibraryAsync();
@@ -290,6 +291,7 @@ public partial class BoardForm : Form, IMessageFilter
     {
         string searchText = _modulePageHeader.SearchText;
         string platformFilter = _modulePageHeader.SelectedPlatform;
+        string sprintFilter = _modulePageHeader.SelectedSprint;
         var filtered = _allCards.AsEnumerable();
 
         if (!string.IsNullOrWhiteSpace(searchText))
@@ -298,6 +300,9 @@ public partial class BoardForm : Form, IMessageFilter
 
         if (!string.IsNullOrWhiteSpace(platformFilter) && platformFilter != "All")
             filtered = filtered.Where(c => c.Platforms.Any(p => p.Equals(platformFilter, StringComparison.OrdinalIgnoreCase)));
+
+        if (!string.IsNullOrWhiteSpace(sprintFilter) && sprintFilter != ModulePageHeaderControl.AllSprintsFilter)
+            filtered = filtered.Where(c => c.Sprint.Equals(sprintFilter, StringComparison.OrdinalIgnoreCase));
 
         var list = filtered.ToList();
         _selectedCardControl = null;

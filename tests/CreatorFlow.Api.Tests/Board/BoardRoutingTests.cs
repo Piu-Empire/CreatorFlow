@@ -14,6 +14,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace CreatorFlow.Api.Tests.Board;
@@ -40,7 +41,7 @@ public sealed class BoardRoutingTests
         await using Host host = await StartAsync();
 
         using HttpResponseMessage response = await host.Client.GetAsync($"/api/projects/{ProjectId}/contents");
-        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
         using JsonDocument json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         JsonElement cards = json.RootElement.GetProperty("cards");
         Assert.AreEqual(2, cards.GetArrayLength());
@@ -51,6 +52,45 @@ public sealed class BoardRoutingTests
         Assert.AreEqual("Creator One", assignee.GetProperty("displayName").GetString());
         Assert.AreEqual(1, host.Repository.LibraryReads);
         Assert.AreEqual(0, host.Repository.BoardReads);
+    }
+
+    [TestMethod]
+    public async Task ContentLibrary_CombinesAllFiltersAndSortsFromProjectData()
+    {
+        await using Host host = await StartAsync();
+        const string query = "title=active&platform=youtube&status=Script&creatorId=8&priority=Medium" +
+            "&hasDeadline=true&deadlineFrom=2026-11-01&deadlineTo=2026-11-30&tag=weekly&sortBy=title&sortDescending=false";
+
+        using HttpResponseMessage response = await host.Client.GetAsync($"/api/projects/{ProjectId}/contents?{query}");
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        using JsonDocument json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        JsonElement cards = json.RootElement.GetProperty("cards");
+        Assert.AreEqual(1, cards.GetArrayLength());
+        Assert.AreEqual(900, cards[0].GetProperty("contentId").GetInt64());
+        Assert.AreEqual(1, host.Repository.LibraryReads);
+    }
+
+    [TestMethod]
+    public async Task ContentLibrary_RejectsInvalidSortWithoutReadingContent()
+    {
+        await using Host host = await StartAsync();
+
+        using HttpResponseMessage response = await host.Client.GetAsync($"/api/projects/{ProjectId}/contents?sortBy=sql");
+
+        Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.AreEqual(0, host.Repository.LibraryReads);
+    }
+
+    [TestMethod]
+    public async Task ContentLibrary_RejectsReversedDeadlineRange()
+    {
+        await using Host host = await StartAsync();
+
+        using HttpResponseMessage response = await host.Client.GetAsync($"/api/projects/{ProjectId}/contents?deadlineFrom=2026-11-30&deadlineTo=2026-11-01");
+
+        Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.AreEqual(0, host.Repository.LibraryReads);
     }
 
     [TestMethod]
@@ -78,10 +118,12 @@ public sealed class BoardRoutingTests
     {
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
+        builder.Logging.ClearProviders();
         var repository = new BoardRepositoryFake();
         var tasks = new MemberRolesFake();
         if (member) tasks.Roles[(ProjectId, ActorId)] = ProjectRole.Owner;
         tasks.BoardAssignees.Add(new BoardAssignee(901, 7, "Creator One", AssignmentStatus.InProgress, 45, null));
+        tasks.BoardAssignees.Add(new BoardAssignee(900, 8, "Creator Two", AssignmentStatus.InProgress, 60, new DateOnly(2026, 11, 15)));
         builder.Services.AddSingleton<IBoardCardRepository>(repository);
         builder.Services.AddSingleton<ITaskRepository>(tasks);
         builder.Services.AddScoped(_ => new CurrentAuthenticatedUser
@@ -113,7 +155,7 @@ public sealed class BoardRoutingTests
 
     private sealed class BoardRepositoryFake : IBoardCardRepository
     {
-        private static readonly BoardCard Active = new(900, ProjectId, "CNT-900", "Active script", "description", "Script", "Medium", null, null, ["YouTube"], ["weekly"], false);
+        private static readonly BoardCard Active = new(900, ProjectId, "CNT-900", "Active script", "description", "Script", "Medium", new DateOnly(2026, 11, 15), null, ["YouTube"], ["weekly"], false);
         private static readonly BoardCard Archived = new(901, ProjectId, "CNT-901", "Archived video", "description", "Archived", "Low", null, null, ["TikTok"], [], false);
 
         public int BoardReads { get; private set; }

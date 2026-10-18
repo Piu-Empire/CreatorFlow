@@ -13,4 +13,5 @@ public sealed record BoardCard(
     DateTime? PlannedPublishAt,
     IReadOnlyList<string> Platforms,
     IReadOnlyList<string> Tags,
-    bool HasPendingReview);
+    bool HasPendingReview,
+    string Sprint = CreatorFlow.Contracts.ContentDetail.SprintCatalog.DefaultSprint);

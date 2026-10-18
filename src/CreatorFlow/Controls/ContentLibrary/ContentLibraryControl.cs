@@ -1,4 +1,5 @@
 using System.Drawing.Drawing2D;
+using CreatorFlow.Contracts.Board;
 using CreatorFlow.Models;
 using CreatorFlow.Models.Enums;
 using CreatorFlow.Theme;
@@ -8,14 +9,38 @@ namespace CreatorFlow.Controls.ContentLibrary;
 /// <summary>Project-wide Content library with real status, platform, assignee and detail navigation.</summary>
 public sealed partial class ContentLibraryControl : UserControl
 {
-    private const string AllStatuses = "Tất cả trạng thái";
-    private const string AllPlatforms = "Tất cả nền tảng";
+    private const string AllStatuses = "Mọi trạng thái";
+    private const string AllPlatforms = "Mọi nền tảng";
 
     private List<ContentBoardCard> contents = [];
+    private IReadOnlyList<ContentBoardCard>? serverFilteredContents;
     private string? loadError;
     private bool loading = true;
+    private bool updatingFilters;
+    private readonly ComboBox creatorFilter = CreateFilterCombo("creatorFilter", "Lọc theo Creator được giao");
+    private readonly ComboBox priorityFilter = CreateFilterCombo("priorityFilter", "Lọc theo độ ưu tiên");
+    private readonly ComboBox deadlineModeFilter = CreateFilterCombo("deadlineModeFilter", "Lọc theo deadline");
+    private readonly DateTimePicker deadlineFromFilter = CreateDateFilter("deadlineFromFilter", "Deadline từ ngày");
+    private readonly DateTimePicker deadlineToFilter = CreateDateFilter("deadlineToFilter", "Deadline đến ngày");
+    private readonly ComboBox tagFilter = CreateFilterCombo("tagFilter", "Lọc theo tag");
+    private readonly ComboBox sortFilter = CreateFilterCombo("sortFilter", "Sắp xếp theo trường");
+    private readonly Button sortDirection = new()
+    {
+        Name = "sortDirection",
+        Text = "Tăng dần ↑",
+        AccessibleName = "Đổi thứ tự sắp xếp",
+        Dock = DockStyle.Fill,
+        FlatStyle = FlatStyle.Flat,
+        BackColor = Color.White,
+        ForeColor = Color.FromArgb(42, 57, 81),
+        Font = UITheme.FontLabel,
+        Margin = Padding.Empty,
+        Cursor = Cursors.Hand,
+    };
+    private readonly System.Windows.Forms.Timer queryDebounceTimer;
 
     public event Action<long>? OpenContentRequested;
+    public event Action<ContentLibraryQuery>? QueryRequested;
 
     public int TotalContentCount => contents.Count;
 
@@ -26,13 +51,155 @@ public sealed partial class ContentLibraryControl : UserControl
         Dock = DockStyle.Fill;
         Font = UITheme.FontBody;
         projectNameLabel.Text = projectName;
+        ConfigureFilterToolbar();
         ApplyTheme();
 
-        statusFilter.Items.Add(AllStatuses);
-        foreach (ContentStatus status in Enum.GetValues<ContentStatus>())
-            statusFilter.Items.Add(StatusLabel(status));
-        statusFilter.SelectedIndex = 0;
+        components ??= new System.ComponentModel.Container();
+        queryDebounceTimer = new System.Windows.Forms.Timer(components) { Interval = 300 };
+        queryDebounceTimer.Tick += (_, _) =>
+        {
+            queryDebounceTimer.Stop();
+            QueryRequested?.Invoke(BuildQuery());
+        };
+        foreach (ComboBox filter in new[] { creatorFilter, priorityFilter, deadlineModeFilter, tagFilter, sortFilter })
+        {
+            filter.SelectedIndexChanged += Filter_Changed;
+            filter.DrawItem += Filter_DrawItem;
+        }
+        deadlineFromFilter.ValueChanged += Filter_Changed;
+        deadlineToFilter.ValueChanged += Filter_Changed;
+        foreach (DateTimePicker picker in new[] { deadlineFromFilter, deadlineToFilter })
+        {
+            picker.CloseUp += Filter_Changed;
+            picker.MouseUp += Filter_Changed;
+            picker.KeyUp += Filter_Changed;
+        }
+        sortDirection.Click += (_, _) =>
+        {
+            sortDirection.Text = sortDirection.Text.StartsWith("Tăng", StringComparison.Ordinal) ? "Giảm dần ↓" : "Tăng dần ↑";
+            Filter_Changed(this, EventArgs.Empty);
+        };
+        SetFilterDefaults();
         SetLoading();
+    }
+
+    private void ConfigureFilterToolbar()
+    {
+        filters.SuspendLayout();
+        filters.Controls.Clear();
+        filters.ColumnStyles.Clear();
+        filters.RowStyles.Clear();
+        filters.ColumnCount = 1;
+        filters.RowCount = 2;
+        filters.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        filters.RowStyles.Add(new RowStyle(SizeType.Percent, 50F));
+        filters.RowStyles.Add(new RowStyle(SizeType.Percent, 50F));
+        filters.Padding = Padding.Empty;
+
+        var primary = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 1, Margin = Padding.Empty, Padding = Padding.Empty, BackColor = Color.White };
+        primary.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        primary.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 146F));
+        primary.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 154F));
+        primary.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 68F));
+        primary.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+        searchSurface.Margin = new Padding(1, 1, 8, 1);
+        statusSurface.Margin = new Padding(2, 1, 2, 1);
+        platformSurface.Margin = new Padding(2, 1, 2, 1);
+        countSurface.Margin = new Padding(2, 1, 0, 1);
+        primary.Controls.Add(searchSurface, 0, 0);
+        primary.Controls.Add(statusSurface, 1, 0);
+        primary.Controls.Add(platformSurface, 2, 0);
+        primary.Controls.Add(countSurface, 3, 0);
+
+        var secondary = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 8, RowCount = 1, Margin = Padding.Empty, Padding = Padding.Empty, BackColor = Color.White };
+        float[] widths = [16F, 12F, 14F, 12F, 12F, 12F, 15F, 7F];
+        foreach (float width in widths) secondary.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, width));
+        secondary.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+        AddFilterSurface(secondary, creatorFilter, "Creator", 0);
+        AddFilterSurface(secondary, priorityFilter, "Ưu tiên", 1);
+        AddFilterSurface(secondary, deadlineModeFilter, "Deadline", 2);
+        AddFilterSurface(secondary, deadlineFromFilter, "Từ ngày", 3);
+        AddFilterSurface(secondary, deadlineToFilter, "Đến ngày", 4);
+        AddFilterSurface(secondary, tagFilter, "Tag", 5);
+        AddFilterSurface(secondary, sortFilter, "Sắp xếp", 6);
+        AddFilterSurface(secondary, sortDirection, "Thứ tự", 7);
+
+        filters.Controls.Add(primary, 0, 0);
+        filters.Controls.Add(secondary, 0, 1);
+        if (layout.RowStyles.Count > 1) layout.RowStyles[1].Height = 96F;
+        toolbar.Padding = new Padding(10, 7, 10, 7);
+        toolbar.Margin = new Padding(0, 1, 0, 6);
+        search.PlaceholderText = "Tìm theo tiêu đề hoặc mã Content";
+        filters.ResumeLayout(true);
+    }
+
+    private static void AddFilterSurface(TableLayoutPanel parent, Control child, string accessibleName, int column)
+    {
+        var surface = new RoundedSurfacePanel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = Color.White,
+            BorderColor = Color.FromArgb(231, 236, 245),
+            Radius = 9,
+            Padding = new Padding(child is DateTimePicker ? 1 : 4, 2, child is DateTimePicker ? 1 : 3, 2),
+            Margin = new Padding(2, 1, 2, 1),
+            AccessibleName = accessibleName,
+        };
+        child.Dock = DockStyle.Fill;
+        child.Margin = Padding.Empty;
+        surface.Controls.Add(child);
+        parent.Controls.Add(surface, column, 0);
+    }
+
+    private static ComboBox CreateFilterCombo(string name, string accessibleName) => new()
+    {
+        Name = name,
+        AccessibleName = accessibleName,
+        BackColor = Color.White,
+        ForeColor = Color.FromArgb(42, 57, 81),
+        Dock = DockStyle.Fill,
+        DropDownStyle = ComboBoxStyle.DropDownList,
+        FlatStyle = FlatStyle.Flat,
+        IntegralHeight = false,
+        DrawMode = DrawMode.OwnerDrawFixed,
+        ItemHeight = 24,
+        Font = UITheme.FontLabel,
+        Margin = Padding.Empty,
+    };
+
+    private static DateTimePicker CreateDateFilter(string name, string accessibleName) => new()
+    {
+        Name = name,
+        AccessibleName = accessibleName,
+        Format = DateTimePickerFormat.Custom,
+        CustomFormat = "dd/MM/yyyy",
+        ShowCheckBox = true,
+        Checked = false,
+        Value = DateTime.Today,
+        Dock = DockStyle.Fill,
+        Font = UITheme.FontLabel,
+        Margin = Padding.Empty,
+    };
+
+    private void SetFilterDefaults()
+    {
+        updatingFilters = true;
+        try
+        {
+            Populate(deadlineModeFilter, new object[] { new DeadlineFilterOption(null, "Mọi deadline"), new DeadlineFilterOption(true, "Có deadline"), new DeadlineFilterOption(false, "Chưa có") });
+            Populate(sortFilter, new object[]
+            {
+                new TextFilterOption(null, "Mới thêm"),
+                new TextFilterOption("title", "Tiêu đề"),
+                new TextFilterOption("platform", "Nền tảng"),
+                new TextFilterOption("status", "Trạng thái"),
+                new TextFilterOption("creator", "Creator"),
+                new TextFilterOption("priority", "Ưu tiên"),
+                new TextFilterOption("deadline", "Deadline"),
+                new TextFilterOption("tag", "Tag"),
+            });
+        }
+        finally { updatingFilters = false; }
     }
 
     private void ApplyTheme()
@@ -44,6 +211,8 @@ public sealed partial class ContentLibraryControl : UserControl
         search.Font = UITheme.FontBody;
         search.ForeColor = UITheme.Ink;
         statusFilter.Font = platformFilter.Font = UITheme.FontLabel;
+        foreach (ComboBox filter in new[] { creatorFilter, priorityFilter, deadlineModeFilter, tagFilter, sortFilter })
+            filter.Font = UITheme.FontLabel;
         countLabel.Font = UITheme.FontLabelBold;
         foreach (Label header in new[] { headerContent, headerStatus, headerPlatform, headerAssignee, headerAction })
             header.Font = UITheme.FontLabel;
@@ -53,7 +222,14 @@ public sealed partial class ContentLibraryControl : UserControl
         brandLabel.Font = UITheme.FontLabel;
     }
 
-    private void Filter_Changed(object? sender, EventArgs e) => RenderRows();
+    private void Filter_Changed(object? sender, EventArgs e)
+    {
+        if (updatingFilters) return;
+        serverFilteredContents = null;
+        RenderRows();
+        queryDebounceTimer.Stop();
+        queryDebounceTimer.Start();
+    }
 
     private void Filter_DrawItem(object? sender, DrawItemEventArgs e)
     {
@@ -70,6 +246,7 @@ public sealed partial class ContentLibraryControl : UserControl
         loading = true;
         loadError = null;
         contents = [];
+        serverFilteredContents = null;
         RenderRows();
     }
 
@@ -78,6 +255,7 @@ public sealed partial class ContentLibraryControl : UserControl
         loading = false;
         loadError = string.IsNullOrWhiteSpace(message) ? "Không tải được Content của Project." : message;
         contents = [];
+        serverFilteredContents = null;
         RenderRows();
     }
 
@@ -90,16 +268,67 @@ public sealed partial class ContentLibraryControl : UserControl
             .Where(card => card is not null)
             .OrderByDescending(card => card.ContentId)
             .ToList();
-
-        platformFilter.BeginUpdate();
-        platformFilter.Items.Clear();
-        platformFilter.Items.Add(AllPlatforms);
-        foreach (string platform in contents.SelectMany(card => card.Platforms).Distinct(StringComparer.OrdinalIgnoreCase)
-                     .OrderBy(name => name, StringComparer.OrdinalIgnoreCase))
-            platformFilter.Items.Add(platform);
-        platformFilter.SelectedIndex = 0;
-        platformFilter.EndUpdate();
+        serverFilteredContents = null;
+        PopulateFilterOptions();
         RenderRows();
+    }
+
+    /// <summary>Updates the server-filtered rows and keeps options from the full Project response.</summary>
+    public void SetFilteredContents(IEnumerable<ContentBoardCard> cards)
+    {
+        ArgumentNullException.ThrowIfNull(cards);
+        serverFilteredContents = cards.ToList();
+        loading = false;
+        loadError = null;
+        RenderRows();
+    }
+
+    private void PopulateFilterOptions()
+    {
+        updatingFilters = true;
+        try
+        {
+            Populate(statusFilter, new object[] { new TextFilterOption(null, AllStatuses) }
+                .Concat(contents.Select(card => card.Status).Distinct()
+                    .OrderBy(StatusLabel, StringComparer.CurrentCultureIgnoreCase)
+                    .Select(status => (object)new TextFilterOption(status.ToString(), StatusLabel(status)))));
+            Populate(platformFilter, new object[] { new TextFilterOption(null, AllPlatforms) }
+                .Concat(contents.SelectMany(card => card.Platforms)
+                    .Where(value => !string.IsNullOrWhiteSpace(value)).Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
+                    .Select(value => (object)new TextFilterOption(value, value))));
+            Populate(priorityFilter, new object[] { new TextFilterOption(null, "Mọi mức ưu tiên") }
+                .Concat(contents.Select(card => card.Priority).Distinct().OrderBy(value => value)
+                    .Select(value => (object)new TextFilterOption(value.ToString(), PriorityLabel(value)))));
+            Populate(creatorFilter, new object[] { new CreatorFilterOption(null, "Mọi Creator") }
+                .Concat(contents.SelectMany(card => card.Assignees)
+                    .Where(creator => creator.UserId > 0 && !string.IsNullOrWhiteSpace(creator.Name))
+                    .GroupBy(creator => creator.UserId).Select(group => group.First())
+                    .OrderBy(creator => creator.Name, StringComparer.OrdinalIgnoreCase)
+                    .Select(creator => (object)new CreatorFilterOption(creator.UserId, creator.Name))));
+            Populate(tagFilter, new object[] { new TextFilterOption(null, "Mọi tag") }
+                .Concat(contents.SelectMany(card => card.Tags)
+                    .Where(value => !string.IsNullOrWhiteSpace(value)).Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
+                    .Select(value => (object)new TextFilterOption(value, value))));
+            SetSelectedIndexZero(statusFilter, platformFilter, creatorFilter, priorityFilter, deadlineModeFilter, tagFilter, sortFilter);
+        }
+        finally { updatingFilters = false; }
+    }
+
+    private static void Populate(ComboBox combo, IEnumerable<object> values)
+    {
+        combo.BeginUpdate();
+        combo.Items.Clear();
+        foreach (object value in values) combo.Items.Add(value);
+        if (combo.Items.Count > 0) combo.SelectedIndex = 0;
+        combo.EndUpdate();
+    }
+
+    private static void SetSelectedIndexZero(params ComboBox[] combos)
+    {
+        foreach (ComboBox combo in combos)
+            if (combo.Items.Count > 0) combo.SelectedIndex = 0;
     }
 
     private void RenderRows()
@@ -124,19 +353,29 @@ public sealed partial class ContentLibraryControl : UserControl
             return;
         }
 
-        string query = search.Text.Trim();
-        string selectedStatus = statusFilter.SelectedItem?.ToString() ?? AllStatuses;
-        string selectedPlatform = platformFilter.SelectedItem?.ToString() ?? AllPlatforms;
-        IEnumerable<ContentBoardCard> filtered = contents;
-        if (query.Length > 0)
-            filtered = filtered.Where(card => card.Code.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                                               card.Title.Contains(query, StringComparison.OrdinalIgnoreCase));
-        if (selectedStatus != AllStatuses)
-            filtered = filtered.Where(card => StatusLabel(card.Status).Equals(selectedStatus, StringComparison.Ordinal));
-        if (selectedPlatform != AllPlatforms)
-            filtered = filtered.Where(card => card.Platforms.Any(platform => platform.Equals(selectedPlatform, StringComparison.OrdinalIgnoreCase)));
+        ContentLibraryQuery query = BuildQuery();
+        IEnumerable<ContentBoardCard> filtered = serverFilteredContents ?? contents;
+        if (!string.IsNullOrWhiteSpace(query.Title))
+            filtered = filtered.Where(card => card.Code.Contains(query.Title, StringComparison.OrdinalIgnoreCase) ||
+                                               card.Title.Contains(query.Title, StringComparison.OrdinalIgnoreCase));
+        if (!string.IsNullOrWhiteSpace(query.Status))
+            filtered = filtered.Where(card => card.Status.ToString().Equals(query.Status, StringComparison.OrdinalIgnoreCase));
+        if (!string.IsNullOrWhiteSpace(query.Platform))
+            filtered = filtered.Where(card => card.Platforms.Any(value => value.Equals(query.Platform, StringComparison.OrdinalIgnoreCase)));
+        if (query.CreatorId.HasValue)
+            filtered = filtered.Where(card => card.Assignees.Any(value => value.UserId == query.CreatorId.Value));
+        if (!string.IsNullOrWhiteSpace(query.Priority))
+            filtered = filtered.Where(card => card.Priority.ToString().Equals(query.Priority, StringComparison.OrdinalIgnoreCase));
+        if (query.HasDeadline.HasValue)
+            filtered = filtered.Where(card => card.Deadline.HasValue == query.HasDeadline.Value);
+        if (query.DeadlineFrom.HasValue)
+            filtered = filtered.Where(card => card.Deadline.HasValue && DateOnly.FromDateTime(card.Deadline.Value.Date) >= query.DeadlineFrom.Value);
+        if (query.DeadlineTo.HasValue)
+            filtered = filtered.Where(card => card.Deadline.HasValue && DateOnly.FromDateTime(card.Deadline.Value.Date) <= query.DeadlineTo.Value);
+        if (!string.IsNullOrWhiteSpace(query.Tag))
+            filtered = filtered.Where(card => card.Tags.Any(value => value.Equals(query.Tag, StringComparison.OrdinalIgnoreCase)));
 
-        List<ContentBoardCard> visible = filtered.ToList();
+        List<ContentBoardCard> visible = SortCards(filtered, query).ToList();
         countLabel.Text = $"{visible.Count} / {contents.Count}";
         summaryLabel.Text = visible.Count == contents.Count
             ? $"Hiển thị {visible.Count} mục dữ liệu"
@@ -160,6 +399,102 @@ public sealed partial class ContentLibraryControl : UserControl
         }
         rows.ResumeLayout(true);
         rows.Visible = true;
+    }
+
+    private ContentLibraryQuery BuildQuery()
+    {
+        var status = statusFilter.SelectedItem as TextFilterOption;
+        var platform = platformFilter.SelectedItem as TextFilterOption;
+        var creator = creatorFilter.SelectedItem as CreatorFilterOption;
+        var priority = priorityFilter.SelectedItem as TextFilterOption;
+        var deadlineMode = deadlineModeFilter.SelectedItem as DeadlineFilterOption;
+        var tag = tagFilter.SelectedItem as TextFilterOption;
+        var sort = sortFilter.SelectedItem as TextFilterOption;
+        bool? hasDeadline = deadlineMode?.Value;
+        return new ContentLibraryQuery
+        {
+            Title = string.IsNullOrWhiteSpace(search.Text) ? null : search.Text.Trim(),
+            Platform = platform?.Value,
+            Status = status?.Value,
+            CreatorId = creator?.UserId,
+            Priority = priority?.Value,
+            HasDeadline = hasDeadline,
+            DeadlineFrom = hasDeadline == false || !deadlineFromFilter.Checked ? null : DateOnly.FromDateTime(deadlineFromFilter.Value.Date),
+            DeadlineTo = hasDeadline == false || !deadlineToFilter.Checked ? null : DateOnly.FromDateTime(deadlineToFilter.Value.Date),
+            Tag = tag?.Value,
+            SortBy = sort?.Value,
+            SortDescending = sortDirection.Text.StartsWith("Giảm", StringComparison.Ordinal),
+        };
+    }
+
+    private static IEnumerable<ContentBoardCard> SortCards(IEnumerable<ContentBoardCard> cards, ContentLibraryQuery query)
+    {
+        if (string.IsNullOrWhiteSpace(query.SortBy)) return cards.OrderByDescending(card => card.ContentId);
+        string sort = query.SortBy.Trim().ToLowerInvariant();
+        if (sort == "deadline")
+        {
+            IOrderedEnumerable<ContentBoardCard> dated = cards.OrderBy(card => !card.Deadline.HasValue);
+            dated = query.SortDescending == true ? dated.ThenByDescending(card => card.Deadline) : dated.ThenBy(card => card.Deadline);
+            return dated.ThenBy(card => card.ContentId);
+        }
+        if (sort == "priority")
+        {
+            Func<ContentBoardCard, int> rank = card => card.Priority switch
+            {
+                Priority.Low => 0,
+                Priority.Medium => 1,
+                Priority.High => 2,
+                Priority.Urgent => 3,
+                _ => -1,
+            };
+            IOrderedEnumerable<ContentBoardCard> byPriority = query.SortDescending == true
+                ? cards.OrderByDescending(rank)
+                : cards.OrderBy(rank);
+            return byPriority.ThenBy(card => card.ContentId);
+        }
+
+        Func<ContentBoardCard, string> key = sort switch
+        {
+            "title" => card => card.Title,
+            "platform" => card => FirstSorted(card.Platforms),
+            "status" => card => StatusLabel(card.Status),
+            "creator" => card => FirstSorted(card.Assignees.Select(value => value.Name)),
+            "tag" => card => FirstSorted(card.Tags),
+            _ => card => card.Title,
+        };
+        IOrderedEnumerable<ContentBoardCard> ordered = query.SortDescending == true
+            ? cards.OrderByDescending(key, StringComparer.OrdinalIgnoreCase)
+            : cards.OrderBy(key, StringComparer.OrdinalIgnoreCase);
+        return ordered.ThenBy(card => card.ContentId);
+    }
+
+    private static string FirstSorted(IEnumerable<string> values) => values
+        .Where(value => !string.IsNullOrWhiteSpace(value))
+        .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
+        .FirstOrDefault() ?? string.Empty;
+
+    private static string PriorityLabel(Priority priority) => priority switch
+    {
+        Priority.Urgent => "Khẩn cấp",
+        Priority.High => "Cao",
+        Priority.Medium => "Trung bình",
+        Priority.Low => "Thấp",
+        _ => priority.ToString(),
+    };
+
+    private sealed record TextFilterOption(string? Value, string Display)
+    {
+        public override string ToString() => Display;
+    }
+
+    private sealed record CreatorFilterOption(long? UserId, string Display)
+    {
+        public override string ToString() => Display;
+    }
+
+    private sealed record DeadlineFilterOption(bool? Value, string Display)
+    {
+        public override string ToString() => Display;
     }
 
     private void ShowState(string text)

@@ -28,11 +28,9 @@ static class Program
     [STAThread]
     static void Main(string[] args)
     {
-        // To customize application configuration such as set high DPI settings or default font,
-        // see https://aka.ms/applicationconfiguration.
-        // Toàn bộ UI vẽ tay theo pixel cố định (thiết kế ở 100%). Chạy DPI-unaware để layout không bị scale kép
-        // khi Windows để 125%/150%. Phải gọi TRƯỚC ApplicationConfiguration.Initialize().
-        Application.SetHighDpiMode(HighDpiMode.DpiUnaware);
+        // Render directly at the monitor's DPI so Windows does not bitmap-scale the whole UI.
+        // Set this before ApplicationConfiguration.Initialize().
+        Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
         ApplicationConfiguration.Initialize();
 
         IUnitOfWork uow;

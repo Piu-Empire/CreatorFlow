@@ -67,9 +67,9 @@ Provider dùng liveness. Operator readiness sau deploy/nghiệm thu, không poll
 
 ## Schema/migration procedure
 
-Theo [schema manifest](../deploy/database/schema-manifest.md): 01 là schema baseline; 04/05/06... là migration. 02 là optional DEV seed, không migration; có DEV_HASH_* nên không tự apply cho Auth nghiệm thu. 03 và verify_auth_schema.sql là verification, không migration. Negative write samples comment trong 03 không chạy ở đây.
+Theo [schema manifest](../deploy/database/schema-manifest.md): 01 là schema baseline; 04/05/06... là migration; 07 là migration bắt buộc cho Idea Bank API (`ideas.note`, `idea_tags`); 08 gộp cập nhật catalog platform, cột `contents.sprint` và xác minh kết quả trong cùng file. 02 là optional DEV seed, không migration và giữ nguyên; có DEV_HASH_* nên không tự apply cho Auth nghiệm thu. 03 và verify_auth_schema.sql là verification, không migration. Negative write samples comment trong 03 không chạy ở đây.
 
-DB mới/rỗng được duyệt: 01 → 04 → 05 → 06 → migration mới trong release theo dependency đã review. DB existing: inventory catalog/applied-script record, chỉ apply phần thiếu đúng precondition. Không chạy lại CREATE scripts, không IF NOT EXISTS che drift. 05 invalidates OTP v1; 06 có security/token-version trigger, phải review tác động trước release.
+DB mới/rỗng được duyệt: 01 → 04 → 05 → 06 → 07 → 08. DB existing: inventory catalog/applied-script record, chỉ apply phần thiếu đúng precondition. Không chạy lại CREATE scripts, không IF NOT EXISTS che drift. 05 invalidates OTP v1; 06 có security/token-version trigger, phải review tác động trước release.
 
 Release cần schema mới: quota/target/quyền → backup/checksum → inventory/scripts SHA256 → apply theo thứ tự → verify → deploy SHA tương ứng → smoke → record. Maintenance window nếu không backward-compatible. Script đã BEGIN/COMMIT, không bọc transaction chồng. Không migrate trong image build/startup/health/test.
 
@@ -82,6 +82,8 @@ psql --no-password --set=ON_ERROR_STOP=1 --file=database/01_schema.sql
 psql --no-password --set=ON_ERROR_STOP=1 --file=database/04_password_reset_requests.sql
 psql --no-password --set=ON_ERROR_STOP=1 --file=database/05_auth_email_avatar.sql
 psql --no-password --set=ON_ERROR_STOP=1 --file=database/06_auth_token_version.sql
+psql --no-password --set=ON_ERROR_STOP=1 --file=database/07_idea_bank.sql
+psql --no-password --set=ON_ERROR_STOP=1 --file=database/08_platform_catalog_and_sprint.sql
 psql --no-password --set=ON_ERROR_STOP=1 --file=database/verify_auth_schema.sql
 ```
 

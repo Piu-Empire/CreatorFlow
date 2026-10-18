@@ -32,8 +32,8 @@ partial class CreateContentDialog
     private System.Windows.Forms.ComboBox _cboContentType;
     private System.Windows.Forms.Label _lblError;
     private System.Windows.Forms.Panel pnlDivider2;
-    private CreatorFlow.Controls.RoundedButton btnCancel;
-    private CreatorFlow.Controls.RoundedButton btnSubmit;
+    private CreatorFlow.Controls.ProjectActionButton btnCancel;
+    private CreatorFlow.Controls.ProjectActionButton btnSubmit;
 
     protected override void Dispose(bool disposing)
     {
@@ -71,8 +71,8 @@ partial class CreateContentDialog
         this._cboContentType = new System.Windows.Forms.ComboBox();
         this._lblError = new System.Windows.Forms.Label();
         this.pnlDivider2 = new System.Windows.Forms.Panel();
-        this.btnCancel = new CreatorFlow.Controls.RoundedButton();
-        this.btnSubmit = new CreatorFlow.Controls.RoundedButton();
+        this.btnCancel = new CreatorFlow.Controls.ProjectActionButton();
+        this.btnSubmit = new CreatorFlow.Controls.ProjectActionButton();
         this.SuspendLayout();
         // 
         // lblHeader
@@ -321,18 +321,20 @@ partial class CreateContentDialog
         this.btnCancel.Location = new System.Drawing.Point(232, 572);
         this.btnCancel.Name = "btnCancel";
         this.btnCancel.Size = new System.Drawing.Size(90, 36);
+        this.btnCancel.Style = RoundButtonStyle.Primary;
         this.btnCancel.TabIndex = 13;
         this.btnCancel.Text = "Huỷ";
-        this.btnCancel.UseVisualStyleBackColor = true;
+        this.btnCancel.UseVisualStyleBackColor = false;
         // 
         // btnSubmit
         // 
         this.btnSubmit.Location = new System.Drawing.Point(332, 572);
         this.btnSubmit.Name = "btnSubmit";
         this.btnSubmit.Size = new System.Drawing.Size(120, 36);
+        this.btnSubmit.Style = RoundButtonStyle.Primary;
         this.btnSubmit.TabIndex = 14;
         this.btnSubmit.Text = "Tạo nội dung";
-        this.btnSubmit.UseVisualStyleBackColor = true;
+        this.btnSubmit.UseVisualStyleBackColor = false;
         this.btnSubmit.Click += new System.EventHandler(this.btnSubmit_Click);
         // 
         // CreateContentDialog

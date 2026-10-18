@@ -33,7 +33,8 @@ public sealed class ApiContentDetailBackend(ApiClient api, UserSession session) 
             ApiTaskMapper.ToDateOnly(draft.Deadline),
             ApiTaskMapper.ToDateOnly(draft.PlannedPublishAt),
             draft.Platforms,
-            draft.AssigneeUserId);
+            draft.AssigneeUserId,
+            draft.Sprint);
         return ApiTaskCall.Run(() => api.CreateContentAsync(projectId, request, ApiTaskCall.BearerOf(session)), session).ContentId;
     }
 
@@ -67,7 +68,8 @@ public sealed class ApiContentDetailBackend(ApiClient api, UserSession session) 
             draft.Priority.ToString(),
             ApiTaskMapper.ToDateOnly(draft.Deadline),
             ApiTaskMapper.ToDateOnly(draft.PlannedPublishAt),
-            draft.Platforms);
+            draft.Platforms,
+            draft.Sprint);
         ApiTaskCall.Run(() => api.UpdateContentAsync(contentId, request, ApiTaskCall.BearerOf(session)), session);
     }
 

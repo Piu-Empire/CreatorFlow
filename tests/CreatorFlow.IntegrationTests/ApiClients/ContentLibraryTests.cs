@@ -1,4 +1,5 @@
 using CreatorFlow.Controls.ContentLibrary;
+using CreatorFlow.Contracts.Board;
 using CreatorFlow.Forms.Board;
 using CreatorFlow.Models;
 using CreatorFlow.Models.Enums;
@@ -67,15 +68,94 @@ public sealed class ContentLibraryTests
             Assert.AreEqual("CNT-901", ((ContentLibraryRowControl)rows.Controls[0]).Content.Code);
 
             search.Clear();
-            status.SelectedIndex = Array.IndexOf(Enum.GetValues<ContentStatus>(), ContentStatus.Archived) + 1;
+            status.SelectedItem = FindItem(status, "Đã lưu trữ");
             Assert.AreEqual(1, rows.Controls.Count);
             Assert.AreEqual(ContentStatus.Archived, ((ContentLibraryRowControl)rows.Controls[0]).Content.Status);
 
             status.SelectedIndex = 0;
             ComboBox platform = Descendants(library).OfType<ComboBox>().Single(control => control.Name == "platformFilter");
-            platform.SelectedIndex = platform.Items.IndexOf("TikTok");
+            platform.SelectedItem = FindItem(platform, "TikTok");
             Assert.AreEqual(1, rows.Controls.Count);
             Assert.AreEqual("CNT-901", ((ContentLibraryRowControl)rows.Controls[0]).Content.Code);
+        });
+    }
+
+    [TestMethod]
+    public void Library_CombinesLiveProjectFiltersAndDeadlineRange()
+    {
+        RunSta(() =>
+        {
+            using var library = new ContentLibraryControl("Project Alpha");
+            library.SetContents(
+            [
+                new ContentBoardCard
+                {
+                    ContentId = 901, Code = "CNT-901", Title = "Weekly education video", Status = ContentStatus.Ready,
+                    Priority = Priority.High, Platforms = ["YouTube"], Tags = ["education"], Deadline = new DateTime(2026, 11, 10),
+                    Assignees = [new CardAssignee(7, "Creator One", AssignmentStatus.InProgress, 45, null)],
+                },
+                new ContentBoardCard
+                {
+                    ContentId = 902, Code = "CNT-902", Title = "Weekly education draft", Status = ContentStatus.Ready,
+                    Priority = Priority.High, Platforms = ["YouTube"], Tags = ["education"], Deadline = new DateTime(2026, 11, 10),
+                    Assignees = [new CardAssignee(8, "Creator Two", AssignmentStatus.InProgress, 10, null)],
+                },
+                new ContentBoardCard
+                {
+                    ContentId = 903, Code = "CNT-903", Title = "Weekly education video", Status = ContentStatus.Script,
+                    Priority = Priority.High, Platforms = ["TikTok"], Tags = ["education"], Deadline = new DateTime(2026, 11, 10),
+                    Assignees = [new CardAssignee(7, "Creator One", AssignmentStatus.InProgress, 45, null)],
+                },
+            ]);
+
+            ComboBox status = Combo(library, "statusFilter");
+            ComboBox platform = Combo(library, "platformFilter");
+            ComboBox creator = Combo(library, "creatorFilter");
+            ComboBox priority = Combo(library, "priorityFilter");
+            ComboBox deadlineMode = Combo(library, "deadlineModeFilter");
+            ComboBox tag = Combo(library, "tagFilter");
+            TextBox search = Descendants(library).OfType<TextBox>().Single(control => control.Name == "search");
+            DateTimePicker from = Descendants(library).OfType<DateTimePicker>().Single(control => control.Name == "deadlineFromFilter");
+            DateTimePicker to = Descendants(library).OfType<DateTimePicker>().Single(control => control.Name == "deadlineToFilter");
+
+            search.Text = "weekly education video";
+            status.SelectedItem = FindItem(status, "Sẵn sàng");
+            platform.SelectedItem = FindItem(platform, "YouTube");
+            creator.SelectedItem = FindItem(creator, "Creator One");
+            priority.SelectedItem = FindItem(priority, "Cao");
+            deadlineMode.SelectedItem = FindItem(deadlineMode, "Có deadline");
+            from.Checked = true;
+            from.Value = new DateTime(2026, 11, 1);
+            to.Checked = true;
+            to.Value = new DateTime(2026, 11, 30);
+            tag.SelectedItem = FindItem(tag, "education");
+
+            TableLayoutPanel rows = Descendants(library).OfType<TableLayoutPanel>().Single(control => control.Name == "rows");
+            Assert.AreEqual(1, rows.Controls.Count);
+            Assert.AreEqual(901L, ((ContentLibraryRowControl)rows.Controls[0]).Content.ContentId);
+            CollectionAssert.Contains(tag.Items.Cast<object>().Select(item => item.ToString()).ToArray(), "education");
+        });
+    }
+
+    [TestMethod]
+    public void Library_SortsByTitleInBothDirections()
+    {
+        RunSta(() =>
+        {
+            using var library = new ContentLibraryControl("Project Alpha");
+            library.SetContents(
+            [
+                new ContentBoardCard { ContentId = 3, Code = "CNT-003", Title = "Charlie" },
+                new ContentBoardCard { ContentId = 1, Code = "CNT-001", Title = "Alpha" },
+                new ContentBoardCard { ContentId = 2, Code = "CNT-002", Title = "Bravo" },
+            ]);
+            ComboBox sort = Combo(library, "sortFilter");
+            sort.SelectedItem = FindItem(sort, "Tiêu đề");
+            TableLayoutPanel rows = Descendants(library).OfType<TableLayoutPanel>().Single(control => control.Name == "rows");
+
+            CollectionAssert.AreEqual(new[] { "Alpha", "Bravo", "Charlie" }, rows.Controls.Cast<ContentLibraryRowControl>().Select(row => row.Content.Title).ToArray());
+            Descendants(library).OfType<Button>().Single(button => button.Name == "sortDirection").PerformClick();
+            CollectionAssert.AreEqual(new[] { "Charlie", "Bravo", "Alpha" }, rows.Controls.Cast<ContentLibraryRowControl>().Select(row => row.Content.Title).ToArray());
         });
     }
 
@@ -107,6 +187,12 @@ public sealed class ContentLibraryTests
             foreach (Control descendant in Descendants(child)) yield return descendant;
         }
     }
+
+    private static ComboBox Combo(Control parent, string name) =>
+        Descendants(parent).OfType<ComboBox>().Single(control => control.Name == name);
+
+    private static object FindItem(ComboBox combo, string display) =>
+        combo.Items.Cast<object>().Single(item => item.ToString() == display);
 
     private static void RunSta(Action action)
     {

@@ -47,8 +47,8 @@ public partial class ContentDetailPanel : UserControl
     private readonly Panel _pnlFooter;
     private readonly Label _lblFooterCode;
     private readonly Label _lblSaveHint;
-    private readonly RoundedButton _btnSave;
-    private readonly RoundedButton _btnDone;
+    private readonly ProjectActionButton _btnSave;
+    private readonly ProjectActionButton _btnDone;
 
     // Tab 1: Overview
     private readonly Panel _pnlTabOverview;
@@ -145,15 +145,15 @@ public partial class ContentDetailPanel : UserControl
             Size = new Size(150, 80),
             BackColor = UITheme.White,
         };
-        _btnDone = new RoundedButton
+        _btnDone = new ProjectActionButton
         {
             Text = "Done & Close",
-            Style = RoundButtonStyle.Secondary,
+            Style = RoundButtonStyle.Primary,
             Size = new Size(130, 44),
             Anchor = AnchorStyles.Top | AnchorStyles.Right,
         };
         _btnDone.Click += (_, _) => CloseRequested?.Invoke(this, EventArgs.Empty);
-        _btnSave = new RoundedButton
+        _btnSave = new ProjectActionButton
         {
             Text = "Lưu thay đổi",
             Style = RoundButtonStyle.Primary,
@@ -268,7 +268,7 @@ public partial class ContentDetailPanel : UserControl
         // 3. Sprint Allocation
         _cboSprintEdit = MakeFlatCombo();
         _cboSprintEdit.Items.AddRange(ContentService.AvailableSprints);
-        _cboSprintEdit.SelectedIndexChanged += (_, _) => MarkDirty();
+        _cboSprintEdit.SelectedIndexChanged += (_, _) => OnSprintSelectionChanged();
         _metaBoxes[3].Controls.Add(Pad(_cboSprintEdit, 12, 7));
 
         // 4. Target Week (Deadline)
@@ -497,6 +497,16 @@ public partial class ContentDetailPanel : UserControl
         _btnSave.Enabled = true;
         _lblSaveHint.Text = "Có thay đổi chưa lưu";
         _lblSaveHint.ForeColor = UITheme.Danger;
+    }
+
+    private void OnSprintSelectionChanged()
+    {
+        if (_isLoading || _current == null) return;
+
+        string sprint = _cboSprintEdit.SelectedItem as string ?? _current.Sprint;
+        _pnlHeader.SetData(_current.Code, SelectedPlatformNames(), sprint);
+        MarkDirty();
+        _lblSaveHint.Text = $"{sprint} đang chọn · Chưa lưu";
     }
 
     private void AddOverviewRow(Control ctl, int gapAfter)
@@ -864,6 +874,8 @@ public partial class ContentDetailPanel : UserControl
                 _detailBackend.Update(_current.ContentId, draft);
             else
                 _contentService.Update(_current.ContentId, draft, CurrentSession.CurrentUserId);
+            _current.Sprint = draft.Sprint;
+            _pnlHeader.SetData(_current.Code, draft.Platforms, draft.Sprint);
             _deadlineEdited = false;
             _isDirty = false;
             _btnSave.Enabled = false;
@@ -1029,7 +1041,7 @@ public partial class ContentDetailPanel : UserControl
         row.Controls.Add(grid);
 
         var bottom = new Panel { Dock = DockStyle.Top, Height = 44, BackColor = UITheme.White };
-        var btnSave = new RoundedButton
+        var btnSave = new ProjectActionButton
         {
             Text = "Lưu",
             Style = RoundButtonStyle.Primary,
@@ -1106,7 +1118,7 @@ public partial class ContentDetailPanel : UserControl
         var canReview = role == ProjectRole.Owner || role == ProjectRole.Manager;
 
         if (TaskRules.CanAssign(role) && _current.Status is not (ContentStatus.Published or ContentStatus.Archived))
-            AddActionButton("Giao việc cho Creator", RoundButtonStyle.Secondary, OnAssignClicked);
+            AddActionButton("Giao việc cho Creator", RoundButtonStyle.Primary, OnAssignClicked);
 
         switch (_current.Status)
         {
@@ -1139,7 +1151,7 @@ public partial class ContentDetailPanel : UserControl
 
     private void AddActionButton(string text, RoundButtonStyle style, EventHandler onClick)
     {
-        var button = new RoundedButton
+        var button = new ProjectActionButton
         {
             Text = text,
             Style = style,
