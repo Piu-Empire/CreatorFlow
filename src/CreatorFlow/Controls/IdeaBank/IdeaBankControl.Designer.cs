@@ -243,9 +243,7 @@ partial class IdeaBankControl
         lblSearchIcon.Dock = DockStyle.Fill;
         lblSearchIcon.Margin = Padding.Empty;
         lblSearchIcon.Name = "lblSearchIcon";
-        lblSearchIcon.Paint += (_, e) => UIIcons.Search(e.Graphics,
-            new Rectangle((lblSearchIcon.Width - 17) / 2, (lblSearchIcon.Height - 17) / 2, 17, 17),
-            Color.FromArgb(148, 163, 184));
+        lblSearchIcon.Paint += lblSearchIcon_Paint;
         //
         // txtSearch
         //
@@ -353,7 +351,7 @@ partial class IdeaBankControl
         listViewIdeas.DrawSubItem += listViewIdeas_DrawSubItem;
         listViewIdeas.SelectedIndexChanged += listViewIdeas_SelectedIndexChanged;
         listViewIdeas.DoubleClick += listViewIdeas_DoubleClick;
-        listViewIdeas.SizeChanged += (_, _) => ResizeIdeaColumns();
+        listViewIdeas.SizeChanged += listViewIdeas_SizeChanged;
         //
         // columns
         //
@@ -445,11 +443,7 @@ partial class IdeaBankControl
         footerPanel.Padding = new Padding(16, 0, 16, 0);
         footerPanel.Name = "footerPanel";
         footerPanel.TabIndex = 4;
-        footerPanel.Paint += (_, e) =>
-        {
-            using var pen = new Pen(Color.FromArgb(238, 240, 243));
-            e.Graphics.DrawLine(pen, 0, 0, footerPanel.Width, 0);
-        };
+        footerPanel.Paint += footerPanel_Paint;
         //
         // lblCount
         //

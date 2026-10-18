@@ -252,6 +252,19 @@ public partial class IdeaBankControl : UserControl
         if (btnEdit.Enabled) btnEdit_Click(sender, e);
     }
 
+    private void listViewIdeas_SizeChanged(object? sender, EventArgs e) => ResizeIdeaColumns();
+
+    private void lblSearchIcon_Paint(object? sender, PaintEventArgs e) =>
+        UIIcons.Search(e.Graphics,
+            new Rectangle((lblSearchIcon.Width - 17) / 2, (lblSearchIcon.Height - 17) / 2, 17, 17),
+            Color.FromArgb(148, 163, 184));
+
+    private void footerPanel_Paint(object? sender, PaintEventArgs e)
+    {
+        using var pen = new Pen(Color.FromArgb(238, 240, 243));
+        e.Graphics.DrawLine(pen, 0, 0, footerPanel.Width, 0);
+    }
+
     private void listViewIdeas_DrawColumnHeader(object? sender, DrawListViewColumnHeaderEventArgs e)
     {
         using var background = new SolidBrush(Color.FromArgb(248, 250, 253));
