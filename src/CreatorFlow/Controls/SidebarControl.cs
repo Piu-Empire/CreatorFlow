@@ -22,6 +22,7 @@ public class SidebarControl : UserControl
     public event EventHandler? AdminWorkspaceRequested;
     public event EventHandler? AdminReportsRequested;
     public event EventHandler? CalendarRequested;
+    public event EventHandler? AiAssistantRequested;
     public event EventHandler? ProjectSettingsRequested;
     public event EventHandler? InvitationsRequested;
     public event EventHandler? ProfileRequested;
@@ -219,13 +220,13 @@ public class SidebarControl : UserControl
         _items.Add(new NavItem { Title = "Reports", Icon = NavIcon.Chart, Y = y }); y += ItemStep;
 
         y += 10;
+        _groups.Add(("AI", y)); y += 26;
+        _items.Add(new NavItem { Title = "AI Assistant", Icon = NavIcon.Sparkle, Y = y, AlwaysEnabled = true, Action = () => AiAssistantRequested?.Invoke(this, EventArgs.Empty) }); y += ItemStep;
+
+        y += 10;
         _groups.Add(("WORK", y)); y += 26;
         _items.Add(new NavItem { Title = "My Tasks", Icon = NavIcon.Check, Y = y, Badge = () => MyWorkCount, Action = () => MyTasksRequested?.Invoke(this, EventArgs.Empty) }); y += ItemStep;
         _items.Add(new NavItem { Title = "Review Queue", Icon = NavIcon.Review, Y = y, Badge = () => ReviewQueueCount, Action = () => ReviewQueueRequested?.Invoke(this, EventArgs.Empty) }); y += ItemStep;
-
-        y += 10;
-        _groups.Add(("AI", y)); y += 26;
-        _items.Add(new NavItem { Title = "AI Assistant", Icon = NavIcon.Sparkle, Y = y, Badge = () => -1 });
 
         if (_isSystemAdmin)
         {

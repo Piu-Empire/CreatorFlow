@@ -493,3 +493,15 @@ $RECYCLE.BIN/
 
 # CodeGraph local index (per-machine, rebuilt via `codegraph init`)
 /.codegraph/
+
+# SCRUM-57: file cấu hình AI cục bộ — KHÔNG commit key thật, chỉ commit .env.example
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Bí mật/cấu hình cục bộ khác
+secrets.json
+secrets.*.json
+appsettings.Development.json
+local.settings.json

@@ -1,6 +1,8 @@
 using CreatorFlow.Models.Enums;
 using CreatorFlow.Contracts.Search;
+using CreatorFlow.AI;
 using CreatorFlow.Controls;
+using CreatorFlow.Controls.AiAssistant;
 using CreatorFlow.Controls.IdeaBank;
 using CreatorFlow.Controls.MyTasks;
 using CreatorFlow.Forms.Invitations;
@@ -8,6 +10,7 @@ using CreatorFlow.Forms.ProjectSettings;
 using CreatorFlow.Models;
 using CreatorFlow.Repositories.Interfaces;
 using CreatorFlow.Services;
+using CreatorFlow.Services.AI;
 using CreatorFlow.Services.Backends;
 using CreatorFlow.Services.Exceptions;
 using CreatorFlow.Theme;
@@ -43,6 +46,7 @@ public partial class BoardForm : Form, IMessageFilter
     private readonly IAssignmentBackend? _assignmentBackend;
     private readonly IReviewQueueBackend? _reviewQueueBackend;
     private readonly INotificationBackend? _notificationBackend;
+    private readonly IAIService? _aiService;
     private NotificationPanelControl? _notificationPanel;
     private long? _reopenContentId; // chế độ API: mở lại drawer của thẻ này sau khi Board tải lại (sau khi lưu/đổi trạng thái/giao việc)
     private readonly IMyTaskBackend? _taskBackend;
@@ -102,7 +106,8 @@ public partial class BoardForm : Form, IMessageFilter
         IContentDetailBackend? detailBackend = null,
         IAssignmentBackend? assignmentBackend = null,
         IReviewQueueBackend? reviewQueueBackend = null,
-        INotificationBackend? notificationBackend = null)
+        INotificationBackend? notificationBackend = null,
+        IAIService? aiService = null)
     {
         InitializeComponent();
         _workflowService = workflowService;
@@ -123,6 +128,7 @@ public partial class BoardForm : Form, IMessageFilter
         _assignmentBackend = assignmentBackend;
         _reviewQueueBackend = reviewQueueBackend;
         _notificationBackend = notificationBackend;
+        _aiService = aiService;
         _topHeaderControl.BellClicked += async (_, _) => await OnBellClickedAsync();
         _topHeaderControl.SetNotificationsEnabled(_notificationBackend is not null);
         InitializeProjects(projects);
@@ -137,6 +143,7 @@ public partial class BoardForm : Form, IMessageFilter
             _sidebarControl.AdminReportsRequested += async (_, _) => await OpenReportsAsync();
             _sidebarControl.CalendarRequested += (_, _) => OpenCalendar();
             _sidebarControl.SummaryRequested += (_, _) => OpenDashboard();
+            _sidebarControl.AiAssistantRequested += (_, _) => OpenAiAssistant();
         }
 
         // TẠM-LOCAL: chế độ local không có auth nên menu Calendar/Summary chưa được gắn; gắn thêm để test.
@@ -145,6 +152,7 @@ public partial class BoardForm : Form, IMessageFilter
         {
             _sidebarControl.CalendarRequested += (_, _) => OpenCalendar();
             _sidebarControl.SummaryRequested += (_, _) => OpenDashboard();
+            _sidebarControl.AiAssistantRequested += (_, _) => OpenAiAssistant();
         }
 
         _pnlDrawerHost.Paint += PnlDrawerHost_Paint;
@@ -726,6 +734,63 @@ public partial class BoardForm : Form, IMessageFilter
     }
 
     private void CloseIdeaBankPage(IdeaBankControl page)
+    {
+        if (!ReferenceEquals(_projectPage, page)) return;
+
+        CloseProjectPage();
+        _pnlBoardArea.Visible = true;
+        _modulePageHeader.Visible = true;
+        _flowColumns.Visible = true;
+        _pnlDrawerHost.Visible = false;
+        if (_pnlBoardArea.Controls["serverProjectState"] is Label serverState)
+            serverState.Visible = false;
+        _topHeaderControl.SetAuthenticatedPage("Board");
+        _sidebarControl.SetActiveMenu("Board");
+        ReloadBoard();
+    }
+
+    /// <summary>SCRUM-57: mở trang Trợ lý AI. Cổng AI hiện là AIService phía client (đọc .env) — POC, xem plan.md.</summary>
+    private void OpenAiAssistant()
+    {
+        if (!HasProjectContext || !CanLeaveProjectPage()) return;
+
+        IIdeaBackend? backend = _projects is null ? _ideaService : _ideaBackend;
+        if (backend is null)
+        {
+            ShowUnavailableModule("AI Assistant");
+            return;
+        }
+
+        Func<List<string>> platformProvider = _projects is null
+            ? () => _contentService.GetAvailablePlatforms()
+            : () => _detailBackend?.GetAvailablePlatforms() ?? new List<string>();
+
+        long projectId = CurrentSession.CurrentProjectId;
+        var page = new AiAssistantControl(new IdeaAssistService(_aiService), platformProvider, backend)
+        {
+            Dock = DockStyle.Fill,
+        };
+        page.IdeasChanged += (_, _) => RefreshBacklogCount();
+        page.CloseRequested += (_, _) => CloseAiAssistantPage(page);
+        ShowProjectPage(page, "Trợ lý AI");
+        _sidebarControl.SetActiveMenu("AI Assistant");
+        RefreshBacklogCount();
+
+        void RefreshBacklogCount()
+        {
+            try
+            {
+                _sidebarControl.BacklogCount = backend.CountBacklog(projectId, CurrentSession.CurrentUserId);
+            }
+            catch (Exception error) when (error is IdeaValidationException or UnauthorizedWorkflowActionException)
+            {
+                _sidebarControl.BacklogCount = 0;
+            }
+            _sidebarControl.Invalidate();
+        }
+    }
+
+    private void CloseAiAssistantPage(AiAssistantControl page)
     {
         if (!ReferenceEquals(_projectPage, page)) return;
 
