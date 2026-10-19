@@ -13,13 +13,18 @@ internal static class ApiTaskCall
 {
     public static T Run<T>(Func<Task<T>> call, UserSession? session = null)
     {
+        long generation = session?.Generation ?? 0;
         try
         {
             return Task.Run(call).GetAwaiter().GetResult();
         }
         catch (ApiBusinessException ex)
         {
-            if (ex.StatusCode == HttpStatusCode.Unauthorized) session?.Clear();
+            if (session is not null && generation == session.Generation)
+            {
+                if (ex.StatusCode == HttpStatusCode.Unauthorized) session.Clear();
+                if (ex.StatusCode == HttpStatusCode.Forbidden) session.NotifyAuthorizationRejected(generation);
+            }
             throw Translate(ex);
         }
         catch (ApiException ex)
@@ -31,13 +36,18 @@ internal static class ApiTaskCall
     /// <summary>Bản bất đồng bộ của <see cref="Run{T}"/>: chạy tiếp trên thread giao diện nên không treo form khi chờ API.</summary>
     public static async Task<T> RunAsync<T>(Func<Task<T>> call, UserSession? session = null)
     {
+        long generation = session?.Generation ?? 0;
         try
         {
             return await call();
         }
         catch (ApiBusinessException ex)
         {
-            if (ex.StatusCode == HttpStatusCode.Unauthorized) session?.Clear();
+            if (session is not null && generation == session.Generation)
+            {
+                if (ex.StatusCode == HttpStatusCode.Unauthorized) session.Clear();
+                if (ex.StatusCode == HttpStatusCode.Forbidden) session.NotifyAuthorizationRejected(generation);
+            }
             throw Translate(ex);
         }
         catch (ApiException ex)

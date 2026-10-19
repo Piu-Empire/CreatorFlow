@@ -758,8 +758,9 @@ public partial class ContentDetailPanel : UserControl
     /// <summary>Danh sách thành viên để hiển thị người phụ trách. Chế độ API lấy từ danh sách có thể giao việc (lỗi → rỗng, không chặn mở drawer).</summary>
     private List<ProjectMemberInfo> LoadMembers(long projectId)
     {
-        if (_detailBackend == null || _assignmentBackend == null)
+        if (_detailBackend == null)
             return _memberRepo!.GetMembers(projectId);
+        if (_assignmentBackend == null) return new List<ProjectMemberInfo>();
 
         try { return _assignmentBackend.GetAssignableMembers(projectId); }
         catch (Exception ex) when (ex is ContentValidationException or UnauthorizedWorkflowActionException or InvalidOperationException) { return new List<ProjectMemberInfo>(); }
@@ -823,6 +824,7 @@ public partial class ContentDetailPanel : UserControl
 
     public void ResetProject()
     {
+        InvalidateProjectPermissions();
         _current = null;
         _isDirty = false;
         _detailLoaded = false;
@@ -830,6 +832,21 @@ public partial class ContentDetailPanel : UserControl
         _metricsLoadedFor = null;
         _metricsHost.Controls.Clear();
         ShowEmptyState();
+    }
+
+    public void InvalidateProjectPermissions()
+    {
+        _roleCache.Clear();
+        _flowActions.Controls.Clear();
+        _dtpTargetWeek.Enabled = false;
+    }
+
+    public void RefreshProjectPermissions()
+    {
+        if (_current is null) return;
+        _roleCache.Clear();
+        _dtpTargetWeek.Enabled = TaskRules.CanChangeDeadline(GetMyRole(_current.ProjectId));
+        RebuildActionButtons();
     }
 
     private void SaveChanges()
@@ -1103,6 +1120,7 @@ public partial class ContentDetailPanel : UserControl
         if (_current == null) return;
 
         var role = GetMyRole(_current.ProjectId);
+        if (role is null) return;
         var canReview = role == ProjectRole.Owner || role == ProjectRole.Manager;
 
         if (TaskRules.CanAssign(role) && _current.Status is not (ContentStatus.Published or ContentStatus.Archived))
@@ -1165,6 +1183,8 @@ public partial class ContentDetailPanel : UserControl
     private void OnAssignClicked(object? sender, EventArgs e)
     {
         if (_current == null || _contentService == null) return;
+        if (!TaskRules.CanAssign(GetMyRole(_current.ProjectId))) return;
+        if (_detailBackend != null && _assignmentBackend == null) return;
 
         // Sau khi giao, drawer được tải lại → thay đổi chưa lưu sẽ mất, nên hỏi trước.
         if (HasUnsavedChanges && MessageBox.Show(this,
@@ -1258,6 +1278,7 @@ public partial class ContentDetailPanel : UserControl
     private void OnReviewDecisionClicked(object? sender, EventArgs e)
     {
         if (_current == null) return;
+        if (GetMyRole(_current.ProjectId) is not (ProjectRole.Owner or ProjectRole.Manager)) return;
 
         using var dialog = new Forms.Board.ReviewDecisionDialog(
             $"{_current.Code} — {_current.Title}",

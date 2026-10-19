@@ -173,6 +173,8 @@ public partial class IdeaBankControl : UserControl
         ResizeIdeaColumns();
     }
 
+    public void RefreshProjectPermissions() => ReloadIdeas();
+
     private void UpdateDetailAndButtons()
     {
         var idea = SelectedIdea;

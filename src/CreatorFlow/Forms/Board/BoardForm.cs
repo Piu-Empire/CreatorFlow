@@ -229,6 +229,8 @@ public partial class BoardForm : Form, IMessageFilter
             HasProjectContext && _profile is null && (_projects is null || CanCreateContentViaApi));
         _sidebarControl.SetProjectName(HasProjectContext ? CurrentSession.CurrentProjectName : null);
         _sidebarControl.ProjectActionsEnabled = HasProjectContext;
+        _sidebarControl.ReviewActionsEnabled = HasProjectContext &&
+            CurrentSession.CurrentUserRole is ProjectRole.Owner or ProjectRole.Manager;
         _sidebarControl.Invalidate();
     }
 
@@ -625,7 +627,7 @@ public partial class BoardForm : Form, IMessageFilter
     /// <summary>Mở hộp thoại Mời thành viên (SCRUM-26) của Project hiện hành. Quyền Owner do API quyết định.</summary>
     private void OpenProjectSettings()
     {
-        if (!HasProjectContext) return;
+        if (!HasProjectContext || CurrentSession.CurrentUserRole != ProjectRole.Owner) return;
         if (!CanLeaveProjectPage()) return;
         CloseProfile();
         if (_invitationService is null)
@@ -687,7 +689,7 @@ public partial class BoardForm : Form, IMessageFilter
 
     private void OpenReviewQueue()
     {
-        if (!HasProjectContext) return;
+        if (!HasProjectContext || CurrentSession.CurrentUserRole is not (ProjectRole.Owner or ProjectRole.Manager)) return;
         if (_projects is not null) { ShowUnavailableModule("Review Queue"); return; }
         CloseProfile();
         CloseAdmin();

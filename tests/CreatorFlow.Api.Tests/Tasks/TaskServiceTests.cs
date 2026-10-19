@@ -425,6 +425,37 @@ public sealed class TaskServiceTests
     // ================================================================== Board
 
     [TestMethod]
+    public async Task CreatorSelfAssignment_CannotChangeExistingDeadlineThroughAssignEndpoint()
+    {
+        var f = new Fixture(CreatorId) { ContentCreatedBy = CreatorId };
+        f.Add(Assignment(11, ContentId, CreatorId, deadline: Today.AddDays(3)));
+
+        var denied = await f.Service.AssignContentAsync(ContentId,
+            new AssignContentRequest(new[] { Req(CreatorId, Today.AddDays(5)) }));
+
+        Assert.AreEqual(403, denied.Status);
+        Assert.AreEqual(0, f.Repo.ApplyCalls);
+        Assert.AreEqual(Today.AddDays(3), f.Repo.Find(11).Deadline);
+        Assert.IsTrue((await f.Service.AssignContentAsync(ContentId,
+            new AssignContentRequest(new[] { Req(CreatorId, Today.AddDays(3)) }))).Succeeded);
+        Assert.AreEqual(0, f.Repo.LastDeadlineChanges.Count);
+    }
+
+    [TestMethod]
+    public async Task CreatorSelfAssignment_KeepingNullDeadlineDoesNotRemoveExistingDeadline()
+    {
+        var f = new Fixture(CreatorId) { ContentCreatedBy = CreatorId };
+        f.Add(Assignment(11, ContentId, CreatorId, deadline: Today.AddDays(3)));
+
+        var result = await f.Service.AssignContentAsync(ContentId,
+            new AssignContentRequest(new[] { Req(CreatorId) }));
+
+        Assert.IsTrue(result.Succeeded);
+        Assert.AreEqual(Today.AddDays(3), f.Repo.Find(11).Deadline);
+        Assert.AreEqual(0, f.Repo.LastDeadlineChanges.Count);
+    }
+
+    [TestMethod]
     public async Task GetBoardAssignees_MemberGetsEveryCreatorOfEveryContent_NonMemberGets403()
     {
         var f = new Fixture(ManagerId);

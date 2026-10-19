@@ -55,7 +55,7 @@ public sealed class ProjectApiFacade : IDisposable
             if (access.Name != current.Name || !access.CurrentUserRole.Equals(current.Role.ToString(), StringComparison.OrdinalIgnoreCase)) Context.Apply(access);
             return true;
         }
-        catch (ApiBusinessException error) when (error.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.Conflict)
+        catch (ApiBusinessException error) when (error.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.NotFound or HttpStatusCode.Conflict)
         {
             if (generation == Context.Generation) Context.Clear();
             return false;
@@ -78,6 +78,11 @@ public sealed class ProjectApiFacade : IDisposable
         catch (ApiBusinessException error) when (error.StatusCode == HttpStatusCode.Unauthorized)
         {
             if (generation == session.Generation) session.Clear();
+            throw;
+        }
+        catch (ApiBusinessException error) when (error.StatusCode == HttpStatusCode.Forbidden)
+        {
+            session.NotifyAuthorizationRejected(generation);
             throw;
         }
     }
