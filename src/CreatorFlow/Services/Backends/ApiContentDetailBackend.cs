@@ -33,7 +33,8 @@ public sealed class ApiContentDetailBackend(ApiClient api, UserSession session) 
             ApiTaskMapper.ToDateOnly(draft.Deadline),
             ApiTaskMapper.ToDateOnly(draft.PlannedPublishAt),
             draft.Platforms,
-            draft.AssigneeUserId);
+            draft.AssigneeUserId,
+            draft.Sprint);
         return ApiTaskCall.Run(() => api.CreateContentAsync(projectId, request, ApiTaskCall.BearerOf(session)), session).ContentId;
     }
 
@@ -67,7 +68,8 @@ public sealed class ApiContentDetailBackend(ApiClient api, UserSession session) 
             draft.Priority.ToString(),
             ApiTaskMapper.ToDateOnly(draft.Deadline),
             ApiTaskMapper.ToDateOnly(draft.PlannedPublishAt),
-            draft.Platforms);
+            draft.Platforms,
+            draft.Sprint);
         ApiTaskCall.Run(() => api.UpdateContentAsync(contentId, request, ApiTaskCall.BearerOf(session)), session);
     }
 
@@ -88,8 +90,44 @@ public sealed class ApiContentDetailBackend(ApiClient api, UserSession session) 
                 ActorName = i.ActorName,
                 Description = i.Description,
                 Feedback = i.Feedback,
+                Kind = i.Kind,
+                FromStatus = i.FromStatus,
+                ToStatus = i.ToStatus,
+                ReviewNo = i.ReviewNo,
+                ReviewStatus = i.ReviewStatus,
             })
             .ToList();
+
+    public ContentReferenceList GetReferences(long contentId)
+    {
+        ContentReferencesResponse response = ApiTaskCall.Run(
+            () => api.GetContentReferencesAsync(contentId, ApiTaskCall.BearerOf(session)), session);
+        return new ContentReferenceList(response.ContentId, response.CanManage,
+            response.References.Select(ToModel).ToList());
+    }
+
+    public ContentReference AddReference(long contentId, string displayName, string resourceUrl)
+    {
+        var request = new CreateContentReferenceRequest(displayName, resourceUrl);
+        ContentReferenceResponse response = ApiTaskCall.Run(
+            () => api.AddContentReferenceAsync(contentId, request, ApiTaskCall.BearerOf(session)), session);
+        return ToModel(response);
+    }
+
+    public void DeleteReference(long contentId, long referenceId) =>
+        ApiTaskCall.Run(() => api.DeleteContentReferenceAsync(contentId, referenceId, ApiTaskCall.BearerOf(session)), session);
+
+    public ContentReferenceList SaveReferenceChanges(long contentId, IReadOnlyList<ContentReferenceAddition> additions,
+        IReadOnlyList<long> deletedReferenceIds)
+    {
+        var request = new SaveContentReferenceChangesRequest(
+            additions.Select(item => new CreateContentReferenceRequest(item.DisplayName, item.ResourceUrl)).ToList(),
+            deletedReferenceIds);
+        ContentReferencesResponse response = ApiTaskCall.Run(
+            () => api.SaveContentReferenceChangesAsync(contentId, request, ApiTaskCall.BearerOf(session)), session);
+        return new ContentReferenceList(response.ContentId, response.CanManage,
+            response.References.Select(ToModel).ToList());
+    }
 
     public void ChangeStatus(long contentId, ContentStatus next) =>
         ApiTaskCall.Run(() => api.ChangeContentStatusAsync(contentId, new ChangeContentStatusRequest(next.ToString()), ApiTaskCall.BearerOf(session)), session);
@@ -111,4 +149,7 @@ public sealed class ApiContentDetailBackend(ApiClient api, UserSession session) 
             : ScriptAccess.Denied(r.ReadOnlyReason ?? string.Empty),
         Statistics = ScriptTextAnalyzer.Analyze(r.Text),
     };
+
+    private static ContentReference ToModel(ContentReferenceResponse r) => new(
+        r.ReferenceId, r.ContentId, r.DisplayName, r.ResourceUrl, r.AddedBy, r.CreatedAt.ToLocalTime());
 }

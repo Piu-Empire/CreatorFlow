@@ -32,7 +32,17 @@ internal sealed class MemberRolesFake : ITaskRepository
         return Task.CompletedTask;
     }
 
-    public Task<IReadOnlyList<ProjectMember>> GetMembersAsync(long projectId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public bool ThrowOnMembers { get; set; }
+
+    public Task<IReadOnlyList<ProjectMember>> GetMembersAsync(long projectId, CancellationToken cancellationToken = default)
+    {
+        if (ThrowOnMembers) throw new InvalidOperationException("db down");
+        return Task.FromResult<IReadOnlyList<ProjectMember>>(Roles
+            .Where(r => r.Key.Item1 == projectId)
+            .Select(r => new ProjectMember(r.Key.Item2, $"User {r.Key.Item2}", r.Value))
+            .ToList());
+    }
+
     public Task<ContentInfo?> GetContentAsync(long contentId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public Task<IReadOnlyList<TaskAssignment>> GetMyTasksAsync(long projectId, long userId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public Task<IReadOnlyList<TaskAssignment>> GetAssignmentsAsync(long contentId, CancellationToken cancellationToken = default) => throw new NotSupportedException();

@@ -39,6 +39,9 @@ public sealed partial class CreateProjectDialog : Form
         InitializeComponent();
         Font = UITheme.FontBody;
         BackColor = UITheme.White;
+        headerPanel.BackColor = UITheme.White;
+        bodyPanel.BackColor = UITheme.White;
+        footerPanel.BackColor = UITheme.Neutral50;
         titleLabel.Font = UITheme.FontPageTitle;
         titleLabel.ForeColor = UITheme.Ink;
         explanationLabel.ForeColor = UITheme.Neutral600;
@@ -59,8 +62,8 @@ public sealed partial class CreateProjectDialog : Form
 
         nameField = UiTheme.AddField(fields, "Tên Project", name);
         descriptionField = UiTheme.AddField(fields, "Mô tả (tùy chọn)", description);
-        nameField.Controls["fieldBorder"]!.Height = 48;
-        descriptionField.Controls["fieldBorder"]!.Height = 80;
+        nameField.Controls["fieldBorder"]!.Height = 56;
+        descriptionField.Controls["fieldBorder"]!.Height = 160;
 
         StyleField(nameField);
         StyleField(descriptionField);

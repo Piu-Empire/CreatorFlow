@@ -17,8 +17,10 @@ internal sealed class ContentDetailRepositoryFake : IContentDetailRepository
     }
 
     private long _nextId = 100;
+    private long _nextReferenceId = 1;
 
     public Dictionary<long, Row> Rows { get; } = new();
+    public Dictionary<long, List<ContentReferenceRecord>> References { get; } = new();
     public List<string> ActivePlatforms { get; } = new() { "TikTok", "YouTube", "Facebook", "Instagram" };
     public Dictionary<long, List<ActivityRecord>> Activity { get; } = new();
 
@@ -60,7 +62,7 @@ internal sealed class ContentDetailRepositoryFake : IContentDetailRepository
         Rows[id] = new Row
         {
             Detail = new ContentDetailRecord(id, content.ProjectId, d.Title, d.Description, d.ContentType, Pascal(content.StatusDb),
-                Pascal(d.PriorityDb), d.Deadline, d.PlannedPublishAt, content.CreatedBy, d.Platforms.OrderBy(p => p, StringComparer.Ordinal).ToArray()),
+                Pascal(d.PriorityDb), d.Deadline, d.PlannedPublishAt, content.CreatedBy, d.Platforms.OrderBy(p => p, StringComparer.Ordinal).ToArray(), d.Sprint),
         };
         return Task.FromResult(id);
     }
@@ -73,7 +75,7 @@ internal sealed class ContentDetailRepositoryFake : IContentDetailRepository
         row.Detail = row.Detail with
         {
             Title = update.Title, Description = update.Description, ContentType = update.ContentType, Priority = Pascal(update.PriorityDb),
-            Deadline = update.Deadline, PlannedPublishAt = update.PlannedPublishAt,
+            Deadline = update.Deadline, PlannedPublishAt = update.PlannedPublishAt, Sprint = update.Sprint,
             Platforms = update.Platforms.OrderBy(p => p, StringComparer.Ordinal).ToArray(),
         };
         return Task.CompletedTask;
@@ -102,6 +104,41 @@ internal sealed class ContentDetailRepositoryFake : IContentDetailRepository
 
     public Task<IReadOnlyList<ActivityRecord>> GetActivityAsync(long contentId, CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyList<ActivityRecord>>(Activity.GetValueOrDefault(contentId) ?? new List<ActivityRecord>());
+
+    public Task<IReadOnlyList<ContentReferenceRecord>> GetReferencesAsync(long contentId, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<ContentReferenceRecord>>(References.GetValueOrDefault(contentId)?.ToList() ?? new List<ContentReferenceRecord>());
+
+    public Task<ContentReferenceRecord> AddReferenceAsync(long contentId, string displayName, string resourceUrl, long addedBy,
+        CancellationToken cancellationToken = default)
+    {
+        var reference = new ContentReferenceRecord(_nextReferenceId++, contentId, displayName, resourceUrl, addedBy, DateTime.UtcNow);
+        if (!References.TryGetValue(contentId, out List<ContentReferenceRecord>? references))
+            References[contentId] = references = new List<ContentReferenceRecord>();
+        references.Add(reference);
+        return Task.FromResult(reference);
+    }
+
+    public Task<bool> DeleteReferenceAsync(long contentId, long referenceId, CancellationToken cancellationToken = default)
+    {
+        if (!References.TryGetValue(contentId, out List<ContentReferenceRecord>? references)) return Task.FromResult(false);
+        int removed = references.RemoveAll(reference => reference.ReferenceId == referenceId);
+        return Task.FromResult(removed > 0);
+    }
+
+    public Task<bool> ApplyReferenceChangesAsync(long contentId, IReadOnlyList<NewContentReference> additions,
+        IReadOnlyList<long> deletedReferenceIds, long addedBy, CancellationToken cancellationToken = default)
+    {
+        List<ContentReferenceRecord> references = References.GetValueOrDefault(contentId) ?? new List<ContentReferenceRecord>();
+        if (deletedReferenceIds.Any(id => references.All(reference => reference.ReferenceId != id)))
+            return Task.FromResult(false);
+
+        if (!References.ContainsKey(contentId)) References[contentId] = references;
+        references.RemoveAll(reference => deletedReferenceIds.Contains(reference.ReferenceId));
+        foreach (NewContentReference addition in additions)
+            references.Add(new ContentReferenceRecord(_nextReferenceId++, contentId, addition.DisplayName,
+                addition.ResourceUrl, addedBy, DateTime.UtcNow));
+        return Task.FromResult(true);
+    }
 
     private static string Pascal(string db) => db.Length == 0 ? db : char.ToUpperInvariant(db[0]) + db[1..].ToLowerInvariant();
 }

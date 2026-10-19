@@ -20,9 +20,9 @@ partial class MyInvitationsDialog
     private System.Windows.Forms.ColumnHeader colExpires;
     private System.Windows.Forms.Label _lblMessage;
     private System.Windows.Forms.Panel pnlDivider2;
-    private CreatorFlow.Controls.RoundedButton btnReject;
-    private CreatorFlow.Controls.RoundedButton btnAccept;
-    private CreatorFlow.Controls.RoundedButton btnClose;
+    private CreatorFlow.Controls.ProjectActionButton btnReject;
+    private CreatorFlow.Controls.ProjectActionButton btnAccept;
+    private CreatorFlow.Controls.ProjectActionButton btnClose;
 
     protected override void Dispose(bool disposing)
     {
@@ -47,9 +47,9 @@ partial class MyInvitationsDialog
         this.colExpires = new System.Windows.Forms.ColumnHeader();
         this._lblMessage = new System.Windows.Forms.Label();
         this.pnlDivider2 = new System.Windows.Forms.Panel();
-        this.btnReject = new CreatorFlow.Controls.RoundedButton();
-        this.btnAccept = new CreatorFlow.Controls.RoundedButton();
-        this.btnClose = new CreatorFlow.Controls.RoundedButton();
+        this.btnReject = new CreatorFlow.Controls.ProjectActionButton();
+        this.btnAccept = new CreatorFlow.Controls.ProjectActionButton();
+        this.btnClose = new CreatorFlow.Controls.ProjectActionButton();
         this.SuspendLayout();
         //
         // lblHeader
@@ -147,7 +147,7 @@ partial class MyInvitationsDialog
         this.btnReject.Style = RoundButtonStyle.Danger;
         this.btnReject.TabIndex = 1;
         this.btnReject.Text = "Từ chối";
-        this.btnReject.UseVisualStyleBackColor = true;
+        this.btnReject.UseVisualStyleBackColor = false;
         this.btnReject.Click += new System.EventHandler(this.btnReject_Click);
         //
         // btnAccept
@@ -158,7 +158,7 @@ partial class MyInvitationsDialog
         this.btnAccept.Style = RoundButtonStyle.Primary;
         this.btnAccept.TabIndex = 2;
         this.btnAccept.Text = "Chấp nhận";
-        this.btnAccept.UseVisualStyleBackColor = true;
+        this.btnAccept.UseVisualStyleBackColor = false;
         this.btnAccept.Click += new System.EventHandler(this.btnAccept_Click);
         //
         // btnClose
@@ -170,7 +170,7 @@ partial class MyInvitationsDialog
         this.btnClose.Style = RoundButtonStyle.Secondary;
         this.btnClose.TabIndex = 3;
         this.btnClose.Text = "Đóng";
-        this.btnClose.UseVisualStyleBackColor = true;
+        this.btnClose.UseVisualStyleBackColor = false;
         //
         // MyInvitationsDialog
         //

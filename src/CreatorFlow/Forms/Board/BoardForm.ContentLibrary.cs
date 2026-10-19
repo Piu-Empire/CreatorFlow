@@ -1,4 +1,5 @@
 using CreatorFlow.ApiClients;
+using CreatorFlow.Contracts.Board;
 using CreatorFlow.Controls;
 using CreatorFlow.Controls.ContentLibrary;
 using CreatorFlow.Models;
@@ -82,6 +83,27 @@ public partial class BoardForm
             CurrentSession.CurrentProjectId == projectId &&
             (_projects is null || projectGeneration == _projects.Context.Generation) &&
             authGeneration == _auth?.Session.Generation;
+
+        int queryGeneration = 0;
+        async void LoadQuery(ContentLibraryQuery query)
+        {
+            if (_boardBackend is null) return;
+            int currentGeneration = ++queryGeneration;
+            try
+            {
+                List<ContentBoardCard> cards = await _boardBackend.GetProjectContentsAsync(projectId, query, _authLifetime.Token);
+                if (!IsCurrentPage() || currentGeneration != queryGeneration) return;
+                page.SetFilteredContents(cards);
+            }
+            catch (OperationCanceledException) when (_authLifetime.IsCancellationRequested || IsDisposed) { }
+            catch (Exception error) when (error is ContentValidationException or UnauthorizedWorkflowActionException or
+                                           InvalidOperationException or ApiException or ApiBusinessException)
+            {
+                if (IsCurrentPage() && currentGeneration == queryGeneration)
+                    _toast.ShowToast(this, "Không lọc được Content từ API: " + error.Message);
+            }
+        }
+        page.QueryRequested += LoadQuery;
 
         if (_projects is null)
         {

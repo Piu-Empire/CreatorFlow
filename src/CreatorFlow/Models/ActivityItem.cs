@@ -1,4 +1,6 @@
-﻿namespace CreatorFlow.Models;
+﻿using CreatorFlow.Contracts.ContentDetail;
+
+namespace CreatorFlow.Models;
 
 /// <summary>
 /// 1 dòng trong Activity timeline (mục 6 UX spec).
@@ -13,6 +15,19 @@ public class ActivityItem
     /// <summary>VD: "SCRIPT → PRODUCTION", "submitted Review #1", "rejected Review #1".</summary>
     public string Description { get; set; } = string.Empty;
 
-    /// <summary>Feedback đi kèm (nếu có, VD khi Reject) - hiển thị dòng phụ bên dưới Description.</summary>
+    /// <summary>Feedback đi kèm (nếu có, VD khi Reject hoặc ghi chú khi gửi duyệt).</summary>
     public string? Feedback { get; set; }
+
+    /// <summary>Loại sự kiện: <see cref="ActivityKinds"/>.</summary>
+    public string Kind { get; set; } = ActivityKinds.StatusChange;
+
+    /// <summary>Trạng thái trước/sau (PascalCase, VD "Editing"); null khi không áp dụng.</summary>
+    public string? FromStatus { get; set; }
+    public string? ToStatus { get; set; }
+
+    /// <summary>Số thứ tự Review (chỉ có ở sự kiện Review).</summary>
+    public int? ReviewNo { get; set; }
+
+    /// <summary>"Pending" / "Approved" / "Rejected" (chỉ có ở sự kiện Review).</summary>
+    public string? ReviewStatus { get; set; }
 }

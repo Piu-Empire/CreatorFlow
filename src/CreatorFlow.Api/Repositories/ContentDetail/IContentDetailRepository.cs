@@ -26,4 +26,14 @@ public interface IContentDetailRepository
 
     /// <summary>Activity timeline (lịch sử trạng thái + Review), tăng dần theo thời gian.</summary>
     Task<IReadOnlyList<ActivityRecord>> GetActivityAsync(long contentId, CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<ContentReferenceRecord>> GetReferencesAsync(long contentId, CancellationToken cancellationToken = default);
+
+    Task<ContentReferenceRecord> AddReferenceAsync(long contentId, string displayName, string resourceUrl, long addedBy,
+        CancellationToken cancellationToken = default);
+
+    Task<bool> DeleteReferenceAsync(long contentId, long referenceId, CancellationToken cancellationToken = default);
+
+    Task<bool> ApplyReferenceChangesAsync(long contentId, IReadOnlyList<NewContentReference> additions,
+        IReadOnlyList<long> deletedReferenceIds, long addedBy, CancellationToken cancellationToken = default);
 }

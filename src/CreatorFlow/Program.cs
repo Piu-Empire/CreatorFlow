@@ -28,10 +28,8 @@ static class Program
     [STAThread]
     static void Main(string[] args)
     {
-        // To customize application configuration such as set high DPI settings or default font,
-        // see https://aka.ms/applicationconfiguration.
-        // Dùng PerMonitorV2 để Windows Forms vẽ ở DPI thật, tránh Windows phóng bitmap gây mờ.
-        // Phải gọi TRƯỚC ApplicationConfiguration.Initialize().
+        // Render directly at the monitor's DPI so Windows does not bitmap-scale the whole UI.
+        // Set this before ApplicationConfiguration.Initialize().
         Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
         ApplicationConfiguration.Initialize();
 
@@ -121,13 +119,15 @@ static class Program
             var boardBackend = new ApiBoardBackend(api, session);
             var detailBackend = new ApiContentDetailBackend(api, session);
             var assignmentBackend = new ApiAssignmentBackend(api, session);
+            var reviewQueueBackend = new ApiReviewQueueBackend(api, session);
+            var notificationBackend = new ApiNotificationBackend(api, session);
             var invitations = new ProjectInvitationService(api, session);
             var invitationInbox = new InvitationInboxService(api, session);
             if (args.Length > 0 && args[0] == "--test")
             {
                 // Diagnostic layout only: no authentication, project queries, or message loop.
                 using var testForm = new BoardForm(workflowService, boardRepo, reviewQueueRepo,
-                    activityRepo, memberRepo, contentService, myTaskService, scriptService, ideaService, auth, metricBackend, invitations, invitationInbox);
+                    activityRepo, memberRepo, contentService, myTaskService, scriptService, ideaService, auth, metricBackend, invitations, invitationInbox, reviewQueueBackend: reviewQueueBackend, notificationBackend: notificationBackend);
                 var handle = testForm.Handle;
                 testForm.Size = new Size(1440, 900);
                 testForm.PerformLayout();
@@ -135,7 +135,7 @@ static class Program
                 return;
             }
             using var context = new AuthenticationApplicationContext(auth, () =>
-                new BoardForm(workflowService, boardRepo, reviewQueueRepo, activityRepo, memberRepo, contentService, myTaskService, scriptService, ideaService, auth, metricBackend, invitations, invitationInbox, projects: projects, taskBackend: taskBackend, ideaBackend: ideaBackend, boardBackend: boardBackend, detailBackend: detailBackend, assignmentBackend: assignmentBackend), projects, invitationInbox);
+                new BoardForm(workflowService, boardRepo, reviewQueueRepo, activityRepo, memberRepo, contentService, myTaskService, scriptService, ideaService, auth, metricBackend, invitations, invitationInbox, projects: projects, taskBackend: taskBackend, ideaBackend: ideaBackend, boardBackend: boardBackend, detailBackend: detailBackend, assignmentBackend: assignmentBackend, reviewQueueBackend: reviewQueueBackend, notificationBackend: notificationBackend), projects, invitationInbox);
             Application.Run(context);
         }
         catch (InvalidOperationException)

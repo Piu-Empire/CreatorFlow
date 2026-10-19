@@ -40,7 +40,8 @@ SELECT
        ORDER BY ca.assigned_at DESC LIMIT 1) AS assignee_name,
     EXISTS (SELECT 1 FROM reviews r WHERE r.content_id = c.content_id AND r.status = 'PENDING') AS has_pending_review,
     COALESCE(c.description, '') AS description,
-    c.planned_publish_at
+    c.planned_publish_at,
+    COALESCE(to_jsonb(c)->>'sprint', 'Sprint 25') AS sprint
 FROM contents c
 WHERE c.project_id = @projectId
 ORDER BY c.content_id";
@@ -71,6 +72,7 @@ ORDER BY c.content_id";
                 HasPendingReview = reader.GetBoolean(10),
                 Description = reader.GetString(11),
                 PlannedPublishAt = reader.IsDBNull(12) ? null : reader.GetDateTime(12),
+                Sprint = reader.GetString(13),
             });
         }
 

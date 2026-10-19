@@ -18,7 +18,8 @@ namespace CreatorFlow.Services;
 /// </summary>
 public class ContentService
 {
-    public static readonly string[] AvailableSprints = { "Sprint 24", "Sprint 25", "Sprint 26" };
+    public static readonly string[] AvailableSprints = CreatorFlow.Contracts.ContentDetail.SprintCatalog.Available.ToArray();
+    public const string DefaultSprint = CreatorFlow.Contracts.ContentDetail.SprintCatalog.DefaultSprint;
 
     /// <summary>Các loại nội dung chọn được (cột contents.content_type là VARCHAR tự do nên danh sách do ứng dụng quản lý).</summary>
     public static readonly string[] AvailableContentTypes =
@@ -290,7 +291,7 @@ public class ContentService
         d.Deadline = d.Deadline?.Date;
         d.PlannedPublishAt = d.PlannedPublishAt?.Date;
         d.EstimatedDuration = (d.EstimatedDuration ?? string.Empty).Trim();
-        d.Sprint = string.IsNullOrWhiteSpace(d.Sprint) ? AvailableSprints[1] : d.Sprint.Trim();
+        d.Sprint = string.IsNullOrWhiteSpace(d.Sprint) ? DefaultSprint : d.Sprint.Trim();
         d.Platforms = (d.Platforms ?? new List<string>())
             .Where(p => !string.IsNullOrWhiteSpace(p))
             .Select(p => p.Trim())

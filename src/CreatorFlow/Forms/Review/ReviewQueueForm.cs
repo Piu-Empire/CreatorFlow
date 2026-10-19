@@ -1,6 +1,7 @@
 ﻿using CreatorFlow.Models;
 using CreatorFlow.Repositories.Interfaces;
 using CreatorFlow.Services;
+using CreatorFlow.Services.Backends;
 using CreatorFlow.Services.Exceptions;
 using CreatorFlow.Theme;
 
@@ -8,21 +9,34 @@ namespace CreatorFlow.Forms.Review;
 
 /// <summary>
 /// Danh sách Content đang chờ kiểm duyệt (mục 2 UX spec - Review Queue, dành cho Owner/Manager).
-/// Không tự kiểm tra Role ở đây - WorkflowService.ApproveReview/RejectReview sẽ chặn nếu User
+/// Không tự kiểm tra Role ở đây - Backend (API) hoặc WorkflowService sẽ chặn nếu User
 /// không phải Owner/Manager của Project tương ứng (nguyên tắc #11 UX spec).
 /// </summary>
 public partial class ReviewQueueForm : Form
 {
-    private readonly IReviewQueueRepository _reviewQueueRepo;
-    private readonly WorkflowService _workflowService;
+    private readonly IReviewQueueRepository? _reviewQueueRepo;
+    private readonly WorkflowService? _workflowService;
+    private readonly IReviewQueueBackend? _backend;
     private List<ReviewQueueItem> _items = new();
 
+    /// <summary>Chế độ in-memory / PostgreSQL cục bộ (chưa có API).</summary>
     public ReviewQueueForm(IReviewQueueRepository reviewQueueRepo, WorkflowService workflowService)
+        : this()
     {
-        InitializeComponent();
         _reviewQueueRepo = reviewQueueRepo;
         _workflowService = workflowService;
+    }
 
+    /// <summary>Chế độ API: danh sách và quyết định duyệt đều qua CreatorFlow.Api.</summary>
+    public ReviewQueueForm(IReviewQueueBackend backend)
+        : this()
+    {
+        _backend = backend;
+    }
+
+    private ReviewQueueForm()
+    {
+        InitializeComponent();
         Load += (_, _) => ReloadQueue();
     }
 
@@ -35,7 +49,22 @@ public partial class ReviewQueueForm : Form
 
     private void ReloadQueue()
     {
-        _items = _reviewQueueRepo.GetPendingReviews(CurrentSession.CurrentProjectId);
+        try
+        {
+            _items = _backend is not null
+                ? _backend.GetPending(CurrentSession.CurrentProjectId)
+                : _reviewQueueRepo!.GetPendingReviews(CurrentSession.CurrentProjectId);
+        }
+        catch (UnauthorizedWorkflowActionException ex)
+        {
+            MessageBox.Show(this, ex.Message, "Không đủ quyền", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        catch (Exception ex) when (ex is ContentValidationException or InvalidOperationException)
+        {
+            MessageBox.Show(this, ex.Message, "Không tải được Review Queue", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
 
         listViewQueue.BeginUpdate();
         listViewQueue.Items.Clear();
@@ -77,10 +106,12 @@ public partial class ReviewQueueForm : Form
 
         try
         {
-            if (dialog.Approved)
-                _workflowService.ApproveReview(item.ContentId, CurrentSession.CurrentUserId, dialog.Feedback);
+            if (_backend is not null)
+                _backend.Decide(item.ContentId, dialog.Approved, dialog.Feedback);
+            else if (dialog.Approved)
+                _workflowService!.ApproveReview(item.ContentId, CurrentSession.CurrentUserId, dialog.Feedback);
             else
-                _workflowService.RejectReview(item.ContentId, CurrentSession.CurrentUserId, dialog.Feedback);
+                _workflowService!.RejectReview(item.ContentId, CurrentSession.CurrentUserId, dialog.Feedback);
 
             ReloadQueue();
         }
@@ -89,6 +120,10 @@ public partial class ReviewQueueForm : Form
             MessageBox.Show(this, ex.Message, "Không đủ quyền", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
         catch (InvalidWorkflowTransitionException ex)
+        {
+            MessageBox.Show(this, ex.Message, "Không thể xử lý", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        catch (Exception ex) when (ex is ContentValidationException or InvalidOperationException)
         {
             MessageBox.Show(this, ex.Message, "Không thể xử lý", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
