@@ -42,13 +42,31 @@ public sealed class NotificationService(
     {
         if (current.User is not { } user) return Unauthorized<NotificationsResponse>();
 
+        bool schemaReady;
+        try
+        {
+            schemaReady = await repository.IsSchemaReadyAsync(token);
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(exception, "Không kiểm tra được schema notifications.");
+            schemaReady = false;
+        }
+
         // Sinh thông báo deadline cho chính người gọi trước khi đọc (idempotent nhờ dedupe_key).
-        await EnsureDeadlineNotificationsAsync(user.UserId, token);
+        // Chỉ sinh khi schema đã sẵn sàng; nếu chưa thì bỏ qua để không spam log.
+        if (schemaReady)
+            await EnsureDeadlineNotificationsAsync(user.UserId, token);
 
         IReadOnlyList<NotificationRecord> items =
             await repository.GetForUserAsync(user.UserId, unreadOnly, MaxItems, token);
         int unread = await repository.CountUnreadAsync(user.UserId, token);
-        return new(new NotificationsResponse(unread, items.Select(ToResponse).ToList()));
+
+        string? schemaMessage = schemaReady
+            ? null
+            : "Thông báo cần chạy migration database/09_notifications.sql trên DB (thêm cột dedupe_key) trước khi hoạt động đầy đủ.";
+
+        return new(new NotificationsResponse(unread, items.Select(ToResponse).ToList(), schemaReady, schemaMessage));
     }
 
     public async Task<AuthOperationResult<NotificationReadResponse>> MarkReadAsync(

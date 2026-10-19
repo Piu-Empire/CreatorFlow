@@ -27,6 +27,8 @@ public sealed class ApiNotificationBackend(ApiClient api, UserSession session) :
                     ContentId = i.ContentId,
                     ContentCode = i.ContentCode,
                 }).ToList(),
+                SchemaReady = response.SchemaReady,
+                SchemaMessage = response.SchemaMessage,
             };
         }, session);
 

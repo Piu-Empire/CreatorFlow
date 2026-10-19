@@ -831,9 +831,11 @@ public partial class BoardForm : Form, IMessageFilter
         {
             var result = _notificationBackend.GetNotifications(unreadOnly: false);
             _topHeaderControl.SetUnreadNotificationCount(result.UnreadCount);
+            if (!result.SchemaReady)
+                _toast.ShowToast(this, result.SchemaMessage ?? "Notifications require database migration 09_notifications.sql.");
 
             _notificationPanel ??= new NotificationPanelControl();
-            _notificationPanel.SetItems(result.Items);
+            _notificationPanel.SetItems(result.Items, result.SchemaReady, result.SchemaMessage);
             _notificationPanel.ItemClicked -= NotificationPanel_ItemClicked;
             _notificationPanel.ItemClicked += NotificationPanel_ItemClicked;
             _notificationPanel.MarkAllRequested -= NotificationPanel_MarkAllRequested;

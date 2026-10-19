@@ -21,6 +21,9 @@ public interface INotificationRepository
     /// <summary>Đánh dấu tất cả thông báo chưa đọc của người gọi; trả về số dòng đã đổi.</summary>
     Task<int> MarkAllReadAsync(long userId, DateTime readAtUtc, CancellationToken cancellationToken = default);
 
+    /// <summary>Kiểm tra schema notifications đã có cột dedupe_key (migration 09) chưa.</summary>
+    Task<bool> IsSchemaReadyAsync(CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Assignment đang hiệu lực của User có hạn (deadline riêng của assignment, nếu không có thì của Content)
     /// không muộn hơn <paramref name="dueOn"/>; bỏ assignment đã xong/huỷ và Content đã Published/Archived.

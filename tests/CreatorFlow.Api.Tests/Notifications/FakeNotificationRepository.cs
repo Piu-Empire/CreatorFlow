@@ -18,6 +18,7 @@ internal class FakeNotificationRepository : INotificationRepository
     public List<(long NotificationId, long UserId, DateTime ReadAt)> MarkReadCalls { get; } = new();
     public int MarkAllReadCalls { get; private set; }
     public bool ThrowOnInsert { get; set; }
+    public bool SchemaReady { get; set; } = true;
     public List<(DueAssignment Due, long UserId)> DueAssignments { get; set; } = new();
 
     public IReadOnlyList<NotificationInsert> Insets => _rows.Select(r => r.Insert).ToList();
@@ -107,4 +108,7 @@ internal class FakeNotificationRepository : INotificationRepository
         NotificationType.Invitation => "INVITATION",
         NotificationType.System => "SYSTEM",
     };
+
+    public Task<bool> IsSchemaReadyAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult(SchemaReady);
 }

@@ -17,7 +17,7 @@ public sealed record NotificationResponse(
     string? ContentCode);
 
 /// <summary>Thông báo mới nhất của người gọi kèm số chưa đọc (để hiện badge trên icon Bell).</summary>
-public sealed record NotificationsResponse(int UnreadCount, IReadOnlyList<NotificationResponse> Items);
+public sealed record NotificationsResponse(int UnreadCount, IReadOnlyList<NotificationResponse> Items, bool SchemaReady = true, string? SchemaMessage = null);
 
 /// <summary>Kết quả đánh dấu một thông báo đã đọc.</summary>
 public sealed record NotificationReadResponse(long NotificationId, bool IsRead, DateTime? ReadAt);

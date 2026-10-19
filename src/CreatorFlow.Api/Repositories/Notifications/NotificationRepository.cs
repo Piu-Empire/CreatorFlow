@@ -162,4 +162,19 @@ public sealed class NotificationRepository(IDbConnectionFactory connectionFactor
         }
         return items;
     }
+
+    public async Task<bool> IsSchemaReadyAsync(CancellationToken cancellationToken = default)
+    {
+        const string sql = """
+            SELECT COUNT(*) FROM information_schema.columns
+            WHERE table_schema = current_schema()
+              AND table_name = 'notifications'
+              AND column_name = 'dedupe_key';
+            """;
+
+        await using NpgsqlConnection connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
+        await using var command = new NpgsqlCommand(sql, connection);
+        object? value = await command.ExecuteScalarAsync(cancellationToken);
+        return value is long count && count > 0;
+    }
 }

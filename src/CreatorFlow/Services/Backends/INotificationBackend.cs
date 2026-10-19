@@ -23,4 +23,6 @@ public sealed class NotificationListResult
 {
     public int UnreadCount { get; set; }
     public List<NotificationItem> Items { get; set; } = new();
+    public bool SchemaReady { get; set; } = true;
+    public string? SchemaMessage { get; set; }
 }

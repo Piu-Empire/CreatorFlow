@@ -89,9 +89,19 @@ public partial class NotificationPanelControl : UserControl
         };
     }
 
-    public void SetItems(IReadOnlyList<NotificationItem> items)
+    public void SetItems(IReadOnlyList<NotificationItem> items, bool schemaReady = true, string? schemaMessage = null)
     {
         _itemsHost.Controls.Clear();
+        if (!schemaReady)
+        {
+            _emptyLabel.Text = schemaMessage ?? "Notifications require database migration 09_notifications.sql.";
+            _emptyLabel.Visible = true;
+            _scrollHost.Visible = false;
+            _markAllLink.Visible = false;
+            return;
+        }
+        _markAllLink.Visible = true;
+        _emptyLabel.Text = "No notifications.";
         _emptyLabel.Visible = items.Count == 0;
         _scrollHost.Visible = items.Count > 0;
 
