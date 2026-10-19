@@ -1093,7 +1093,8 @@ public partial class BoardForm : Form, IMessageFilter
         CloseReports();
         CloseDashboard();
         var calendar = new CalendarControl { Dock = DockStyle.Fill };
-        calendar.CardProvider = () => HasProjectContext ? _allCards : null;
+        // Server mode: Lịch chỉ chạy khi có nguồn card từ server; unavailable thì không cấp provider.
+        calendar.CardProvider = () => HasProjectContext && (_projects is null || _boardBackend is not null) ? _allCards : null;
         if (_projects is not null && _boardBackend is null) calendar.UnavailableReason = "Lịch chưa có nguồn Content từ server cho Project này.";
         calendar.ContentOpened += OpenContentById;
         _calendar = calendar;
