@@ -3,6 +3,7 @@ using System.Net.Http;
 using CreatorFlow.ApiClients;
 using CreatorFlow.Contracts.Auth;
 using CreatorFlow.Contracts.Users;
+using CreatorFlow.Contracts.Search;
 using CreatorFlow.Models;
 
 namespace CreatorFlow.Services;
@@ -11,6 +12,23 @@ namespace CreatorFlow.Services;
 public sealed class AuthApiFacade(ApiClient api, UserSession session)
 {
     public UserSession Session => session;
+
+    public async Task<GlobalSearchResponse?> SearchGlobalAsync(string query, int limit = 30, CancellationToken token = default)
+    {
+        var credentials = Credentials();
+        if (credentials is null) return null;
+        try
+        {
+            GlobalSearchResponse response = await api.SearchGlobalAsync(query, limit, credentials.Value.Token, token);
+            token.ThrowIfCancellationRequested();
+            return credentials.Value.Generation == session.Generation ? response : null;
+        }
+        catch (ApiBusinessException exception)
+        {
+            HandleUnauthorized(exception, credentials.Value.Generation);
+            throw;
+        }
+    }
 
     public async Task<bool> IsEmailVerificationAvailableAsync(CancellationToken token = default) =>
         (await CapabilitiesAsync(token))?.EmailVerificationAvailable == true;

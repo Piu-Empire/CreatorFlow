@@ -1,4 +1,5 @@
 using CreatorFlow.Api.Services.Board;
+using CreatorFlow.Contracts.Board;
 
 namespace CreatorFlow.Api.Endpoints;
 
@@ -17,7 +18,11 @@ public static class BoardEndpoints
             AuthEndpoints.ToHttp(await service.GetBoardAsync(projectId, token)));
 
         // Kho Content dùng cùng dữ liệu chi tiết nhưng có cả Content đã Archived.
-        api.MapGet("/projects/{projectId:long}/contents", async (long projectId, BoardService service, CancellationToken token) =>
-            AuthEndpoints.ToHttp(await service.GetContentLibraryAsync(projectId, token)));
+        api.MapGet("/projects/{projectId:long}/contents", async (
+            long projectId,
+            [AsParameters] ContentLibraryQuery query,
+            BoardService service,
+            CancellationToken token) =>
+                AuthEndpoints.ToHttp(await service.GetContentLibraryAsync(projectId, query, token)));
     }
 }

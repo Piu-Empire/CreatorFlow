@@ -37,6 +37,8 @@ public sealed partial class ProjectMembersDialog : Form
         Font = UITheme.FontBody;
         BackColor = UITheme.White;
         AccessibleName = Text;
+        bodyLayout.BackColor = UITheme.White;
+        listHost.BackColor = members.BackColor = UITheme.White;
         headingLabel.Font = UITheme.FontPageTitle;
         headingLabel.ForeColor = UITheme.Ink;
         projectLabel.Text = string.IsNullOrWhiteSpace(projectName) ? $"Project #{projectId}" : projectName;
@@ -190,11 +192,12 @@ public sealed partial class ProjectMembersDialog : Form
             Margin = new Padding(0, 0, 4, 0),
             AccessibleName = $"Đổi vai trò của {member.DisplayName}",
         };
-        var remove = new DangerOutlineButton
+        var remove = new ProjectActionButton
         {
             Text = "Gỡ",
             Dock = DockStyle.Top,
             Height = 36,
+            Style = RoundButtonStyle.DangerGhost,
             Enabled = !lastOwner,
             Margin = new Padding(4, 0, 0, 0),
             AccessibleName = $"Gỡ {member.DisplayName} khỏi Project",
@@ -384,47 +387,4 @@ public sealed partial class ProjectMembersDialog : Form
         base.Dispose(disposing);
     }
 
-    private sealed class DangerOutlineButton : Button
-    {
-        private bool hovered;
-
-        public DangerOutlineButton()
-        {
-            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
-            FlatStyle = FlatStyle.Flat;
-            FlatAppearance.BorderSize = 0;
-            BackColor = UITheme.White;
-            ForeColor = UITheme.Danger;
-            Font = UITheme.FontBody;
-            Cursor = Cursors.Hand;
-            UseVisualStyleBackColor = false;
-        }
-
-        protected override void OnMouseEnter(EventArgs e)
-        {
-            hovered = true;
-            Invalidate();
-            base.OnMouseEnter(e);
-        }
-
-        protected override void OnMouseLeave(EventArgs e)
-        {
-            hovered = false;
-            Invalidate();
-            base.OnMouseLeave(e);
-        }
-
-        protected override void OnPaint(PaintEventArgs e)
-        {
-            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-            var bounds = new Rectangle(0, 0, Width - 1, Height - 1);
-            using var path = UITheme.CreateRoundedRectanglePath(bounds, 8);
-            using var fill = new SolidBrush(hovered ? Color.FromArgb(255, 241, 242) : UITheme.White);
-            using var border = new Pen(Color.FromArgb(254, 205, 211));
-            e.Graphics.FillPath(fill, path);
-            e.Graphics.DrawPath(border, path);
-            TextRenderer.DrawText(e.Graphics, Text, Font, bounds, Enabled ? UITheme.Danger : UITheme.Neutral400,
-                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine);
-        }
-    }
 }

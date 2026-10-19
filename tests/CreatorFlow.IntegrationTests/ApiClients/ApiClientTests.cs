@@ -44,6 +44,36 @@ public sealed class ApiClientTests
     }
 
     [TestMethod]
+    public async Task GetProjectContentLibraryAsync_EncodesCombinedFilterAndSortQuery()
+    {
+        using var handler = new StubHandler((request, _) =>
+        {
+            Assert.AreEqual(
+                "https://example.test/api/projects/81/contents?title=Title%20%26%20Tag&platform=YouTube&status=Ready&creatorId=7&priority=High&hasDeadline=true&deadlineFrom=2026-11-01&deadlineTo=2026-11-30&tag=education&sortBy=deadline&sortDescending=true",
+                request.RequestUri!.AbsoluteUri);
+            return Task.FromResult(JsonResponse("{\"cards\":[]}"));
+        });
+        using var http = CreateHttpClient(handler);
+        using var api = new ApiClient(http);
+        var query = new ContentLibraryQuery
+        {
+            Title = "Title & Tag",
+            Platform = "YouTube",
+            Status = "Ready",
+            CreatorId = 7,
+            Priority = "High",
+            HasDeadline = true,
+            DeadlineFrom = new DateOnly(2026, 11, 1),
+            DeadlineTo = new DateOnly(2026, 11, 30),
+            Tag = "education",
+            SortBy = "deadline",
+            SortDescending = true,
+        };
+
+        await api.GetProjectContentLibraryAsync(81, "fixture-token", query);
+    }
+
+    [TestMethod]
     [DataRow(400)]
     [DataRow(401)]
     [DataRow(403)]

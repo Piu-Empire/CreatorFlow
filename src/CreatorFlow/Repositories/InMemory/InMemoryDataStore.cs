@@ -22,7 +22,7 @@ public class InMemoryContentRecord
     public string Script = string.Empty;
     public string ContentType = string.Empty;
     public DateTime? PlannedPublishAt;
-    public string Sprint = "Sprint 25";
+    public string Sprint = CreatorFlow.Contracts.ContentDetail.SprintCatalog.DefaultSprint;
     public string EstimatedDuration = string.Empty;
     public List<string> Platforms = new();
     public HashSet<string> PublishedPlatforms = new();

@@ -1,4 +1,5 @@
 using CreatorFlow.Models;
+using CreatorFlow.Contracts.Board;
 
 namespace CreatorFlow.Services.Backends;
 
@@ -15,4 +16,8 @@ public interface IBoardBackend
     /// <summary>Kho toàn bộ Content của Project, gồm cả Content đã Archived. Mặc định tương thích backend chỉ có Board.</summary>
     Task<List<ContentBoardCard>> GetProjectContentsAsync(long projectId, CancellationToken token = default) =>
         GetBoardCardsAsync(projectId, token);
+
+    /// <summary>Kho Content với filter/sort server-side. Backend cũ có thể fallback về danh sách đầy đủ.</summary>
+    Task<List<ContentBoardCard>> GetProjectContentsAsync(long projectId, ContentLibraryQuery query, CancellationToken token = default) =>
+        GetProjectContentsAsync(projectId, token);
 }

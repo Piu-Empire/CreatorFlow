@@ -15,7 +15,7 @@ partial class InviteMemberDialog
     private System.Windows.Forms.TextBox txtEmail;
     private System.Windows.Forms.Label lblRole;
     private System.Windows.Forms.ComboBox cboRole;
-    private CreatorFlow.Controls.RoundedButton btnInvite;
+    private CreatorFlow.Controls.ProjectActionButton btnInvite;
     private System.Windows.Forms.Label _lblMessage;
     private System.Windows.Forms.Panel pnlDivider2;
     private System.Windows.Forms.Label lblList;
@@ -25,7 +25,7 @@ partial class InviteMemberDialog
     private System.Windows.Forms.ColumnHeader colStatus;
     private System.Windows.Forms.ColumnHeader colExpires;
     private System.Windows.Forms.Panel pnlDivider3;
-    private CreatorFlow.Controls.RoundedButton btnClose;
+    private CreatorFlow.Controls.ProjectActionButton btnClose;
 
     protected override void Dispose(bool disposing)
     {
@@ -45,7 +45,7 @@ partial class InviteMemberDialog
         this.txtEmail = new System.Windows.Forms.TextBox();
         this.lblRole = new System.Windows.Forms.Label();
         this.cboRole = new System.Windows.Forms.ComboBox();
-        this.btnInvite = new CreatorFlow.Controls.RoundedButton();
+        this.btnInvite = new CreatorFlow.Controls.ProjectActionButton();
         this._lblMessage = new System.Windows.Forms.Label();
         this.pnlDivider2 = new System.Windows.Forms.Panel();
         this.lblList = new System.Windows.Forms.Label();
@@ -55,7 +55,7 @@ partial class InviteMemberDialog
         this.colStatus = new System.Windows.Forms.ColumnHeader();
         this.colExpires = new System.Windows.Forms.ColumnHeader();
         this.pnlDivider3 = new System.Windows.Forms.Panel();
-        this.btnClose = new CreatorFlow.Controls.RoundedButton();
+        this.btnClose = new CreatorFlow.Controls.ProjectActionButton();
         this.SuspendLayout();
         // 
         // lblHeader
@@ -133,7 +133,7 @@ partial class InviteMemberDialog
         this.btnInvite.Style = RoundButtonStyle.Primary;
         this.btnInvite.TabIndex = 2;
         this.btnInvite.Text = "Gửi lời mời";
-        this.btnInvite.UseVisualStyleBackColor = true;
+        this.btnInvite.UseVisualStyleBackColor = false;
         this.btnInvite.Click += new System.EventHandler(this.btnInvite_Click);
         // 
         // _lblMessage  (lỗi: đỏ #DC2626; thành công: xanh; đang tải: xám — 11px đậm, style guide mục 13)
@@ -207,7 +207,7 @@ partial class InviteMemberDialog
         this.btnClose.Style = RoundButtonStyle.Secondary;
         this.btnClose.TabIndex = 4;
         this.btnClose.Text = "Đóng";
-        this.btnClose.UseVisualStyleBackColor = true;
+        this.btnClose.UseVisualStyleBackColor = false;
         // 
         // InviteMemberDialog
         // 

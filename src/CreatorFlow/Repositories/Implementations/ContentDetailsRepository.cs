@@ -10,8 +10,8 @@ namespace CreatorFlow.Repositories.Implementations;
 /// <summary>
 /// Cài đặt Npgsql cho IContentDetailsRepository: ghi bảng contents và đồng bộ content_platforms.
 /// Chạy trong transaction hiện hành của session (ContentService đã Begin()).
-/// Lưu đủ thông tin lập kế hoạch (SCRUM-32): title, description, script, content_type, priority, deadline, planned_publish_at.
-/// Chưa lưu Sprint / EstimatedDuration / Assignee vì schema chưa có cột tương ứng
+/// Lưu đủ thông tin lập kế hoạch: title, description, script, content_type, priority, deadline, planned_publish_at, sprint.
+/// Chưa lưu EstimatedDuration / Assignee vì schema chưa có cột tương ứng
 /// (assignee thuộc content_assignments — phần Workflow/Assignment).
 /// </summary>
 public class ContentDetailsRepository : IContentDetailsRepository
@@ -23,8 +23,8 @@ public class ContentDetailsRepository : IContentDetailsRepository
     public long Create(long projectId, ContentStatus status, ContentDraft draft, long createdByUserId)
     {
         using var cmd = _session.CreateCommand(@"
-INSERT INTO contents (project_id, title, description, script, content_type, priority, status, deadline, planned_publish_at, created_by)
-VALUES (@projectId, @title, @description, @script, @contentType, @priority::content_priority, @status::content_status, @deadline, @plannedPublishAt, @createdBy)
+INSERT INTO contents (project_id, title, description, script, content_type, priority, status, deadline, planned_publish_at, created_by, sprint)
+VALUES (@projectId, @title, @description, @script, @contentType, @priority::content_priority, @status::content_status, @deadline, @plannedPublishAt, @createdBy, @sprint)
 RETURNING content_id");
         cmd.Parameters.AddWithValue("projectId", projectId);
         cmd.Parameters.AddWithValue("status", PostgresEnumMapper.ToDatabaseValue(status));
@@ -41,7 +41,7 @@ RETURNING content_id");
         using (var cmd = _session.CreateCommand(@"
 UPDATE contents
 SET title = @title, description = @description, script = @script, content_type = @contentType,
-    priority = @priority::content_priority, deadline = @deadline, planned_publish_at = @plannedPublishAt
+    priority = @priority::content_priority, deadline = @deadline, planned_publish_at = @plannedPublishAt, sprint = @sprint
 WHERE content_id = @id"))
         {
             AddPlanningParameters(cmd, draft);
@@ -94,6 +94,7 @@ WHERE content_id = @id");
         cmd.Parameters.AddWithValue("priority", PostgresEnumMapper.ToDatabaseValue(draft.Priority));
         cmd.Parameters.Add("deadline", NpgsqlDbType.TimestampTz).Value = ToDbDate(draft.Deadline);
         cmd.Parameters.Add("plannedPublishAt", NpgsqlDbType.TimestampTz).Value = ToDbDate(draft.PlannedPublishAt);
+        cmd.Parameters.Add("sprint", NpgsqlDbType.Varchar).Value = draft.Sprint;
     }
 
     /// <summary>

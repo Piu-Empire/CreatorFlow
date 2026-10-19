@@ -19,7 +19,7 @@ public class ContentDraft
 
     public Priority Priority { get; set; } = Priority.Medium;
     public List<string> Platforms { get; set; } = new();
-    public string Sprint { get; set; } = "Sprint 25";
+    public string Sprint { get; set; } = CreatorFlow.Contracts.ContentDetail.SprintCatalog.DefaultSprint;
     public DateTime? Deadline { get; set; }
 
     /// <summary>Ngày dự kiến đăng (chỉ lấy phần ngày). null = chưa lên lịch đăng.</summary>

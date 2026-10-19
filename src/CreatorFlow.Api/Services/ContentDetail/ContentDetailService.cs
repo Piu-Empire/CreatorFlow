@@ -63,7 +63,7 @@ public sealed class ContentDetailService(
         return new(new ContentDetailResponse(
             content.ContentId, content.ProjectId, $"CNT-{content.ContentId:000}", content.Title, content.Description,
             content.ContentType, content.Status, content.Priority, content.Deadline, content.PlannedPublishAt,
-            content.CreatedBy, content.Platforms, role.Value.ToString()));
+            content.CreatedBy, content.Platforms, role.Value.ToString(), content.Sprint));
     }
 
     public async Task<AuthOperationResult<ContentDetailResponse>> UpdateAsync(
@@ -100,13 +100,17 @@ public sealed class ContentDetailService(
         (List<string> platforms, string? platformError) = await ResolvePlatformsAsync(request.Platforms, token);
         if (platformError is not null) return Validation<ContentDetailResponse>(platformError, "platforms");
 
+        string sprint = content.Sprint;
+        if (!string.IsNullOrWhiteSpace(request.Sprint) && !SprintCatalog.TryNormalize(request.Sprint, out sprint))
+            return Validation<ContentDetailResponse>("Sprint không hợp lệ.", "sprint");
+
         string[] removed = (await repository.GetPublishedPlatformNamesAsync(contentId, token))
             .Where(p => !platforms.Contains(p, StringComparer.OrdinalIgnoreCase)).ToArray();
         if (removed.Length > 0)
             return Validation<ContentDetailResponse>($"Không thể bỏ nền tảng đã đăng: {string.Join(", ", removed)}.", "platforms");
 
         await repository.UpdateAsync(contentId,
-            new ContentUpdate(check.Title, check.Description, check.ContentType, check.PriorityDb, request.Deadline, request.PlannedPublishAt, platforms), token);
+            new ContentUpdate(check.Title, check.Description, check.ContentType, check.PriorityDb, request.Deadline, request.PlannedPublishAt, platforms, sprint), token);
 
         return await GetDetailAsync(contentId, token);
     }
@@ -148,6 +152,10 @@ public sealed class ContentDetailService(
         (List<string> platforms, string? platformError) = await ResolvePlatformsAsync(request.Platforms, token);
         if (platformError is not null) return Validation<ContentDetailResponse>(platformError, "platforms");
 
+        string requestedSprint = string.IsNullOrWhiteSpace(request.Sprint) ? SprintCatalog.DefaultSprint : request.Sprint;
+        if (!SprintCatalog.TryNormalize(requestedSprint, out string sprint))
+            return Validation<ContentDetailResponse>("Sprint không hợp lệ.", "sprint");
+
         if (request.AssigneeUserId is long assigneeId)
         {
             if (!TaskRules.CanAssign(role) && assigneeId != user.UserId)
@@ -161,7 +169,7 @@ public sealed class ContentDetailService(
         }
 
         long contentId = await repository.CreateAsync(new NewContent(projectId, statusDb,
-            new ContentUpdate(check.Title, check.Description, check.ContentType, check.PriorityDb, request.Deadline, request.PlannedPublishAt, platforms),
+            new ContentUpdate(check.Title, check.Description, check.ContentType, check.PriorityDb, request.Deadline, request.PlannedPublishAt, platforms, sprint),
             user.UserId), token);
 
         if (request.AssigneeUserId is long assignee)
