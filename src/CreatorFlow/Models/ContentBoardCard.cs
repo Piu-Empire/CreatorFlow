@@ -43,6 +43,7 @@ public class ContentBoardCard
     /// <summary>Có Review đang PENDING hay không (hiện icon Review trên card).</summary>
     public bool HasPendingReview { get; set; }
 
+    /// <summary>Quá hạn khi có Deadline đã qua ngày và Content chưa hoàn thành (Published/Archived).</summary>
     public bool IsOverdue =>
-        TaskRules.IsOverdue(Deadline, Status == ContentStatus.Published, DateTime.Today);
+        TaskRules.IsOverdue(Deadline, Status is ContentStatus.Published or ContentStatus.Archived, DateTime.Today);
 }

@@ -8,6 +8,8 @@ using CreatorFlow.Api.Models.Auth;
 using CreatorFlow.Api.Models.Invitations;
 using CreatorFlow.Api.Models.Tasks;
 using CreatorFlow.Api.Repositories.ContentDetail;
+using CreatorFlow.Api.Repositories.Board;
+using CreatorFlow.Api.Models.Board;
 using CreatorFlow.Api.Repositories.Ideas;
 using CreatorFlow.Api.Repositories.Invitations;
 using CreatorFlow.Api.Repositories.ReviewQueue;
@@ -16,6 +18,7 @@ using CreatorFlow.Api.Services.ContentDetail;
 using CreatorFlow.Api.Services.Ideas;
 using CreatorFlow.Api.Services.Invitations;
 using CreatorFlow.Api.Services.Auth;
+using CreatorFlow.Api.Services.Overdue;
 using CreatorFlow.Api.Services.ReviewQueue;
 using CreatorFlow.Api.Tests.ContentDetail;
 using CreatorFlow.Api.Tests.Ideas;
@@ -44,7 +47,8 @@ public sealed class FeatureRoutingTests
     private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
 
     private sealed record Host(WebApplication App, HttpClient Client, IdeaRepositoryFake Ideas, ContentDetailRepositoryFake Contents,
-        MemberRolesFake Roles, InvitationFake Invites, MyInvitationFake MyInvites, TestEmailSender EmailSender) : IAsyncDisposable
+        MemberRolesFake Roles, InvitationFake Invites, MyInvitationFake MyInvites, TestEmailSender EmailSender,
+        BoardCardsFake Board) : IAsyncDisposable
     {
         public async ValueTask DisposeAsync() { Client.Dispose(); await App.DisposeAsync(); }
     }
@@ -60,6 +64,7 @@ public sealed class FeatureRoutingTests
         var myInvites = new MyInvitationFake();
         var emailSender = new TestEmailSender();
         var reviewQueue = new ReviewQueueRepositoryFake();
+        var board = new BoardCardsFake();
         roles.Roles[(ProjectId, 1)] = ProjectRole.Owner;
         roles.Roles[(ProjectId, ActorId)] = ProjectRole.Creator;
         invites.Roles[(ProjectId, ActorId)] = ProjectRole.Owner; // trong test lời mời, người đăng nhập là Owner
@@ -70,6 +75,7 @@ public sealed class FeatureRoutingTests
         builder.Services.AddSingleton<IInvitationRepository>(invites);
         builder.Services.AddSingleton<IMyInvitationRepository>(myInvites);
         builder.Services.AddSingleton<IReviewQueueRepository>(reviewQueue);
+        builder.Services.AddSingleton<IBoardCardRepository>(board);
         builder.Services.AddSingleton<IEmailSender>(emailSender);
         builder.Services.AddSingleton(TimeProvider.System);
         builder.Services.AddScoped(_ => new CurrentAuthenticatedUser
@@ -79,6 +85,7 @@ public sealed class FeatureRoutingTests
         builder.Services.AddScoped<IdeaService>();
         builder.Services.AddScoped<ContentDetailService>();
         builder.Services.AddScoped<ReviewQueueService>();
+        builder.Services.AddScoped<OverdueService>();
         builder.Services.AddScoped<InvitationService>();
         builder.Services.AddScoped<MyInvitationService>();
         builder.Services.AddAuthentication("fixture").AddScheme<AuthenticationSchemeOptions, ProjectRoutingTests.FixtureAuth>("fixture", _ => { });
@@ -91,13 +98,14 @@ public sealed class FeatureRoutingTests
         app.MapIdeaEndpoints();
         app.MapContentDetailEndpoints();
         app.MapReviewQueueEndpoints();
+        app.MapOverdueEndpoints();
         app.MapInvitationEndpoints();
         app.MapMyInvitationEndpoints();
         await app.StartAsync();
 
         HttpClient client = app.GetTestClient();
         if (signedIn) client.DefaultRequestHeaders.Authorization = new("fixture", "actor");
-        return new Host(app, client, ideas, contents, roles, invites, myInvites, emailSender);
+        return new Host(app, client, ideas, contents, roles, invites, myInvites, emailSender, board);
     }
 
     private static readonly (HttpMethod Method, string Path, object? Body)[] AllRoutes =
@@ -116,6 +124,7 @@ public sealed class FeatureRoutingTests
         (HttpMethod.Put, "/api/contents/10/script", new { text = "x", expectedVersion = "v" }),
         (HttpMethod.Get, "/api/contents/10/activity", null),
         (HttpMethod.Get, "/api/projects/1/reviews/pending", null),
+        (HttpMethod.Get, "/api/projects/1/overdue", null),
         (HttpMethod.Post, "/api/projects/1/invitations", new { email = "a@x.vn", role = "Creator" }),
         (HttpMethod.Get, "/api/projects/1/invitations", null),
         (HttpMethod.Get, "/api/invitations/mine", null),
@@ -299,7 +308,40 @@ public sealed class FeatureRoutingTests
         Assert.AreEqual(HttpStatusCode.NotFound, (await host.Client.PostAsync("/api/invitations/12/accept", null)).StatusCode, "lời mời của người khác");
     }
 
+    [TestMethod]
+    public async Task Overdue_OverHttp_ReturnsOnlyLateUnfinishedContent_AndForbidsOutsiders()
+    {
+        await using Host host = await StartAsync();
+        DateOnly twoDaysAgo = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-2);
+        host.Board.Cards.Add(new BoardCard(50, ProjectId, "CNT-050", "Quá hạn", "d", "Script", "Medium",
+            twoDaysAgo, null, ["YouTube"], [], false));
+        host.Board.Cards.Add(new BoardCard(51, ProjectId, "CNT-051", "Đã xuất bản", "d", "Published", "Medium",
+            twoDaysAgo, null, [], [], false));
+        host.Roles.BoardAssignees.Add(new BoardAssignee(50, ActorId, "Actor", AssignmentStatus.Assigned, 0, null));
+
+        var body = await host.Client.GetFromJsonAsync<JsonElement>("/api/projects/1/overdue", Web);
+
+        Assert.AreEqual(1, body.GetProperty("total").GetInt32());
+        JsonElement item = body.GetProperty("items")[0];
+        Assert.AreEqual(50, item.GetProperty("contentId").GetInt64());
+        Assert.AreEqual(2, item.GetProperty("daysLate").GetInt32());
+        Assert.AreEqual("YouTube", item.GetProperty("platforms")[0].GetString());
+        Assert.AreEqual(ActorId, item.GetProperty("assignees")[0].GetProperty("userId").GetInt64());
+        Assert.AreEqual(HttpStatusCode.Forbidden, (await host.Client.GetAsync("/api/projects/2/overdue")).StatusCode);
+    }
+
     // ================================================================== test double
+
+    internal sealed class BoardCardsFake : IBoardCardRepository
+    {
+        public List<BoardCard> Cards { get; } = new();
+
+        public Task<IReadOnlyList<BoardCard>> GetCardsAsync(long projectId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<BoardCard>>(Cards.Where(c => c.ProjectId == projectId).ToList());
+
+        public Task<IReadOnlyList<BoardCard>> GetProjectContentsAsync(long projectId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<BoardCard>>(Cards);
+    }
 
     internal sealed class InvitationFake : IInvitationRepository
     {
