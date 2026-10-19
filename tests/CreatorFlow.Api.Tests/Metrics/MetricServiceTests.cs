@@ -157,6 +157,81 @@ public sealed class MetricServiceTests
         Assert.AreEqual(403, result.Status);
     }
 
+    [TestMethod]
+    public async Task Record_SameValuesTwice_SkipsSecondInsert()
+    {
+        var f = new Fixture(ManagerId);
+
+        var first = await f.Service.RecordAsync(ContentId, TikTokId, new RecordMetricRequest(100, 5, 2, 3));
+        var second = await f.Service.RecordAsync(ContentId, TikTokId, new RecordMetricRequest(100, 5, 2, 3));
+
+        Assert.IsTrue(first.Succeeded);
+        Assert.IsTrue(second.Succeeded);
+        Assert.AreEqual(1, f.Metrics.AddCalls); // AC3b: nhập y nguyên giá trị cũ không tạo dòng trùng
+        Assert.AreEqual(100, second.Value!.Latest!.Views);
+    }
+
+    [TestMethod]
+    public async Task GetSummary_NotSignedIn_Returns401()
+    {
+        var f = new Fixture(null);
+
+        var result = await f.Service.GetSummaryAsync(ProjectId, null);
+
+        Assert.AreEqual(401, result.Status);
+    }
+
+    [TestMethod]
+    public async Task GetSummary_NotMember_Returns403()
+    {
+        var f = new Fixture(99);
+
+        var result = await f.Service.GetSummaryAsync(ProjectId, "content");
+
+        Assert.AreEqual(403, result.Status);
+    }
+
+    [TestMethod]
+    public async Task GetSummary_InvalidGroupBy_Returns400()
+    {
+        var f = new Fixture(OwnerId);
+
+        var result = await f.Service.GetSummaryAsync(ProjectId, "unknown");
+
+        Assert.AreEqual(400, result.Status);
+    }
+
+    [TestMethod]
+    public async Task GetSummary_MapsRows_AndComputesEngagement()
+    {
+        var f = new Fixture(OwnerId);
+        f.Metrics.Summary =
+        [
+            new MetricSummaryRecord(10, "Content A", 1000, 20, 10, 5),
+            new MetricSummaryRecord(11, "Content B", 0, 0, 0, 0),
+        ];
+
+        var result = await f.Service.GetSummaryAsync(ProjectId, "content");
+
+        Assert.IsTrue(result.Succeeded);
+        Assert.AreEqual("content", result.Value!.GroupBy);
+        Assert.AreEqual(2, result.Value.Rows.Count);
+        Assert.AreEqual(3.5d, result.Value.Rows[0].EngagementPercent, 0.001); // (20+10+5)/1000×100
+        Assert.AreEqual(0d, result.Value.Rows[1].EngagementPercent);          // Views=0 → 0 (AC1)
+        Assert.AreEqual(MetricGroupBy.Content, f.Metrics.LastGroupBy);
+    }
+
+    [TestMethod]
+    public async Task GetSummary_DefaultGroupBy_IsContent()
+    {
+        var f = new Fixture(OwnerId);
+
+        var result = await f.Service.GetSummaryAsync(ProjectId, null);
+
+        Assert.IsTrue(result.Succeeded);
+        Assert.AreEqual(MetricGroupBy.Content, f.Metrics.LastGroupBy);
+    }
+
     // ================================================================== helpers
 
     private sealed class Fixture
@@ -238,6 +313,16 @@ public sealed class MetricServiceTests
         public Task<IReadOnlyList<MetricSnapshot>> GetHistoryAsync(long contentPlatformId, CancellationToken ct = default) =>
             Task.FromResult<IReadOnlyList<MetricSnapshot>>(_rows
                 .Where(r => r.ContentPlatformId == contentPlatformId).OrderByDescending(r => r.MetricId).ToList());
+
+        public IReadOnlyList<MetricSummaryRecord> Summary { get; set; } = Array.Empty<MetricSummaryRecord>();
+        public MetricGroupBy? LastGroupBy { get; private set; }
+
+        public Task<IReadOnlyList<MetricSummaryRecord>> GetProjectSummaryAsync(
+            long projectId, MetricGroupBy groupBy, CancellationToken ct = default)
+        {
+            LastGroupBy = groupBy;
+            return Task.FromResult(Summary);
+        }
 
         public Task<MetricSnapshot> AddSnapshotAsync(NewMetric metric, CancellationToken ct = default)
         {

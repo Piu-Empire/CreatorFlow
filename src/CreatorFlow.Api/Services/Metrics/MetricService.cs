@@ -25,6 +25,24 @@ public sealed class MetricService(IMetricRepository metrics, ITaskRepository tas
             platforms.Select(p => ToResponse(p, role, latest.GetValueOrDefault(p.ContentPlatformId), null)).ToList()));
     }
 
+    public async Task<AuthOperationResult<MetricsSummaryResponse>> GetSummaryAsync(
+        long projectId, string? groupBy, CancellationToken token = default)
+    {
+        if (current.User is not { } user) return Unauthorized<MetricsSummaryResponse>();
+        if (!TryParseGroupBy(groupBy, out MetricGroupBy dimension))
+            return AuthOperationResult<MetricsSummaryResponse>.Fail("validation",
+                "groupBy phải là content, creator, platform hoặc project.", "groupBy");
+
+        ProjectRole? role = await tasks.GetRoleAsync(projectId, user.UserId, token);
+        if (role is null) return NotMember<MetricsSummaryResponse>();
+
+        var summaryRows = await metrics.GetProjectSummaryAsync(projectId, dimension, token);
+        var response = new MetricsSummaryResponse(projectId, DimensionText(dimension),
+            summaryRows.Select(r => new MetricsSummaryRow(r.Key, r.Name, r.Views, r.Likes, r.Comments, r.Shares,
+                MetricEngagement.Percent(r.Views, r.Likes, r.Comments, r.Shares))).ToList());
+        return new(response);
+    }
+
     public async Task<AuthOperationResult<PlatformMetricsResponse>> GetPlatformMetricsAsync(
         long contentId, long platformId, bool history, CancellationToken token = default)
     {
@@ -59,10 +77,45 @@ public sealed class MetricService(IMetricRepository metrics, ITaskRepository tas
         if (!MetricRules.IsEligible(target))
             return AuthOperationResult<PlatformMetricsResponse>.Fail("content_locked", "Chỉ nhập metrics sau khi đã Published.", status: 409);
 
+        // AC3b: nếu giá trị sau khi gộp trùng y nguyên snapshot mới nhất thì không tạo dòng trùng.
+        // (Kiểm tra ở service cho dễ test; khe hở đọc–ghi nhỏ, chấp nhận cho POC.)
+        MetricSnapshot? latest = (await metrics.GetHistoryAsync(target.ContentPlatformId, token)).FirstOrDefault();
+        if (latest is not null && IsUnchanged(latest, request))
+            return new(ToResponse(target, role, latest, null));
+
         MetricSnapshot saved = await metrics.AddSnapshotAsync(
             new NewMetric(target.ContentPlatformId, request.Views, request.Likes, request.Comments, request.Shares, user.UserId), token);
         return new(ToResponse(target, role, saved, null));
     }
+
+    /// <summary>true nếu request (field null = giữ nguyên) không đổi so với snapshot <paramref name="latest"/>.</summary>
+    private static bool IsUnchanged(MetricSnapshot latest, RecordMetricRequest request) =>
+        (request.Views ?? latest.Views) == latest.Views &&
+        (request.Likes ?? latest.Likes) == latest.Likes &&
+        (request.Comments ?? latest.Comments) == latest.Comments &&
+        (request.Shares ?? latest.Shares) == latest.Shares;
+
+    private static bool TryParseGroupBy(string? value, out MetricGroupBy groupBy)
+    {
+        groupBy = MetricGroupBy.Content;
+        if (string.IsNullOrWhiteSpace(value)) return true;
+        switch (value.Trim().ToLowerInvariant())
+        {
+            case "project": groupBy = MetricGroupBy.Project; return true;
+            case "content": groupBy = MetricGroupBy.Content; return true;
+            case "creator": groupBy = MetricGroupBy.Creator; return true;
+            case "platform": groupBy = MetricGroupBy.Platform; return true;
+            default: return false;
+        }
+    }
+
+    private static string DimensionText(MetricGroupBy groupBy) => groupBy switch
+    {
+        MetricGroupBy.Project => "project",
+        MetricGroupBy.Creator => "creator",
+        MetricGroupBy.Platform => "platform",
+        _ => "content",
+    };
 
     private static PlatformMetricsResponse ToResponse(PlatformTarget p, ProjectRole? role, MetricSnapshot? latest, IReadOnlyList<MetricSnapshot>? history) => new(
         p.ContentPlatformId, p.PlatformId, p.PlatformName, p.PublicationStatus,

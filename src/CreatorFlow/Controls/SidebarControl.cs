@@ -21,6 +21,7 @@ public class SidebarControl : UserControl
     public event EventHandler? IdeaBankRequested;
     public event EventHandler? AdminWorkspaceRequested;
     public event EventHandler? AdminReportsRequested;
+    public event EventHandler? ReportsRequested;
     public event EventHandler? CalendarRequested;
     public event EventHandler? AiAssistantRequested;
     public event EventHandler? ProjectSettingsRequested;
@@ -217,7 +218,7 @@ public class SidebarControl : UserControl
         _items.Add(new NavItem { Title = "Kho Content", Icon = NavIcon.Library, Y = y, Action = () => ContentLibraryRequested?.Invoke(this, EventArgs.Empty) }); y += ItemStep;
         _items.Add(new NavItem { Title = "Backlog", Icon = NavIcon.List, Y = y, Badge = () => BacklogCount, Action = () => IdeaBankRequested?.Invoke(this, EventArgs.Empty) }); y += ItemStep;
         _items.Add(new NavItem { Title = "Calendar", Icon = NavIcon.Calendar, Y = y, AlwaysEnabled = true, Action = () => CalendarRequested?.Invoke(this, EventArgs.Empty) }); y += ItemStep;
-        _items.Add(new NavItem { Title = "Reports", Icon = NavIcon.Chart, Y = y }); y += ItemStep;
+        _items.Add(new NavItem { Title = "Reports", Icon = NavIcon.Chart, Y = y, Action = () => ReportsRequested?.Invoke(this, EventArgs.Empty) }); y += ItemStep;
 
         y += 10;
         _groups.Add(("AI", y)); y += 26;

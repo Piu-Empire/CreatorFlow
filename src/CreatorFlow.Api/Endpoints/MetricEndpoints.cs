@@ -23,5 +23,10 @@ public static class MetricEndpoints
         api.MapPost("/contents/{contentId:long}/platforms/{platformId:long}/metrics",
             async (long contentId, long platformId, RecordMetricRequest request, MetricService service, CancellationToken token) =>
                 AuthEndpoints.ToHttp(await service.RecordAsync(contentId, platformId, request, token)));
+
+        // Tổng hợp Metrics của Project theo chiều (SCRUM-52): ?groupBy=content|creator|platform|project.
+        api.MapGet("/projects/{projectId:long}/metrics/summary",
+            async (long projectId, string? groupBy, MetricService service, CancellationToken token) =>
+                AuthEndpoints.ToHttp(await service.GetSummaryAsync(projectId, groupBy, token)));
     }
 }

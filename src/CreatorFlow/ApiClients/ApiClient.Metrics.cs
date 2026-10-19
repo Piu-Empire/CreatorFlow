@@ -17,4 +17,9 @@ public sealed partial class ApiClient
 
     public Task<PlatformMetricsResponse> RecordMetricAsync(long contentId, long platformId, RecordMetricRequest request, string bearer, CancellationToken token = default) =>
         SendTasksAsync<PlatformMetricsResponse>(HttpMethod.Post, $"api/contents/{contentId}/platforms/{platformId}/metrics", request, bearer, token);
+
+    /// <summary>Tổng hợp Metrics của Project theo chiều (SCRUM-52). groupBy = content|creator|platform|project.</summary>
+    public Task<MetricsSummaryResponse> GetMetricsSummaryAsync(long projectId, string groupBy, string bearer, CancellationToken token = default) =>
+        SendTasksAsync<MetricsSummaryResponse>(HttpMethod.Get,
+            $"api/projects/{projectId}/metrics/summary?groupBy={Uri.EscapeDataString(groupBy)}", null, bearer, token);
 }

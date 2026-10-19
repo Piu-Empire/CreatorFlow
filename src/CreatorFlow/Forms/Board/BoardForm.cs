@@ -46,6 +46,7 @@ public partial class BoardForm : Form, IMessageFilter
     private readonly IAssignmentBackend? _assignmentBackend;
     private readonly IReviewQueueBackend? _reviewQueueBackend;
     private readonly INotificationBackend? _notificationBackend;
+    private readonly IMetricBackend? _metricBackend;
     private readonly IAIService? _aiService;
     private NotificationPanelControl? _notificationPanel;
     private long? _reopenContentId; // chế độ API: mở lại drawer của thẻ này sau khi Board tải lại (sau khi lưu/đổi trạng thái/giao việc)
@@ -128,6 +129,7 @@ public partial class BoardForm : Form, IMessageFilter
         _assignmentBackend = assignmentBackend;
         _reviewQueueBackend = reviewQueueBackend;
         _notificationBackend = notificationBackend;
+        _metricBackend = metrics;
         _aiService = aiService;
         _topHeaderControl.BellClicked += async (_, _) => await OnBellClickedAsync();
         _topHeaderControl.SetNotificationsEnabled(_notificationBackend is not null);
@@ -144,15 +146,7 @@ public partial class BoardForm : Form, IMessageFilter
             _sidebarControl.CalendarRequested += (_, _) => OpenCalendar();
             _sidebarControl.SummaryRequested += (_, _) => OpenDashboard();
             _sidebarControl.AiAssistantRequested += (_, _) => OpenAiAssistant();
-        }
-
-        // TẠM-LOCAL: chế độ local không có auth nên menu Calendar/Summary chưa được gắn; gắn thêm để test.
-        // Xóa khối này trước khi push (xem docs/tasks/scrum-49-loc-calendar/local-test-cleanup.md).
-        if (auth is null)
-        {
-            _sidebarControl.CalendarRequested += (_, _) => OpenCalendar();
-            _sidebarControl.SummaryRequested += (_, _) => OpenDashboard();
-            _sidebarControl.AiAssistantRequested += (_, _) => OpenAiAssistant();
+            _sidebarControl.ReportsRequested += (_, _) => OpenProjectReports();
         }
 
         _pnlDrawerHost.Paint += PnlDrawerHost_Paint;
@@ -1123,6 +1117,21 @@ public partial class BoardForm : Form, IMessageFilter
         _pnlBoardArea.Visible = true;
         _topHeaderControl.SetAuthenticatedPage("Board");
         UpdateProjectContext();
+    }
+
+    /// <summary>Màn Báo cáo Metrics của Project (SCRUM-52). Cần chế độ máy chủ (có backend metrics).</summary>
+    private void OpenProjectReports()
+    {
+        if (!CanLeaveProjectPage()) return;
+        if (_metricBackend is null || !HasProjectContext)
+        {
+            _toast.ShowToast(this, "Báo cáo Metrics cần chạy ở chế độ máy chủ (đã kết nối database).");
+            return;
+        }
+
+        var page = new ProjectReportsControl(_metricBackend, CurrentSession.CurrentProjectId) { Dock = DockStyle.Fill };
+        ShowProjectPage(page, "Báo cáo Metrics");
+        _sidebarControl.SetActiveMenu("Reports");
     }
 
     private void OpenDashboard()
