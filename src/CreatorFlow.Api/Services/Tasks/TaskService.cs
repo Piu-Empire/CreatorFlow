@@ -178,6 +178,10 @@ public sealed class TaskService(
                 return AuthOperationResult<AssignmentsResponse>.Fail("validation", "Chỉ có thể giao Content cho thành viên có vai trò Creator.", "assignments");
 
             TaskAssignment? current = existing.FirstOrDefault(e => e.AssigneeUserId == item.UserId);
+            // Tự nhận việc không cấp quyền sửa deadline đã được giao trước đó.
+            if (!TaskRules.CanChangeDeadline(role) && current is not null &&
+                item.Deadline.HasValue && item.Deadline != current.Deadline)
+                return Forbidden<AssignmentsResponse>("Chỉ Owner/Manager mới được đổi deadline.");
             if (TaskRules.ValidateNewDeadline(item.Deadline, current?.Deadline, Today) is { } deadlineError)
                 return AuthOperationResult<AssignmentsResponse>.Fail("validation", $"{member.DisplayName}: {deadlineError}", "assignments");
         }

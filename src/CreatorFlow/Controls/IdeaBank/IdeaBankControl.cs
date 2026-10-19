@@ -214,6 +214,8 @@ public partial class IdeaBankControl : UserControl
         FocusPendingIdea();
     }
 
+    public void RefreshProjectPermissions() => ReloadIdeas();
+
     private void UpdateDetailAndButtons()
     {
         var idea = SelectedIdea;

@@ -18,13 +18,22 @@ public sealed class ApiIdeaBackend(ApiClient api, UserSession session) : IIdeaBa
 
     private T Run<T>(Func<Task<T>> call)
     {
+        long generation = session.Generation;
         try
         {
             return Task.Run(call).GetAwaiter().GetResult();
         }
         catch (ApiBusinessException ex)
         {
-            if (ex.StatusCode == HttpStatusCode.Unauthorized) session.Clear();
+            if (generation == session.Generation)
+            {
+                if (ex.StatusCode == HttpStatusCode.Unauthorized) session.Clear();
+                if (ex.StatusCode == HttpStatusCode.Forbidden)
+                {
+                    _roles.Clear();
+                    session.NotifyAuthorizationRejected(generation);
+                }
+            }
             throw ex.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden
                 ? new UnauthorizedWorkflowActionException(ex.Message)
                 : new IdeaValidationException(ex.Message);

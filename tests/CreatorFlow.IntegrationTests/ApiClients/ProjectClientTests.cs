@@ -203,6 +203,54 @@ public sealed class ProjectClientTests
         catch (ApiBusinessException error) { Assert.AreEqual(field, error.ErrorField); }
         Assert.IsNull(projects.Context.Current);
     }
+    [TestMethod]
+    public async Task RevalidationAfter403_ClearsProjectButKeepsLogin()
+    {
+        var session = Session();
+        int rejected = 0;
+        session.AuthorizationRejected += (_, _) => rejected++;
+        using var http = new HttpClient(new Handler((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.Forbidden)
+        { Content = JsonContent.Create(new { code = "forbidden", title = "Membership removed" }) }))) { BaseAddress = new("http://fixture.test/") };
+        using var api = new ApiClient(http);
+        using var projects = new ProjectApiFacade(api, session);
+        projects.Context.Apply(new(81, "A", "OWNER", "ACTIVE"));
+
+        Assert.IsFalse(await projects.RevalidateAsync(default));
+        Assert.IsNull(projects.Context.Current);
+        Assert.IsNull(CurrentSession.CurrentUserRole);
+        Assert.IsTrue(session.IsAuthenticated);
+        Assert.AreEqual(1, rejected);
+    }
+
+    [TestMethod]
+    public void Backend403_NotifiesUiWithoutRetryingMutationOrClearingLogin()
+    {
+        var session = Session();
+        int attempts = 0, rejected = 0;
+        session.AuthorizationRejected += (_, _) => rejected++;
+        using var http = new HttpClient(new Handler((_, _) =>
+        {
+            attempts++;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Forbidden)
+            { Content = JsonContent.Create(new { code = "forbidden", title = "Only Owner/Manager" }) });
+        })) { BaseAddress = new("http://fixture.test/") };
+        using var api = new ApiClient(http);
+        var backend = new CreatorFlow.Services.Backends.ApiMyTaskBackend(api, session);
+        try
+        {
+            backend.ChangeDeadline(10, 55, DateTime.Today.AddDays(3));
+            Assert.Fail("403 must not report a successful mutation");
+        }
+        catch (CreatorFlow.Services.Exceptions.UnauthorizedWorkflowActionException) { }
+        Assert.AreEqual(1, attempts);
+        Assert.AreEqual(1, rejected);
+        Assert.IsTrue(session.IsAuthenticated);
+        long generation = session.Generation;
+        session.Clear();
+        session.NotifyAuthorizationRejected(generation);
+        Assert.AreEqual(1, rejected);
+    }
+
     private sealed class Handler(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> send) : HttpMessageHandler
     { protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token) => send(request, token); }
 }
