@@ -40,5 +40,21 @@ public static class ContentDetailEndpoints
         api.MapGet("/contents/{contentId:long}/activity",
             async (long contentId, ContentDetailService service, CancellationToken token) =>
                 AuthEndpoints.ToHttp(await service.GetActivityAsync(contentId, token)));
+
+        api.MapGet("/contents/{contentId:long}/references",
+            async (long contentId, ContentDetailService service, CancellationToken token) =>
+                AuthEndpoints.ToHttp(await service.GetReferencesAsync(contentId, token)));
+
+        api.MapPost("/contents/{contentId:long}/references",
+            async (long contentId, CreateContentReferenceRequest request, ContentDetailService service, CancellationToken token) =>
+                AuthEndpoints.ToHttp(await service.AddReferenceAsync(contentId, request, token)));
+
+        api.MapDelete("/contents/{contentId:long}/references/{referenceId:long}",
+            async (long contentId, long referenceId, ContentDetailService service, CancellationToken token) =>
+                AuthEndpoints.ToHttp(await service.DeleteReferenceAsync(contentId, referenceId, token)));
+
+        api.MapPut("/contents/{contentId:long}/references",
+            async (long contentId, SaveContentReferenceChangesRequest request, ContentDetailService service, CancellationToken token) =>
+                AuthEndpoints.ToHttp(await service.SaveReferenceChangesAsync(contentId, request, token)));
     }
 }

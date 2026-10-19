@@ -48,3 +48,14 @@ public sealed record ActivityRecord(
     string? ToStatus = null,
     int? ReviewNo = null,
     string? ReviewStatus = null);
+
+/// <summary>Reference metadata stored in content_attachments.</summary>
+public sealed record ContentReferenceRecord(
+    long ReferenceId,
+    long ContentId,
+    string DisplayName,
+    string ResourceUrl,
+    long? AddedBy,
+    DateTime CreatedAt);
+
+public sealed record NewContentReference(string DisplayName, string ResourceUrl);

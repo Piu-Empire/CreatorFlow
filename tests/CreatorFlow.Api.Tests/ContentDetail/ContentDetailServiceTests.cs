@@ -723,6 +723,113 @@ public sealed class ContentDetailServiceTests
         Assert.AreEqual("Pending", result.Value.Items[1].ReviewStatus);
     }
 
+    // ================================================================== references
+
+    [TestMethod]
+    public async Task References_ListRequiresMembership_AndReturnsCanManage()
+    {
+        var f = new Fixture(CreatorId);
+        f.Repo.References[OwnContent] = [new ContentReferenceRecord(1, OwnContent, "Brief", "https://example.test/brief.pdf", CreatorId, DateTime.UtcNow)];
+
+        Assert.AreEqual(401, (await new Fixture(actingUserId: null).Service.GetReferencesAsync(OwnContent)).Status);
+        Assert.AreEqual(403, (await new Fixture(OutsiderId).Service.GetReferencesAsync(OwnContent)).Status);
+        Assert.AreEqual(404, (await f.Service.GetReferencesAsync(9999)).Status);
+
+        var own = await f.Service.GetReferencesAsync(OwnContent);
+        var anotherCreators = await f.ServiceFor(OtherCreatorId).GetReferencesAsync(OwnContent);
+
+        Assert.IsTrue(own.Succeeded);
+        Assert.IsTrue(own.Value!.CanManage);
+        Assert.AreEqual("Brief", own.Value.References.Single().DisplayName);
+        Assert.IsFalse(anotherCreators.Value!.CanManage);
+    }
+
+    [TestMethod]
+    public async Task References_AddValidatesAndStoresHttpLinksWithoutFetchingThem()
+    {
+        var f = new Fixture(CreatorId);
+
+        var added = await f.Service.AddReferenceAsync(OwnContent, new CreateContentReferenceRequest("  Brief  ", "https://example.invalid/file.pdf"));
+
+        Assert.AreEqual(201, added.Status);
+        Assert.AreEqual("Brief", added.Value!.DisplayName);
+        Assert.AreEqual("https://example.invalid/file.pdf", added.Value.ResourceUrl);
+        Assert.AreEqual(CreatorId, added.Value.AddedBy);
+        Assert.AreEqual(1, (await f.Repo.GetReferencesAsync(OwnContent)).Count);
+        Assert.AreEqual(403, (await new Fixture(OtherCreatorId).Service.AddReferenceAsync(OwnContent,
+            new CreateContentReferenceRequest("No access", "https://example.test"))).Status);
+    }
+
+    [TestMethod]
+    [DataRow("", "https://example.test")]
+    [DataRow("  ", "https://example.test")]
+    [DataRow("a", "file:///C:/private.pdf")]
+    [DataRow("a", "not-a-url")]
+    public async Task References_AddRejectsInvalidNameOrUrl(string name, string url)
+    {
+        var f = new Fixture(CreatorId);
+
+        var result = await f.Service.AddReferenceAsync(OwnContent, new CreateContentReferenceRequest(name, url));
+
+        Assert.AreEqual(400, result.Status);
+        Assert.AreEqual(0, (await f.Repo.GetReferencesAsync(OwnContent)).Count);
+    }
+
+    [TestMethod]
+    public async Task References_AddAndDeleteRespectOwnershipAndContentState()
+    {
+        var f = new Fixture(OtherCreatorId);
+
+        Assert.AreEqual(403, (await f.Service.AddReferenceAsync(OwnContent,
+            new CreateContentReferenceRequest("Brief", "https://example.test"))).Status);
+        Assert.AreEqual(409, (await f.Service.AddReferenceAsync(PublishedContent,
+            new CreateContentReferenceRequest("Brief", "https://example.test"))).Status);
+
+        var owner = await f.ServiceFor(OwnerId).AddReferenceAsync(OwnContent,
+            new CreateContentReferenceRequest("Brief", "http://example.test"));
+        Assert.IsTrue(owner.Succeeded);
+        Assert.AreEqual(404, (await f.ServiceFor(OwnerId).DeleteReferenceAsync(OwnersContent, owner.Value!.ReferenceId)).Status);
+        Assert.IsTrue((await f.ServiceFor(OwnerId).DeleteReferenceAsync(OwnContent, owner.Value.ReferenceId)).Succeeded);
+        Assert.AreEqual(0, (await f.Repo.GetReferencesAsync(OwnContent)).Count);
+    }
+
+    [TestMethod]
+    public async Task References_SaveChangesAppliesAddsAndDeletesAsOneAuthorizedOperation()
+    {
+        var f = new Fixture(CreatorId);
+        ContentReferenceRecord existing = await f.Repo.AddReferenceAsync(OwnContent, "Old", "https://example.test/old", CreatorId);
+        var request = new SaveContentReferenceChangesRequest(
+            [new CreateContentReferenceRequest(" New ", "https://example.test/new")],
+            [existing.ReferenceId]);
+
+        var saved = await f.Service.SaveReferenceChangesAsync(OwnContent, request);
+
+        Assert.IsTrue(saved.Succeeded);
+        Assert.AreEqual(1, saved.Value!.References.Count);
+        Assert.AreEqual("New", saved.Value.References[0].DisplayName);
+        Assert.AreEqual(CreatorId, saved.Value.References[0].AddedBy);
+        Assert.AreEqual(403, (await new Fixture(OtherCreatorId).Service.SaveReferenceChangesAsync(OwnContent, request)).Status);
+        Assert.AreEqual(409, (await f.ServiceFor(OwnerId).SaveReferenceChangesAsync(PublishedContent, request)).Status);
+    }
+
+    [TestMethod]
+    public async Task References_SaveChangesRejectsInvalidOrMissingDeleteWithoutPartialWrite()
+    {
+        var f = new Fixture(CreatorId);
+        ContentReferenceRecord existing = await f.Repo.AddReferenceAsync(OwnContent, "Old", "https://example.test/old", CreatorId);
+
+        var invalid = await f.Service.SaveReferenceChangesAsync(OwnContent, new SaveContentReferenceChangesRequest(
+            [new CreateContentReferenceRequest("", "https://example.test/new")], [existing.ReferenceId]));
+        var missingDelete = await f.Service.SaveReferenceChangesAsync(OwnContent, new SaveContentReferenceChangesRequest(
+            [new CreateContentReferenceRequest("New", "https://example.test/new")], [long.MaxValue]));
+
+        Assert.AreEqual(400, invalid.Status);
+        Assert.AreEqual(404, missingDelete.Status);
+        IReadOnlyList<ContentReferenceRecord> references = await f.Repo.GetReferencesAsync(OwnContent);
+        Assert.AreEqual(1, references.Count);
+        Assert.AreEqual(existing.ReferenceId, references[0].ReferenceId);
+    }
+
     // ================================================================== test double
 
     private sealed class Fixture

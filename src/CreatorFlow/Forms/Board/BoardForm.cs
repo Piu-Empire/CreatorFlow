@@ -375,8 +375,8 @@ public partial class BoardForm : Form, IMessageFilter
     private void SelectCard(KanbanCardControl cardCtrl)
     {
         if (!HasProjectContext || (_projects is not null && _detailBackend is null)) return;
-        // Đang mở thẻ khác và có thay đổi chưa lưu → hỏi trước khi chuyển (Clear() tự hiện hộp thoại xác nhận).
-        if (_selectedContentId.HasValue && _selectedContentId != cardCtrl.Card.ContentId && _contentDetailPanel.HasUnsavedChanges)
+        // Đang có thay đổi chưa lưu; chuyển thẻ hoặc tải lại cùng thẻ đều phải xác nhận trước.
+        if (_selectedContentId.HasValue && _contentDetailPanel.HasUnsavedChanges)
         {
             if (!_contentDetailPanel.Clear()) return;
         }
@@ -789,8 +789,8 @@ public partial class BoardForm : Form, IMessageFilter
             return;
         }
 
-        // Đang mở thẻ khác và có thay đổi chưa lưu → hỏi trước khi chuyển (Clear() tự hiện hộp thoại xác nhận).
-        if (_selectedContentId.HasValue && _selectedContentId != contentId && _contentDetailPanel.HasUnsavedChanges)
+        // Đang có thay đổi chưa lưu; chuyển thẻ hoặc tải lại cùng thẻ đều phải xác nhận trước.
+        if (_selectedContentId.HasValue && _contentDetailPanel.HasUnsavedChanges)
         {
             if (!_contentDetailPanel.Clear()) return;
         }
