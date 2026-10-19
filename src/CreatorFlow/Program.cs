@@ -86,10 +86,10 @@ static class Program
         var contentService = new ContentService(contentRepo, detailsRepo, historyRepo, memberRepo, platformRepo, uow, myTaskRepo);
         var myTaskService = new MyTaskService(myTaskRepo, memberRepo, uow);
         var ideaService = new IdeaService(ideaRepo, memberRepo, historyRepo, uow);
-        // SCRUM-33: AI chưa có cài đặt thật nên dùng NotConfiguredAiService; thay bằng AIService thật khi có.
-        var scriptService = new ScriptService(scriptRepo, detailsRepo, platformRepo, memberRepo, myTaskRepo, uow, new NotConfiguredAiService());
-        // SCRUM-57: cổng AI cho màn Trợ lý AI. Hiện đọc cấu hình từ .env ở client — POC, sẽ chuyển sang Backend sau.
+        // SCRUM-57/58: lõi AI client đọc cấu hình từ .env ở client — POC, sẽ chuyển sang Backend sau.
         var aiService = AIFactory.Create();
+        // SCRUM-33 + SCRUM-58: cổng AI cho script dùng ScriptAiService (adapter sang lõi AI client).
+        var scriptService = new ScriptService(scriptRepo, detailsRepo, platformRepo, memberRepo, myTaskRepo, uow, new ScriptAiService(aiService));
 
         // TẠM-LOCAL: đặt true để chạy thẳng Board bằng dữ liệu InMemory (test màn Lịch), bỏ qua login/API.
         // Xóa cả khối này trước khi push (xem docs/tasks/scrum-49-loc-calendar/local-test-cleanup.md).
