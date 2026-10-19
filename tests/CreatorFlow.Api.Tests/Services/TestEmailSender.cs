@@ -27,6 +27,14 @@ internal sealed class TestEmailSender : IEmailSender
         Invitations.Add((email, projectId, role, inviterName, expiresAtUtc));
         return Task.CompletedTask;
     }
+    public List<(string Email, string Title, string Message)> Notifications { get; } = new();
+    public Task SendNotificationAsync(string email, string title, string message,
+        CancellationToken cancellationToken = default)
+    {
+        if (Fail) throw new EmailDeliveryException();
+        Notifications.Add((email, title, message));
+        return Task.CompletedTask;
+    }
 }
 internal sealed class ImmediateClock : TimeProvider
 {

@@ -9,6 +9,11 @@ using CreatorFlow.Api.Models.Invitations;
 using CreatorFlow.Api.Models.Tasks;
 using CreatorFlow.Api.Repositories.ContentDetail;
 using CreatorFlow.Api.Repositories.Board;
+using CreatorFlow.Api.Repositories.Auth;
+using CreatorFlow.Api.Repositories.Notifications;
+using CreatorFlow.Api.Services.Notifications;
+using CreatorFlow.Api.Tests.Notifications;
+using CreatorFlow.Api.Models.Notifications;
 using CreatorFlow.Api.Models.Board;
 using CreatorFlow.Api.Repositories.Ideas;
 using CreatorFlow.Api.Repositories.Invitations;
@@ -48,7 +53,7 @@ public sealed class FeatureRoutingTests
 
     private sealed record Host(WebApplication App, HttpClient Client, IdeaRepositoryFake Ideas, ContentDetailRepositoryFake Contents,
         MemberRolesFake Roles, InvitationFake Invites, MyInvitationFake MyInvites, TestEmailSender EmailSender,
-        BoardCardsFake Board) : IAsyncDisposable
+        BoardCardsFake Board, FakeNotificationRepository Notifications, NotificationUserRepository Users) : IAsyncDisposable
     {
         public async ValueTask DisposeAsync() { Client.Dispose(); await App.DisposeAsync(); }
     }
@@ -65,6 +70,8 @@ public sealed class FeatureRoutingTests
         var emailSender = new TestEmailSender();
         var reviewQueue = new ReviewQueueRepositoryFake();
         var board = new BoardCardsFake();
+        var notifications = new FakeNotificationRepository();
+        var users = new NotificationUserRepository();
         roles.Roles[(ProjectId, 1)] = ProjectRole.Owner;
         roles.Roles[(ProjectId, ActorId)] = ProjectRole.Creator;
         invites.Roles[(ProjectId, ActorId)] = ProjectRole.Owner; // trong test lời mời, người đăng nhập là Owner
@@ -76,6 +83,8 @@ public sealed class FeatureRoutingTests
         builder.Services.AddSingleton<IMyInvitationRepository>(myInvites);
         builder.Services.AddSingleton<IReviewQueueRepository>(reviewQueue);
         builder.Services.AddSingleton<IBoardCardRepository>(board);
+        builder.Services.AddSingleton<INotificationRepository>(notifications);
+        builder.Services.AddSingleton<IUserRepository>(users);
         builder.Services.AddSingleton<IEmailSender>(emailSender);
         builder.Services.AddSingleton(TimeProvider.System);
         builder.Services.AddScoped(_ => new CurrentAuthenticatedUser
@@ -88,6 +97,7 @@ public sealed class FeatureRoutingTests
         builder.Services.AddScoped<OverdueService>();
         builder.Services.AddScoped<InvitationService>();
         builder.Services.AddScoped<MyInvitationService>();
+        builder.Services.AddScoped<NotificationService>();
         builder.Services.AddAuthentication("fixture").AddScheme<AuthenticationSchemeOptions, ProjectRoutingTests.FixtureAuth>("fixture", _ => { });
         builder.Services.AddAuthorization();
         builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow);
@@ -101,11 +111,12 @@ public sealed class FeatureRoutingTests
         app.MapOverdueEndpoints();
         app.MapInvitationEndpoints();
         app.MapMyInvitationEndpoints();
+        app.MapNotificationEndpoints();
         await app.StartAsync();
 
         HttpClient client = app.GetTestClient();
         if (signedIn) client.DefaultRequestHeaders.Authorization = new("fixture", "actor");
-        return new Host(app, client, ideas, contents, roles, invites, myInvites, emailSender, board);
+        return new Host(app, client, ideas, contents, roles, invites, myInvites, emailSender, board, notifications, users);
     }
 
     private static readonly (HttpMethod Method, string Path, object? Body)[] AllRoutes =
@@ -130,6 +141,10 @@ public sealed class FeatureRoutingTests
         (HttpMethod.Get, "/api/invitations/mine", null),
         (HttpMethod.Post, "/api/invitations/1/accept", null),
         (HttpMethod.Post, "/api/invitations/1/reject", null),
+        (HttpMethod.Get, "/api/notifications", null),
+        (HttpMethod.Get, "/api/notifications?unreadOnly=true", null),
+        (HttpMethod.Post, "/api/notifications/1/read", null),
+        (HttpMethod.Post, "/api/notifications/read-all", null),
     ];
 
     [TestMethod]
@@ -328,6 +343,40 @@ public sealed class FeatureRoutingTests
         Assert.AreEqual("YouTube", item.GetProperty("platforms")[0].GetString());
         Assert.AreEqual(ActorId, item.GetProperty("assignees")[0].GetProperty("userId").GetInt64());
         Assert.AreEqual(HttpStatusCode.Forbidden, (await host.Client.GetAsync("/api/projects/2/overdue")).StatusCode);
+    }
+
+    [TestMethod]
+    public async Task Notifications_ListUnreadCountMarkReadMarkAll_OverHttp()
+    {
+        await using Host host = await StartAsync(); // người đăng nhập là Actor (user 3)
+        host.Notifications.Seed(ActorId, NotificationType.ReviewSubmitted, "Có nội dung chờ duyệt: CNT-010",
+            "Nội dung \"Video 10\" vừa được gửi duyệt (lần 1).",
+            createdAt: new DateTime(2026, 10, 9, 8, 0, 0, DateTimeKind.Utc));
+        host.Notifications.Seed(ActorId, NotificationType.Overdue, "Nội dung CNT-011 đã trễ hạn",
+            "Nội dung \"Video 11\" đã quá hạn 07/10/2026.", isRead: true,
+            createdAt: new DateTime(2026, 10, 8, 9, 0, 0, DateTimeKind.Utc));
+        host.Notifications.Seed(99, NotificationType.Assignment, "Của người khác", "không được thấy");
+
+        var body = await host.Client.GetFromJsonAsync<JsonElement>("/api/notifications", Web);
+        Assert.AreEqual(1, body.GetProperty("unreadCount").GetInt32());
+        Assert.AreEqual(2, body.GetProperty("items").GetArrayLength());
+        long first = body.GetProperty("items")[0].GetProperty("notificationId").GetInt64();
+        Assert.AreEqual("Có nội dung chờ duyệt: CNT-010", body.GetProperty("items")[0].GetProperty("title").GetString());
+        Assert.IsFalse(body.GetProperty("items")[0].GetProperty("isRead").GetBoolean());
+
+        Assert.IsTrue((await host.Client.PostAsync($"/api/notifications/{first}/read", null)).IsSuccessStatusCode);
+        Assert.IsTrue((await host.Client.PostAsync($"/api/notifications/{first}/read", null)).IsSuccessStatusCode, "đánh dấu lại không được lỗi");
+        Assert.AreEqual(HttpStatusCode.NotFound, (await host.Client.PostAsync("/api/notifications/7/read", null)).StatusCode, "thông báo của người khác");
+        Assert.AreEqual(HttpStatusCode.NotFound, (await host.Client.PostAsync("/api/notifications/9999/read", null)).StatusCode, "không tồn tại");
+
+        Assert.IsTrue((await host.Client.PostAsync("/api/notifications/read-all", null)).IsSuccessStatusCode);
+
+        var after = await host.Client.GetFromJsonAsync<JsonElement>("/api/notifications", Web);
+        Assert.AreEqual(0, after.GetProperty("unreadCount").GetInt32());
+        Assert.AreEqual(2, after.GetProperty("items").GetArrayLength());
+        Assert.IsTrue(after.GetProperty("items")[0].GetProperty("isRead").GetBoolean());
+
+        Assert.AreEqual(HttpStatusCode.BadRequest, (await host.Client.GetAsync("/api/notifications?unreadOnly=1")).StatusCode, "unreadOnly phải là true/false");
     }
 
     // ================================================================== test double

@@ -3,6 +3,7 @@ using CreatorFlow.Api.Models.Tasks;
 using CreatorFlow.Api.Models.Workflow;
 using CreatorFlow.Api.Repositories.Workflow;
 using CreatorFlow.Api.Services.Auth;
+using CreatorFlow.Api.Services.Notifications;
 using CreatorFlow.Contracts.Workflow;
 
 namespace CreatorFlow.Api.Services.Workflow;
@@ -14,7 +15,10 @@ namespace CreatorFlow.Api.Services.Workflow;
 ///   - duyệt/từ chối (REVIEW→READY / REVIEW→EDITING): chỉ Owner/Manager, từ chối bắt buộc Feedback.
 /// Người thao tác luôn lấy từ JWT, không bao giờ nhận từ body/route.
 /// </summary>
-public sealed class WorkflowService(IWorkflowRepository repository, CurrentAuthenticatedUser current)
+public sealed class WorkflowService(
+    IWorkflowRepository repository,
+    CurrentAuthenticatedUser current,
+    NotificationService notifications)
 {
     // Luồng chuyển trạng thái "đi thẳng" (không liên quan Reviews).
     private static readonly Dictionary<WorkflowContentStatus, WorkflowContentStatus> SimpleTransitions = new()
@@ -76,9 +80,17 @@ public sealed class WorkflowService(IWorkflowRepository repository, CurrentAuthe
 
         WorkflowContent? updated = await repository.SubmitReviewAsync(
             contentId, user.UserId, request.Note, token);
-        return updated is null
-            ? Conflict<ContentStatusResponse>("Trạng thái vừa bị thay đổi, hãy tải lại.")
-            : new(ToResponse(updated));
+        if (updated is null)
+            return Conflict<ContentStatusResponse>("Trạng thái vừa bị thay đổi, hãy tải lại.");
+
+        // Thông báo là hiệu ứng phụ sau khi Review đã tạo: Review vừa ghi đang PENDING nên đọc lại để lấy review_no.
+        PendingReviewInfo? review = await repository.GetPendingReviewInfoAsync(contentId, token);
+        if (review is not null)
+            await notifications.NotifyReviewSubmittedAsync(
+                review.ContentId, review.ProjectId, review.ContentCode, review.ContentTitle,
+                review.ReviewNo, user.UserId, token);
+
+        return new(ToResponse(updated));
     }
 
     // ------------------------------------------------------------------ duyệt / từ chối
@@ -106,11 +118,20 @@ public sealed class WorkflowService(IWorkflowRepository repository, CurrentAuthe
         if (!request.Approve && string.IsNullOrWhiteSpace(request.Feedback))
             return Validation<ContentStatusResponse>("Từ chối Review bắt buộc phải có Feedback.", "feedback");
 
+        // Đọc Review PENDING TRƯỚC khi quyết định: sau đó Review không còn PENDING nhưng thông báo cần review_no + người gửi.
+        PendingReviewInfo? pending = await repository.GetPendingReviewInfoAsync(contentId, token);
+
         WorkflowContent? updated = await repository.DecideReviewAsync(
             contentId, user.UserId, request.Approve, request.Feedback, token);
-        return updated is null
-            ? Conflict<ContentStatusResponse>("Không có Review đang chờ duyệt, hãy tải lại.")
-            : new(ToResponse(updated));
+        if (updated is null)
+            return Conflict<ContentStatusResponse>("Không có Review đang chờ duyệt, hãy tải lại.");
+
+        if (pending is not null)
+            await notifications.NotifyReviewDecidedAsync(
+                pending.ContentId, pending.ProjectId, pending.ContentCode, pending.ContentTitle, pending.ReviewNo,
+                pending.SubmittedBy, request.Approve, request.Feedback, user.UserId, token);
+
+        return new(ToResponse(updated));
     }
 
     // ------------------------------------------------------------------ lịch sử
