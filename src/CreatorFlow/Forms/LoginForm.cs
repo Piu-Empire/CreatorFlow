@@ -1,3 +1,4 @@
+using CreatorFlow.Controls;
 using CreatorFlow.Helpers;
 using CreatorFlow.Services;
 
@@ -5,7 +6,7 @@ namespace CreatorFlow.Forms;
 
 public partial class LoginForm : Form
 {
-    private readonly AuthApiFacade _authService;
+    private readonly AuthApiFacade? _authService;
     private CancellationTokenSource? _loginCancellation;
     private bool _isClosing;
     private bool _resetAvailable;
@@ -16,14 +17,42 @@ public partial class LoginForm : Form
     public event Action<string>? ForgotPasswordRequested;
     public event Action<string>? EmailVerificationRequested;
 
-    public LoginForm(AuthApiFacade authService, string? email = null, string? message = null)
+    public LoginForm()
+    {
+        InitializeComponent();
+        ConfigureDesignableControls();
+    }
+
+    public LoginForm(AuthApiFacade authService, string? email = null, string? message = null) : this()
     {
         _authService = authService;
-        InitializeComponent();
         emailTextBox.Text = email ?? string.Empty;
         messageLabel.Text = message ?? string.Empty;
         messageLabel.ForeColor = UiTheme.Muted;
     }
+
+    private void ConfigureDesignableControls()
+    {
+        AuthenticationLayout.ConfigureResponsiveLayout(columns, brandingPanel, formArea, formColumn);
+        UiTheme.StyleField(emailBorder, emailTextBox);
+        UiTheme.StyleField(passwordBorder, passwordTextBox);
+        UiTheme.StyleButton(loginButton);
+        showPassword.CheckedChanged += ShowPassword_CheckedChanged;
+        forgotLink.LinkClicked += ForgotLink_LinkClicked;
+        registerLink.LinkClicked += RegisterLink_LinkClicked;
+        loginButton.Click += LoginButton_Click;
+        emailTextBox.TextChanged += (_, _) => UiTheme.SetFieldError(emailField, null);
+        passwordTextBox.TextChanged += (_, _) => UiTheme.SetFieldError(passwordField, null);
+    }
+
+    private void ShowPassword_CheckedChanged(object? sender, EventArgs e) =>
+        passwordTextBox.UseSystemPasswordChar = !showPassword.Checked;
+
+    private void ForgotLink_LinkClicked(object? sender, LinkLabelLinkClickedEventArgs e) =>
+        ForgotPasswordRequested?.Invoke(emailTextBox.Text.Trim());
+
+    private void RegisterLink_LinkClicked(object? sender, LinkLabelLinkClickedEventArgs e) =>
+        RegisterRequested?.Invoke(this, EventArgs.Empty);
 
     private async void LoginButton_Click(object? sender, EventArgs e)
     {
@@ -42,6 +71,7 @@ public partial class LoginForm : Form
 
         try
         {
+            if (_authService is null) return;
             LoginResult result = await _authService.LoginAsync(
                 emailTextBox.Text, passwordTextBox.Text, cancellation.Token);
 
@@ -85,6 +115,7 @@ public partial class LoginForm : Form
     protected override async void OnShown(EventArgs e)
     {
         base.OnShown(e);
+        if (_authService is null) return;
         using var cancellation = new CancellationTokenSource();
         _readinessCancellation = cancellation;
         try

@@ -1,36 +1,74 @@
 using CreatorFlow.Helpers;
 using CreatorFlow.Services;
+using CreatorFlow.Controls;
 
 namespace CreatorFlow.Forms;
 
 public partial class VerifyEmailForm : Form
 {
-    private readonly AuthApiFacade _authService;
-    private readonly string _email;
+    private AuthApiFacade? _authService;
+    private string _email = string.Empty;
     private Guid _requestId;
     private CancellationTokenSource? _pending;
     private bool _closing;
     private long _resendAt;
+    private readonly Dictionary<string, Panel> fields = new();
     public event Action<string>? LoginRequested;
     public event Action<string, string>? EmailVerified;
 
-    public VerifyEmailForm(AuthApiFacade authService, string email)
+    public VerifyEmailForm()
+    {
+        InitializeComponent();
+        ConfigureDesignableControls();
+    }
+
+    public VerifyEmailForm(AuthApiFacade authService, string email) : this()
     {
         _authService = authService;
         _email = email;
-        InitializeComponent();
         emailTextBox.Text = email;
     }
+
+    private void ConfigureDesignableControls()
+    {
+        AuthenticationLayout.ConfigureResponsiveLayout(columns, brandingPanel, formArea, formColumn);
+        UiTheme.StyleField(emailFieldBorder, emailTextBox);
+        UiTheme.StyleField(codeFieldBorder, codeTextBox);
+        UiTheme.StyleButton(resetButton);
+        fields.Add("Code", codeField);
+        resetButton.Click += ResetButton_Click;
+        resendLink.LinkClicked += ResendLink_Click;
+        backLink.LinkClicked += BackLink_LinkClicked;
+        cooldownTimer.Tick += CooldownTimer_Tick;
+        emailTextBox.TextChanged += (_, _) => UiTheme.SetFieldError(emailField, null);
+        codeTextBox.TextChanged += (_, _) => UiTheme.SetFieldError(fields["Code"], null);
+        formColumn.SizeChanged += FormColumn_SizeChanged;
+        FormColumn_SizeChanged(this, EventArgs.Empty);
+    }
+
+    private void FormColumn_SizeChanged(object? sender, EventArgs e)
+    {
+        foreach (Panel field in new[] { emailField, fields["Code"] })
+        {
+            if (field.Controls["fieldError"] is Label error)
+                error.MaximumSize = new Size(Math.Max(1, formColumn.ClientSize.Width), 0);
+        }
+    }
+
+    private void BackLink_LinkClicked(object? sender, LinkLabelLinkClickedEventArgs e) =>
+        LoginRequested?.Invoke(_email);
+
+    private void CooldownTimer_Tick(object? sender, EventArgs e) => UpdateCooldown();
 
     protected override void OnShown(EventArgs e)
     {
         base.OnShown(e);
-        ResendLink_Click(this, null!);
+        if (_authService is not null) ResendLink_Click(this, null!);
     }
 
     private async void ResetButton_Click(object? sender, EventArgs e)
     {
-        if (_closing || _pending is not null) return;
+        if (_closing || _pending is not null || _authService is null) return;
         using var cancellation = new CancellationTokenSource();
         _pending = cancellation;
         SetBusy(true);
@@ -56,7 +94,7 @@ public partial class VerifyEmailForm : Form
 
     private async void ResendLink_Click(object? sender, LinkLabelLinkClickedEventArgs e)
     {
-        if (_closing || _pending is not null || Environment.TickCount64 < _resendAt) return;
+        if (_closing || _pending is not null || Environment.TickCount64 < _resendAt || _authService is null) return;
         using var cancellation = new CancellationTokenSource();
         _pending = cancellation;
         SetBusy(true);
