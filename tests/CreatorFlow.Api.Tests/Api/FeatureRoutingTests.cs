@@ -10,13 +10,16 @@ using CreatorFlow.Api.Models.Tasks;
 using CreatorFlow.Api.Repositories.ContentDetail;
 using CreatorFlow.Api.Repositories.Ideas;
 using CreatorFlow.Api.Repositories.Invitations;
+using CreatorFlow.Api.Repositories.ReviewQueue;
 using CreatorFlow.Api.Repositories.Tasks;
 using CreatorFlow.Api.Services.ContentDetail;
 using CreatorFlow.Api.Services.Ideas;
 using CreatorFlow.Api.Services.Invitations;
 using CreatorFlow.Api.Services.Auth;
+using CreatorFlow.Api.Services.ReviewQueue;
 using CreatorFlow.Api.Tests.ContentDetail;
 using CreatorFlow.Api.Tests.Ideas;
+using CreatorFlow.Api.Tests.ReviewQueue;
 using CreatorFlow.Api.Tests.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
@@ -56,6 +59,7 @@ public sealed class FeatureRoutingTests
         var invites = new InvitationFake();
         var myInvites = new MyInvitationFake();
         var emailSender = new TestEmailSender();
+        var reviewQueue = new ReviewQueueRepositoryFake();
         roles.Roles[(ProjectId, 1)] = ProjectRole.Owner;
         roles.Roles[(ProjectId, ActorId)] = ProjectRole.Creator;
         invites.Roles[(ProjectId, ActorId)] = ProjectRole.Owner; // trong test lời mời, người đăng nhập là Owner
@@ -65,6 +69,7 @@ public sealed class FeatureRoutingTests
         builder.Services.AddSingleton<ITaskRepository>(roles);
         builder.Services.AddSingleton<IInvitationRepository>(invites);
         builder.Services.AddSingleton<IMyInvitationRepository>(myInvites);
+        builder.Services.AddSingleton<IReviewQueueRepository>(reviewQueue);
         builder.Services.AddSingleton<IEmailSender>(emailSender);
         builder.Services.AddSingleton(TimeProvider.System);
         builder.Services.AddScoped(_ => new CurrentAuthenticatedUser
@@ -73,6 +78,7 @@ public sealed class FeatureRoutingTests
         });
         builder.Services.AddScoped<IdeaService>();
         builder.Services.AddScoped<ContentDetailService>();
+        builder.Services.AddScoped<ReviewQueueService>();
         builder.Services.AddScoped<InvitationService>();
         builder.Services.AddScoped<MyInvitationService>();
         builder.Services.AddAuthentication("fixture").AddScheme<AuthenticationSchemeOptions, ProjectRoutingTests.FixtureAuth>("fixture", _ => { });
@@ -84,6 +90,7 @@ public sealed class FeatureRoutingTests
         app.UseAuthorization();
         app.MapIdeaEndpoints();
         app.MapContentDetailEndpoints();
+        app.MapReviewQueueEndpoints();
         app.MapInvitationEndpoints();
         app.MapMyInvitationEndpoints();
         await app.StartAsync();
@@ -108,6 +115,7 @@ public sealed class FeatureRoutingTests
         (HttpMethod.Get, "/api/contents/10/script", null),
         (HttpMethod.Put, "/api/contents/10/script", new { text = "x", expectedVersion = "v" }),
         (HttpMethod.Get, "/api/contents/10/activity", null),
+        (HttpMethod.Get, "/api/projects/1/reviews/pending", null),
         (HttpMethod.Post, "/api/projects/1/invitations", new { email = "a@x.vn", role = "Creator" }),
         (HttpMethod.Get, "/api/projects/1/invitations", null),
         (HttpMethod.Get, "/api/invitations/mine", null),

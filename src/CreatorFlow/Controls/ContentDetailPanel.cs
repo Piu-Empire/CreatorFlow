@@ -1117,8 +1117,8 @@ public partial class ContentDetailPanel : UserControl
             case ContentStatus.Review:
                 if (canReview)
                 {
-                    AddActionButton("✓ Approve (Phê duyệt)", RoundButtonStyle.Primary, OnReviewDecisionClicked);
-                    AddActionButton("✕ Reject (Từ chối)", RoundButtonStyle.Danger, OnReviewDecisionClicked);
+                    // Một nút duy nhất: quyết định Duyệt/Từ chối nằm trong dialog kiểm duyệt.
+                    AddActionButton("Kiểm duyệt nội dung", RoundButtonStyle.Primary, OnReviewDecisionClicked);
                 }
                 else
                 {

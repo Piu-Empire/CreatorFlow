@@ -238,7 +238,8 @@ public sealed class ContentDetailService(
 
         IReadOnlyList<ActivityRecord> items = await repository.GetActivityAsync(contentId, token);
         return new(new ActivityResponse(contentId,
-            items.Select(i => new ActivityItemResponse(i.Timestamp, i.ActorName, i.Description, i.Feedback)).ToList()));
+            items.Select(i => new ActivityItemResponse(i.Timestamp, i.ActorName, i.Description, i.Feedback,
+                i.Kind, i.FromStatus, i.ToStatus, i.ReviewNo, i.ReviewStatus)).ToList()));
     }
 
     // ------------------------------------------------------------------ helpers

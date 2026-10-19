@@ -1,3 +1,5 @@
+using CreatorFlow.Contracts.ContentDetail;
+
 namespace CreatorFlow.Api.Models.ContentDetail;
 
 /// <summary>Một dòng contents gộp nền tảng. Status/Priority là PascalCase.</summary>
@@ -34,4 +36,13 @@ public sealed record NewContent(
 /// <summary>Script thô đang lưu (null = chưa có) cùng thông tin để tính quyền.</summary>
 public sealed record ScriptRecord(long ContentId, long ProjectId, string Status, long CreatedBy, string? Script);
 
-public sealed record ActivityRecord(DateTime Timestamp, string ActorName, string Description, string? Feedback);
+public sealed record ActivityRecord(
+    DateTime Timestamp,
+    string ActorName,
+    string Description,
+    string? Feedback,
+    string Kind = ActivityKinds.StatusChange,
+    string? FromStatus = null,
+    string? ToStatus = null,
+    int? ReviewNo = null,
+    string? ReviewStatus = null);

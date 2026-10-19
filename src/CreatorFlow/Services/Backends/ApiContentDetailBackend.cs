@@ -88,6 +88,11 @@ public sealed class ApiContentDetailBackend(ApiClient api, UserSession session) 
                 ActorName = i.ActorName,
                 Description = i.Description,
                 Feedback = i.Feedback,
+                Kind = i.Kind,
+                FromStatus = i.FromStatus,
+                ToStatus = i.ToStatus,
+                ReviewNo = i.ReviewNo,
+                ReviewStatus = i.ReviewStatus,
             })
             .ToList();
 

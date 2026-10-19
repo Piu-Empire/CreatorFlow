@@ -705,14 +705,22 @@ public sealed class ContentDetailServiceTests
     {
         var f = new Fixture(OtherCreatorId);
         var at = new DateTime(2026, 10, 11, 9, 0, 0, DateTimeKind.Utc);
-        f.Repo.Activity[OwnContent] = [new ActivityRecord(at, "Owner", "IDEA → SCRIPT", "ok"), new ActivityRecord(at.AddHours(1), "Creator", "submitted Review #1", null)];
+        f.Repo.Activity[OwnContent] = [
+            new ActivityRecord(at, "Owner", "Idea → Script", "ok", ActivityKinds.StatusChange, "Idea", "Script"),
+            new ActivityRecord(at.AddHours(1), "Creator", "submitted Review #1", null,
+                ActivityKinds.ReviewSubmitted, "Editing", "Review", 1, "Pending")];
         f.Repo.Activity[OwnersContent] = [new ActivityRecord(at, "Owner", "không liên quan", null)];
 
         var result = await f.Service.GetActivityAsync(OwnContent);
 
         Assert.AreEqual(OwnContent, result.Value!.ContentId);
-        CollectionAssert.AreEqual(new[] { "IDEA → SCRIPT", "submitted Review #1" }, result.Value.Items.Select(i => i.Description).ToArray());
+        CollectionAssert.AreEqual(new[] { "Idea → Script", "submitted Review #1" }, result.Value.Items.Select(i => i.Description).ToArray());
         Assert.AreEqual("ok", result.Value.Items[0].Feedback);
+        Assert.AreEqual(ActivityKinds.StatusChange, result.Value.Items[0].Kind);
+        Assert.AreEqual("Script", result.Value.Items[0].ToStatus);
+        Assert.AreEqual(ActivityKinds.ReviewSubmitted, result.Value.Items[1].Kind);
+        Assert.AreEqual(1, result.Value.Items[1].ReviewNo);
+        Assert.AreEqual("Pending", result.Value.Items[1].ReviewStatus);
     }
 
     // ================================================================== test double

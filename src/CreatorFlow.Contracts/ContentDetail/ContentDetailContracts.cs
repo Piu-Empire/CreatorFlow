@@ -60,7 +60,28 @@ public sealed record ScriptResponse(
 /// <summary>Lưu script: ExpectedVersion là Version lúc người dùng mở/lưu lần cuối (phát hiện xung đột).</summary>
 public sealed record SaveScriptRequest(string? Text, string ExpectedVersion);
 
-/// <summary>Một dòng Activity timeline (gộp lịch sử đổi trạng thái + Review), tăng dần theo thời gian.</summary>
-public sealed record ActivityItemResponse(DateTime Timestamp, string ActorName, string Description, string? Feedback);
+/// <summary>Loại sự kiện trên Activity timeline.</summary>
+public static class ActivityKinds
+{
+    public const string StatusChange = "StatusChange";
+    public const string ReviewSubmitted = "ReviewSubmitted";
+    public const string ReviewDecided = "ReviewDecided";
+}
+
+/// <summary>
+/// Một dòng Activity timeline (gộp lịch sử đổi trạng thái + Review), tăng dần theo thời gian.
+/// FromStatus/ToStatus là PascalCase ("Editing"...); ReviewStatus là "Pending"/"Approved"/"Rejected".
+/// Description giữ format cũ cho nơi hiển thị cũ; UI mới dùng các field cấu trúc.
+/// </summary>
+public sealed record ActivityItemResponse(
+    DateTime Timestamp,
+    string ActorName,
+    string Description,
+    string? Feedback,
+    string Kind = ActivityKinds.StatusChange,
+    string? FromStatus = null,
+    string? ToStatus = null,
+    int? ReviewNo = null,
+    string? ReviewStatus = null);
 
 public sealed record ActivityResponse(long ContentId, IReadOnlyList<ActivityItemResponse> Items);
