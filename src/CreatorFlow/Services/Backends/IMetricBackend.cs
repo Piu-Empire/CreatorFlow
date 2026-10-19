@@ -12,4 +12,7 @@ public interface IMetricBackend
 
     /// <summary>Nhập một snapshot mới (field null = giữ giá trị cũ). Trả về platform kèm snapshot vừa lưu.</summary>
     PlatformMetricsResponse RecordMetric(long contentId, long platformId, long? views, long? likes, long? comments, long? shares);
+
+    /// <summary>Tổng hợp Metrics của Project theo chiều (SCRUM-52). groupBy = content|creator|platform|project.</summary>
+    MetricsSummaryResponse GetMetricsSummary(long projectId, string groupBy);
 }

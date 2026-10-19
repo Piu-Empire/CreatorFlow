@@ -47,6 +47,27 @@ public static class CalendarDateLogic
     public static List<DateTime> WeekDays(DateTime anchor) =>
         Enumerable.Range(0, 7).Select(i => StartOfWeek(anchor).AddDays(i)).ToList();
 
+    /// <summary>
+    /// Lọc card theo Platform / Status / Creator / Project / từ khóa trước khi dựng lịch (thuần client-side).
+    /// Tham số null (hoặc chuỗi rỗng với <paramref name="search"/>) nghĩa là không lọc theo tiêu chí đó.
+    /// </summary>
+    public static List<ContentBoardCard> ApplyFilters(
+        IEnumerable<ContentBoardCard> cards,
+        string? platform,
+        ContentStatus? status,
+        long? creatorUserId,
+        long? projectId,
+        string? search = null) =>
+        cards.Where(c =>
+                (platform is null || c.Platforms.Any(p => string.Equals(p, platform, StringComparison.OrdinalIgnoreCase))) &&
+                (status is null || c.Status == status) &&
+                (creatorUserId is null || c.Assignees.Any(a => a.UserId == creatorUserId)) &&
+                (projectId is null || c.ProjectId == projectId) &&
+                (string.IsNullOrWhiteSpace(search) ||
+                    c.Code.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                    c.Title.Contains(search, StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+
     /// <summary>Dựng chip từ cards: deadline → marker sản xuất, publish → marker xuất bản.</summary>
     public static List<CalendarChip> BuildChips(IEnumerable<ContentBoardCard> cards, DateTime today)
     {

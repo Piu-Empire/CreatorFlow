@@ -1,6 +1,8 @@
 using CreatorFlow.Models.Enums;
 using CreatorFlow.Contracts.Search;
+using CreatorFlow.AI;
 using CreatorFlow.Controls;
+using CreatorFlow.Controls.AiAssistant;
 using CreatorFlow.Controls.IdeaBank;
 using CreatorFlow.Controls.MyTasks;
 using CreatorFlow.Forms.Invitations;
@@ -8,6 +10,7 @@ using CreatorFlow.Forms.ProjectSettings;
 using CreatorFlow.Models;
 using CreatorFlow.Repositories.Interfaces;
 using CreatorFlow.Services;
+using CreatorFlow.Services.AI;
 using CreatorFlow.Services.Backends;
 using CreatorFlow.Services.Exceptions;
 using CreatorFlow.Theme;
@@ -43,6 +46,8 @@ public partial class BoardForm : Form, IMessageFilter
     private readonly IAssignmentBackend? _assignmentBackend;
     private readonly IReviewQueueBackend? _reviewQueueBackend;
     private readonly INotificationBackend? _notificationBackend;
+    private readonly IMetricBackend? _metricBackend;
+    private readonly IAIService? _aiService;
     private NotificationPanelControl? _notificationPanel;
     private long? _reopenContentId; // chế độ API: mở lại drawer của thẻ này sau khi Board tải lại (sau khi lưu/đổi trạng thái/giao việc)
     private readonly IMyTaskBackend? _taskBackend;
@@ -53,6 +58,7 @@ public partial class BoardForm : Form, IMessageFilter
     private AdminUserManagementControl? _admin;
     private AdminReportsControl? _reports;
     private CalendarControl? _calendar;
+    private DashboardControl? _dashboard;
     private readonly CancellationTokenSource _authLifetime = new();
     private int _avatarGeneration;
     private int _globalSearchGeneration;
@@ -101,7 +107,8 @@ public partial class BoardForm : Form, IMessageFilter
         IContentDetailBackend? detailBackend = null,
         IAssignmentBackend? assignmentBackend = null,
         IReviewQueueBackend? reviewQueueBackend = null,
-        INotificationBackend? notificationBackend = null)
+        INotificationBackend? notificationBackend = null,
+        IAIService? aiService = null)
     {
         InitializeComponent();
         _workflowService = workflowService;
@@ -122,6 +129,8 @@ public partial class BoardForm : Form, IMessageFilter
         _assignmentBackend = assignmentBackend;
         _reviewQueueBackend = reviewQueueBackend;
         _notificationBackend = notificationBackend;
+        _metricBackend = metrics;
+        _aiService = aiService;
         _topHeaderControl.BellClicked += async (_, _) => await OnBellClickedAsync();
         _topHeaderControl.SetNotificationsEnabled(_notificationBackend is not null);
         InitializeProjects(projects);
@@ -135,6 +144,9 @@ public partial class BoardForm : Form, IMessageFilter
             _sidebarControl.AdminWorkspaceRequested += async (_, _) => await OpenAdminAsync();
             _sidebarControl.AdminReportsRequested += async (_, _) => await OpenReportsAsync();
             _sidebarControl.CalendarRequested += (_, _) => OpenCalendar();
+            _sidebarControl.SummaryRequested += (_, _) => OpenDashboard();
+            _sidebarControl.AiAssistantRequested += (_, _) => OpenAiAssistant();
+            _sidebarControl.ReportsRequested += (_, _) => OpenProjectReports();
         }
 
         _pnlDrawerHost.Paint += PnlDrawerHost_Paint;
@@ -166,6 +178,7 @@ public partial class BoardForm : Form, IMessageFilter
             CloseAdmin();
             CloseReports();
             CloseCalendar();
+            CloseDashboard();
             _sidebarControl.SetActiveMenu("Board");
             ReloadBoard();
         };
@@ -279,6 +292,7 @@ public partial class BoardForm : Form, IMessageFilter
                     BackColor = UITheme.Neutral50,
                     TextAlign = ContentAlignment.MiddleCenter
                 });
+            _dashboard?.RefreshData();
             return;
         }
         if (_pnlBoardArea.Controls["noProjectContext"] is Control emptyState)
@@ -297,6 +311,7 @@ public partial class BoardForm : Form, IMessageFilter
         _sidebarControl.BacklogCount = _ideaService.CountBacklog(CurrentSession.CurrentProjectId, CurrentSession.CurrentUserId);
         _sidebarControl.Invalidate();
         ApplyFilters();
+        _dashboard?.RefreshData();
 
         // Drawer đang mở: nạp lại dữ liệu mới (trạng thái/nút workflow) hoặc đóng nếu thẻ không còn.
         // Nếu đang có thay đổi chưa lưu thì KHÔNG ghi đè, để không mất dữ liệu người dùng đang nhập.
@@ -572,7 +587,7 @@ public partial class BoardForm : Form, IMessageFilter
     {
         // New Content is available over Project Settings; its modal opens above the settings page.
         // Other workspaces and Profile keep their existing navigation/unsaved-state behavior.
-        if (!HasProjectContext || _profile is not null || _admin is not null || _reports is not null || _calendar is not null) return;
+        if (!HasProjectContext || _profile is not null || _admin is not null || _reports is not null || _calendar is not null || _dashboard is not null) return;
         bool viaApi = _projects is not null;
         if (viaApi && (_detailBackend is null || _assignmentBackend is null)) { ShowUnavailableModule("Tạo Content"); return; }
 
@@ -730,6 +745,63 @@ public partial class BoardForm : Form, IMessageFilter
         ReloadBoard();
     }
 
+    /// <summary>SCRUM-57: mở trang Trợ lý AI. Cổng AI hiện là AIService phía client (đọc .env) — POC, xem plan.md.</summary>
+    private void OpenAiAssistant()
+    {
+        if (!HasProjectContext || !CanLeaveProjectPage()) return;
+
+        IIdeaBackend? backend = _projects is null ? _ideaService : _ideaBackend;
+        if (backend is null)
+        {
+            ShowUnavailableModule("AI Assistant");
+            return;
+        }
+
+        Func<List<string>> platformProvider = _projects is null
+            ? () => _contentService.GetAvailablePlatforms()
+            : () => _detailBackend?.GetAvailablePlatforms() ?? new List<string>();
+
+        long projectId = CurrentSession.CurrentProjectId;
+        var page = new AiAssistantControl(new IdeaAssistService(_aiService), platformProvider, backend)
+        {
+            Dock = DockStyle.Fill,
+        };
+        page.IdeasChanged += (_, _) => RefreshBacklogCount();
+        page.CloseRequested += (_, _) => CloseAiAssistantPage(page);
+        ShowProjectPage(page, "Trợ lý AI");
+        _sidebarControl.SetActiveMenu("AI Assistant");
+        RefreshBacklogCount();
+
+        void RefreshBacklogCount()
+        {
+            try
+            {
+                _sidebarControl.BacklogCount = backend.CountBacklog(projectId, CurrentSession.CurrentUserId);
+            }
+            catch (Exception error) when (error is IdeaValidationException or UnauthorizedWorkflowActionException)
+            {
+                _sidebarControl.BacklogCount = 0;
+            }
+            _sidebarControl.Invalidate();
+        }
+    }
+
+    private void CloseAiAssistantPage(AiAssistantControl page)
+    {
+        if (!ReferenceEquals(_projectPage, page)) return;
+
+        CloseProjectPage();
+        _pnlBoardArea.Visible = true;
+        _modulePageHeader.Visible = true;
+        _flowColumns.Visible = true;
+        _pnlDrawerHost.Visible = false;
+        if (_pnlBoardArea.Controls["serverProjectState"] is Label serverState)
+            serverState.Visible = false;
+        _topHeaderControl.SetAuthenticatedPage("Board");
+        _sidebarControl.SetActiveMenu("Board");
+        ReloadBoard();
+    }
+
     /// <summary>Chạy một hộp thoại mở từ sidebar: sáng mục <paramref name="menu"/> trong lúc mở, đóng xong trả highlight về mục trước đó.</summary>
     private void ShowWithActiveMenu(string menu, Action show)
     {
@@ -816,6 +888,7 @@ public partial class BoardForm : Form, IMessageFilter
         CloseAdmin();
         CloseReports();
         CloseCalendar();
+        CloseDashboard();
         using var queueForm = _reviewQueueBackend is not null
             ? new Review.ReviewQueueForm(_reviewQueueBackend)
             : new Review.ReviewQueueForm(_reviewQueueRepository, _workflowService);
@@ -917,6 +990,7 @@ public partial class BoardForm : Form, IMessageFilter
         CloseAdmin();
         CloseReports();
         CloseCalendar();
+        CloseDashboard();
         var profile = new ProfileControl(_auth) { Dock = DockStyle.Fill };
         _profile = profile;
         UpdateProjectContext();
@@ -955,6 +1029,7 @@ public partial class BoardForm : Form, IMessageFilter
         CloseProfile();
         CloseReports();
         CloseCalendar();
+        CloseDashboard();
         var admin = new AdminUserManagementControl(_auth, _toast) { Dock = DockStyle.Fill };
         _admin = admin;
         _pnlDrawerHost.Visible = false;
@@ -987,6 +1062,7 @@ public partial class BoardForm : Form, IMessageFilter
         CloseProfile();
         CloseAdmin();
         CloseCalendar();
+        CloseDashboard();
         var reports = new AdminReportsControl(_auth, _toast) { Dock = DockStyle.Fill };
         _reports = reports;
         _pnlDrawerHost.Visible = false;
@@ -1018,9 +1094,11 @@ public partial class BoardForm : Form, IMessageFilter
         CloseProfile();
         CloseAdmin();
         CloseReports();
+        CloseDashboard();
         var calendar = new CalendarControl { Dock = DockStyle.Fill };
-        calendar.CardProvider = () => HasProjectContext && _projects is null ? _allCards : null;
-        if (_projects is not null) calendar.UnavailableReason = "Lịch chưa có nguồn Content từ server cho Project này.";
+        // Server mode: Lịch chỉ chạy khi có nguồn card từ server; unavailable thì không cấp provider.
+        calendar.CardProvider = () => HasProjectContext && (_projects is null || _boardBackend is not null) ? _allCards : null;
+        if (_projects is not null && _boardBackend is null) calendar.UnavailableReason = "Lịch chưa có nguồn Content từ server cho Project này.";
         calendar.ContentOpened += OpenContentById;
         _calendar = calendar;
         _pnlDrawerHost.Visible = false;
@@ -1039,6 +1117,67 @@ public partial class BoardForm : Form, IMessageFilter
         _calendar = null;
         _pnlMain.Controls.Remove(calendar);
         calendar.Dispose();
+        _sidebarControl.SetActiveMenu("Board");
+        _pnlBoardArea.Visible = true;
+        _topHeaderControl.SetAuthenticatedPage("Board");
+        UpdateProjectContext();
+    }
+
+    /// <summary>Màn Báo cáo Metrics của Project (SCRUM-52). Cần chế độ máy chủ (có backend metrics).</summary>
+    private void OpenProjectReports()
+    {
+        if (!CanLeaveProjectPage()) return;
+        if (_metricBackend is null || !HasProjectContext)
+        {
+            _toast.ShowToast(this, "Báo cáo Metrics cần chạy ở chế độ máy chủ (đã kết nối database).");
+            return;
+        }
+
+        var page = new ProjectReportsControl(_metricBackend, CurrentSession.CurrentProjectId) { Dock = DockStyle.Fill };
+        ShowProjectPage(page, "Báo cáo Metrics");
+        _sidebarControl.SetActiveMenu("Reports");
+    }
+
+    private void OpenDashboard()
+    {
+        if (_dashboard is not null || !CanLeaveProjectPage()) return;
+        CloseProjectPage();
+        CloseProfile();
+        CloseAdmin();
+        CloseReports();
+        CloseCalendar();
+        var dashboard = new DashboardControl { Dock = DockStyle.Fill };
+        dashboard.CardProvider = () => HasProjectContext ? _allCards : null;
+        if (_projects is not null && _boardBackend is null)
+            dashboard.UnavailableReason = "Tổng quan chưa có nguồn Content từ server cho Project này.";
+        _dashboard = dashboard;
+        _pnlDrawerHost.Visible = false;
+        _pnlBoardArea.Visible = false;
+        _pnlMain.Controls.Add(dashboard);
+        dashboard.BringToFront();
+        _sidebarControl.SetActiveMenu("Summary");
+        _topHeaderControl.SetAuthenticatedPage("Tổng quan Project");
+
+        // Server: nạp lại card của Project hiện hành cho chắc (số liệu khớp DB), hiện trạng thái đang tải.
+        // Local: _allCards đã có sẵn sau ReloadBoard nên chỉ việc vẽ.
+        if (_projects is not null && _boardBackend is not null)
+        {
+            dashboard.BeginLoading();
+            _ = LoadServerBoardAsync();
+        }
+        else
+        {
+            dashboard.RefreshData();
+        }
+    }
+
+    private void CloseDashboard()
+    {
+        if (_dashboard is null) return;
+        DashboardControl dashboard = _dashboard;
+        _dashboard = null;
+        _pnlMain.Controls.Remove(dashboard);
+        dashboard.Dispose();
         _sidebarControl.SetActiveMenu("Board");
         _pnlBoardArea.Visible = true;
         _topHeaderControl.SetAuthenticatedPage("Board");

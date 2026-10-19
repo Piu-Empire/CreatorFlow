@@ -1,4 +1,5 @@
 using CreatorFlow.Data;
+using CreatorFlow.AI;
 using CreatorFlow.Forms.Board;
 using CreatorFlow.Repositories.Implementations;
 using CreatorFlow.Repositories.InMemory;
@@ -85,8 +86,10 @@ static class Program
         var contentService = new ContentService(contentRepo, detailsRepo, historyRepo, memberRepo, platformRepo, uow, myTaskRepo);
         var myTaskService = new MyTaskService(myTaskRepo, memberRepo, uow);
         var ideaService = new IdeaService(ideaRepo, memberRepo, historyRepo, uow);
-        // SCRUM-33: AI chưa có cài đặt thật nên dùng NotConfiguredAiService; thay bằng AIService thật khi có.
-        var scriptService = new ScriptService(scriptRepo, detailsRepo, platformRepo, memberRepo, myTaskRepo, uow, new NotConfiguredAiService());
+        // SCRUM-57/58: lõi AI client đọc cấu hình từ .env ở client — POC, sẽ chuyển sang Backend sau.
+        var aiService = AIFactory.Create();
+        // SCRUM-33 + SCRUM-58: cổng AI cho script dùng ScriptAiService (adapter sang lõi AI client).
+        var scriptService = new ScriptService(scriptRepo, detailsRepo, platformRepo, memberRepo, myTaskRepo, uow, new ScriptAiService(aiService));
 
         // AuthenticationApplicationContext binds the authenticated user; project selection belongs to SCRUM-25.
         CurrentSession.CurrentUserId = 0;
@@ -121,7 +124,7 @@ static class Program
                 return;
             }
             using var context = new AuthenticationApplicationContext(auth, () =>
-                new BoardForm(workflowService, boardRepo, reviewQueueRepo, activityRepo, memberRepo, contentService, myTaskService, scriptService, ideaService, auth, metricBackend, invitations, invitationInbox, projects: projects, taskBackend: taskBackend, ideaBackend: ideaBackend, boardBackend: boardBackend, detailBackend: detailBackend, assignmentBackend: assignmentBackend, reviewQueueBackend: reviewQueueBackend, notificationBackend: notificationBackend), projects, invitationInbox);
+                new BoardForm(workflowService, boardRepo, reviewQueueRepo, activityRepo, memberRepo, contentService, myTaskService, scriptService, ideaService, auth, metricBackend, invitations, invitationInbox, projects: projects, taskBackend: taskBackend, ideaBackend: ideaBackend, boardBackend: boardBackend, detailBackend: detailBackend, assignmentBackend: assignmentBackend, reviewQueueBackend: reviewQueueBackend, notificationBackend: notificationBackend, aiService: aiService), projects, invitationInbox);
             Application.Run(context);
         }
         catch (InvalidOperationException)

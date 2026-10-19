@@ -214,11 +214,16 @@ public sealed class ScriptServiceTests
     }
 
     [TestMethod]
-    public void PrepareAiRequest_EmptyScript_ThrowsValidation()
+    public void PrepareAiRequest_EmptyScript_IsAllowedForGeneration()
     {
+        // SCRUM-58: cho phép script trống để sinh Outline/Script từ thông tin Content.
         var (service, id, _) = Build(script: string.Empty);
 
-        Assert.ThrowsExactly<ContentValidationException>(() => service.PrepareAiRequest(id, CreatorAId));
+        var request = service.PrepareAiRequest(id, CreatorAId, AiRequestType.Outline);
+
+        Assert.AreEqual(string.Empty, request.Script);
+        Assert.AreEqual("Video test", request.Title);
+        Assert.AreEqual(0, request.Sections.Count);
     }
 
     [TestMethod]

@@ -12,4 +12,7 @@ public sealed class ApiMetricBackend(ApiClient api, UserSession session) : IMetr
     public PlatformMetricsResponse RecordMetric(long contentId, long platformId, long? views, long? likes, long? comments, long? shares) =>
         ApiTaskCall.Run(() => api.RecordMetricAsync(contentId, platformId,
             new RecordMetricRequest(views, likes, comments, shares), ApiTaskCall.BearerOf(session)), session);
+
+    public MetricsSummaryResponse GetMetricsSummary(long projectId, string groupBy) =>
+        ApiTaskCall.Run(() => api.GetMetricsSummaryAsync(projectId, groupBy, ApiTaskCall.BearerOf(session)), session);
 }

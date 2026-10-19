@@ -14,13 +14,16 @@ public class SidebarControl : UserControl
     private int _navScrollOffset;
 
     public event EventHandler? ReviewQueueRequested;
+    public event EventHandler? SummaryRequested;
     public event EventHandler? BoardRequested;
     public event EventHandler? ContentLibraryRequested;
     public event EventHandler? MyTasksRequested;
     public event EventHandler? IdeaBankRequested;
     public event EventHandler? AdminWorkspaceRequested;
     public event EventHandler? AdminReportsRequested;
+    public event EventHandler? ReportsRequested;
     public event EventHandler? CalendarRequested;
+    public event EventHandler? AiAssistantRequested;
     public event EventHandler? ProjectSettingsRequested;
     public event EventHandler? InvitationsRequested;
     public event EventHandler? ProfileRequested;
@@ -211,21 +214,21 @@ public class SidebarControl : UserControl
 
         int y = 212;
         _groups.Add(("PROJECT", y)); y += 26;
-        _items.Add(new NavItem { Title = "Summary", Icon = NavIcon.Summary, Y = y }); y += ItemStep;
+        _items.Add(new NavItem { Title = "Summary", Icon = NavIcon.Summary, Y = y, AlwaysEnabled = true, Action = () => SummaryRequested?.Invoke(this, EventArgs.Empty) }); y += ItemStep;
         _items.Add(new NavItem { Title = "Board", Icon = NavIcon.Board, Y = y, IsActive = true, AlwaysEnabled = true, Action = () => BoardRequested?.Invoke(this, EventArgs.Empty) }); y += ItemStep;
         _items.Add(new NavItem { Title = "Kho Content", Icon = NavIcon.Library, Y = y, Action = () => ContentLibraryRequested?.Invoke(this, EventArgs.Empty) }); y += ItemStep;
         _items.Add(new NavItem { Title = "Backlog", Icon = NavIcon.List, Y = y, Badge = () => BacklogCount, Action = () => IdeaBankRequested?.Invoke(this, EventArgs.Empty) }); y += ItemStep;
         _items.Add(new NavItem { Title = "Calendar", Icon = NavIcon.Calendar, Y = y, AlwaysEnabled = true, Action = () => CalendarRequested?.Invoke(this, EventArgs.Empty) }); y += ItemStep;
-        _items.Add(new NavItem { Title = "Reports", Icon = NavIcon.Chart, Y = y }); y += ItemStep;
+        _items.Add(new NavItem { Title = "Reports", Icon = NavIcon.Chart, Y = y, Action = () => ReportsRequested?.Invoke(this, EventArgs.Empty) }); y += ItemStep;
+
+        y += 10;
+        _groups.Add(("AI", y)); y += 26;
+        _items.Add(new NavItem { Title = "AI Assistant", Icon = NavIcon.Sparkle, Y = y, AlwaysEnabled = true, Action = () => AiAssistantRequested?.Invoke(this, EventArgs.Empty) }); y += ItemStep;
 
         y += 10;
         _groups.Add(("WORK", y)); y += 26;
         _items.Add(new NavItem { Title = "My Tasks", Icon = NavIcon.Check, Y = y, Badge = () => MyWorkCount, Action = () => MyTasksRequested?.Invoke(this, EventArgs.Empty) }); y += ItemStep;
         _items.Add(new NavItem { Title = "Review Queue", Icon = NavIcon.Review, Y = y, Badge = () => ReviewQueueCount, Action = () => ReviewQueueRequested?.Invoke(this, EventArgs.Empty) }); y += ItemStep;
-
-        y += 10;
-        _groups.Add(("AI", y)); y += 26;
-        _items.Add(new NavItem { Title = "AI Assistant", Icon = NavIcon.Sparkle, Y = y, Badge = () => -1 });
 
         if (_isSystemAdmin)
         {

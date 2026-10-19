@@ -1,5 +1,6 @@
 using CreatorFlow.Models;
 using CreatorFlow.Models.Enums;
+using CreatorFlow.Services;
 using CreatorFlow.Theme;
 
 namespace CreatorFlow.Controls
@@ -33,6 +34,11 @@ namespace CreatorFlow.Controls
         private DateTime _cursor = DateTime.Today;
         private string _stateAction = string.Empty;
 
+        // Panel bộ lọc mở từ nút "Bộ lọc"; dựng 1 lần rồi host trong ToolStripDropDown.
+        private readonly CalendarFilterPanel _filterPanel = new();
+        private ToolStripDropDown? _filterMenu;
+        private ToolStripControlHost? _filterHost;
+
         /// <summary>Nguồn cards dùng chung với Board (BoardForm gán khi mở màn hình; null = chưa chọn project).</summary>
         public Func<List<ContentBoardCard>?>? CardProvider { get; set; }
         public string? UnavailableReason { get; set; }
@@ -65,17 +71,12 @@ namespace CreatorFlow.Controls
             };
             pnlViewSwitch.Controls.Add(_segView);
             flpToolbar.WrapContents = false;
-            segPlatform.Items.Clear();
-            segPlatform.Items.AddRange(PlatformItems);
-            segPlatform.Width = segPlatform.MeasureTotalWidth();
-            segPlatform.SelectedIndexChanged += (_, _) => RefreshData();
-            cboStatus.Font = UITheme.FontBody;
-            cboStatus.FlatStyle = FlatStyle.Flat;
-            cboStatus.BackColor = UITheme.White;
-            cboStatus.ForeColor = UITheme.Ink;
-            cboStatus.Items.AddRange(StatusItems.Select(i => i.Label).ToArray());
-            cboStatus.SelectedIndex = 0;
-            cboStatus.SelectedIndexChanged += (_, _) => RefreshData();
+            searchBox.PlaceholderText = "Tìm theo tên hoặc mã content...";
+            searchBox.TextChanged += (_, _) => RefreshData();
+            btnFilter.Click += (_, _) => ToggleFilterMenu();
+            _filterPanel.SetPlatforms(PlatformItems);
+            _filterPanel.SetStatuses(StatusItems);
+            _filterPanel.FiltersChanged += (_, _) => RefreshData();
             btnToday.Click += (_, _) => { _cursor = DateTime.Today; RefreshData(); };
             btnPrev.Click += (_, _) => Shift(-1);
             btnNext.Click += (_, _) => Shift(1);
@@ -83,8 +84,8 @@ namespace CreatorFlow.Controls
             {
                 if (_stateAction == "clear")
                 {
-                    segPlatform.SelectedIndex = 0;
-                    cboStatus.SelectedIndex = 0;
+                    _filterPanel.Reset();
+                    searchBox.Clear();
                 }
 
                 RefreshData();
@@ -139,6 +140,7 @@ namespace CreatorFlow.Controls
                 return;
             }
 
+            RebuildFilterOptions(cards);
             List<ContentBoardCard> filtered = Filter(cards);
             List<CalendarChip> chips = CalendarDateLogic.BuildChips(filtered, DateTime.Today);
             _grid.View = _view;
@@ -148,6 +150,7 @@ namespace CreatorFlow.Controls
             _grid.Invalidate();
             RenderPeriod();
             lblSummary.Text = $"{chips.Count} mốc trên lịch · {_grid.Unscheduled.Count} chưa xếp lịch";
+            UpdateFilterBadge();
             ShowState(null, string.Empty, string.Empty, null, string.Empty);
             if (chips.Count == 0 && _grid.Unscheduled.Count == 0)
                 ShowState("empty", "Chưa có content nào", "Thử đổi bộ lọc hoặc thêm content có deadline.", "Xóa bộ lọc", "clear");
@@ -173,15 +176,86 @@ namespace CreatorFlow.Controls
             btnState.Location = new Point(centerX - btnState.Width / 2, pnlState.Height / 2 + 12);
         }
 
-        private List<ContentBoardCard> Filter(List<ContentBoardCard> cards)
+        private List<ContentBoardCard> Filter(List<ContentBoardCard> cards) =>
+            CalendarDateLogic.ApplyFilters(
+                cards,
+                _filterPanel.Platform,
+                _filterPanel.Status,
+                _filterPanel.CreatorId,
+                _filterPanel.ProjectId,
+                searchBox.QueryText);
+
+        /// <summary>Cập nhật nhãn nút "Bộ lọc" kèm số tiêu chí đang bật (gồm cả từ khóa tìm kiếm).</summary>
+        private void UpdateFilterBadge()
         {
-            string? platform = segPlatform.SelectedIndex <= 0 ? null : segPlatform.SelectedValue;
-            ContentStatus? status = cboStatus.SelectedIndex <= 0 ? null : StatusItems[cboStatus.SelectedIndex].Status;
-            return cards.Where(c =>
-                    (platform is null || c.Platforms.Any(p => string.Equals(p, platform, StringComparison.OrdinalIgnoreCase))) &&
-                    (status is null || c.Status == status))
-                .ToList();
+            int active = _filterPanel.ActiveCount + (searchBox.QueryText.Length > 0 ? 1 : 0);
+            btnFilter.Text = active > 0 ? $"Bộ lọc ({active})" : "Bộ lọc";
         }
+
+        /// <summary>Mở/đóng panel "Bộ lọc" ngay dưới nút.</summary>
+        private void ToggleFilterMenu()
+        {
+            if (_filterMenu is { Visible: true } open)
+            {
+                open.Close();
+                return;
+            }
+
+            EnsureFilterMenu();
+            _filterMenu!.Show(btnFilter, new Point(0, btnFilter.Height + 4));
+        }
+
+        private void EnsureFilterMenu()
+        {
+            if (_filterMenu is not null) return;
+            _filterHost = new ToolStripControlHost(_filterPanel)
+            {
+                Margin = Padding.Empty,
+                Padding = Padding.Empty,
+                AutoSize = false,
+                Size = _filterPanel.Size,
+            };
+            var menu = new ToolStripDropDown { Padding = new(4), BackColor = UITheme.White };
+            menu.SizeChanged += (_, _) =>
+            {
+                using var path = UITheme.CreateRoundedRectanglePath(new Rectangle(0, 0, menu.Width, menu.Height), 8);
+                var old = menu.Region;
+                menu.Region = new Region(path);
+                old?.Dispose();
+            };
+            menu.Paint += (_, e) =>
+            {
+                using var path = UITheme.CreateRoundedRectanglePath(new Rectangle(0, 0, menu.Width - 1, menu.Height - 1), 8);
+                using var pen = new Pen(UITheme.Neutral200);
+                e.Graphics.DrawPath(pen, path);
+            };
+            menu.Items.Add(_filterHost);
+            _filterMenu = menu;
+            Disposed += (_, _) => menu.Dispose();
+        }
+
+        /// <summary>Dựng option Creator/Project từ chính cards (nguồn chưa lọc), giữ lựa chọn hiện tại nếu còn.</summary>
+        private void RebuildFilterOptions(List<ContentBoardCard> cards)
+        {
+            List<(long Id, string Name)> creators = cards.SelectMany(c => c.Assignees)
+                .GroupBy(a => a.UserId)
+                .Select(g => (Id: g.Key, Name: g.First().Name))
+                .OrderBy(x => x.Name)
+                .ToList();
+            _filterPanel.SetCreators(creators);
+
+            List<(long Id, string Name)> projects = cards.Select(c => c.ProjectId)
+                .Distinct()
+                .OrderBy(id => id)
+                .Select(id => (Id: id, Name: ProjectDisplayName(id)))
+                .ToList();
+            _filterPanel.SetProjects(projects);
+        }
+
+        private static string ProjectDisplayName(long projectId) =>
+            projectId == CurrentSession.CurrentProjectId && !string.IsNullOrWhiteSpace(CurrentSession.CurrentProjectName)
+                ? CurrentSession.CurrentProjectName
+                : $"Project {projectId}";
 
         private void Shift(int step)
         {

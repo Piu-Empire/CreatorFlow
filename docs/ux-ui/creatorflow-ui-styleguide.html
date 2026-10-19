@@ -1,0 +1,927 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CreatorFlow — UI Style Guide</title>
+<style>
+  :root{
+    --bg:#ffffff; --ink:#151c27; --sub:#525252; --line:#e5e5e5; --line-soft:rgba(229,229,229,.8);
+    --n50:#fafafa; --n100:#f5f5f5; --n200:#e5e5e5; --n300:#d4d4d4; --n400:#a3a3a3; --n600:#525252; --n700:#404040; --n800:#262626; --n900:#171717;
+    --radius-lg:8px; --radius-xl:12px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:"Segoe UI","Inter",-apple-system,"Helvetica Neue",Arial,sans-serif;font-size:13px;line-height:1.55}
+  a{color:inherit}
+  .layout{display:flex;min-height:100vh}
+  /* ---- TOC (mô phỏng đúng sidebar 260px màu đen của app gốc) ---- */
+  nav.toc{position:sticky;top:0;align-self:flex-start;width:260px;flex:0 0 260px;height:100vh;background:#000;color:#cfc4c5;padding:20px 10px;overflow-y:auto}
+  nav.toc .brand{color:#fff;font-weight:800;font-size:16px;padding:0 10px 16px;letter-spacing:-.01em}
+  nav.toc .brand span{display:block;font-weight:500;font-size:11px;color:#8a8a8a;margin-top:2px}
+  nav.toc a{display:block;padding:6px 10px;border-radius:8px;color:#cfc4c5;text-decoration:none;font-size:12px;font-weight:500;margin-bottom:2px}
+  nav.toc a:hover{background:rgba(255,255,255,.1);color:#fff}
+  nav.toc .grp{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#6b6b6b;font-weight:700;margin:16px 10px 6px}
+  main{flex:1;min-width:0;padding:40px 48px 120px;max-width:1180px}
+  header.hero{border-bottom:1px solid var(--line);padding-bottom:24px;margin-bottom:40px}
+  header.hero h1{font-size:30px;font-weight:800;letter-spacing:-.02em;margin:0 0 8px}
+  header.hero p{color:var(--sub);font-size:14px;max-width:760px;margin:0}
+  section{margin-bottom:56px;scroll-margin-top:24px}
+  section h2{font-size:20px;font-weight:700;margin:0 0 6px;display:flex;align-items:center;gap:10px}
+  section h2 .tag{font-size:10px;font-weight:700;color:var(--n600);background:var(--n100);border:1px solid var(--line);border-radius:999px;padding:2px 8px;text-transform:none}
+  section > .lead{color:var(--sub);font-size:13px;margin:0 0 20px;max-width:760px}
+  h3.sub{font-size:13px;font-weight:700;color:var(--n700);margin:24px 0 10px}
+
+  /* swatch grid */
+  .swatches{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:14px}
+  .swatch{border:1px solid var(--line-soft);border-radius:var(--radius-lg);overflow:hidden;background:#fff}
+  .swatch .fill{height:64px}
+  .swatch .info{padding:9px 11px}
+  .swatch .name{font-weight:700;font-size:12px}
+  .swatch .hex{font-family:"Consolas","SFMono-Regular",monospace;font-size:11px;color:var(--n600);cursor:pointer}
+  .swatch .use{font-size:11px;color:var(--n600);margin-top:3px}
+
+  /* table */
+  table{border-collapse:collapse;width:100%;font-size:12.5px}
+  table th,table td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:middle}
+  table th{background:var(--n50);font-weight:700;color:var(--n700);font-size:11px;text-transform:uppercase;letter-spacing:.03em}
+  table td code{font-family:"Consolas",monospace;font-size:11.5px;background:var(--n100);padding:1px 5px;border-radius:4px}
+
+  /* typography samples */
+  .type-row{display:flex;align-items:baseline;gap:18px;padding:14px 0;border-bottom:1px solid var(--line-soft)}
+  .type-row:last-child{border-bottom:none}
+  .type-row .meta{width:190px;flex:0 0 190px;font-size:11px;color:var(--n600)}
+  .type-row .meta b{display:block;color:var(--ink);font-size:12.5px;font-weight:700}
+  .type-sample{color:var(--ink)}
+
+  /* spacing bars */
+  .space-row{display:flex;align-items:center;gap:14px;padding:7px 0}
+  .space-row .bar{background:var(--n900);height:14px;border-radius:2px}
+  .space-row .lbl{width:120px;flex:0 0 120px;font-size:12px;font-weight:600}
+  .space-row .val{font-family:Consolas,monospace;font-size:11.5px;color:var(--n600)}
+
+  /* radius demo */
+  .demo-row{display:flex;gap:20px;flex-wrap:wrap}
+  .demo-box{width:96px;height:64px;background:var(--n100);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--n600);font-weight:600}
+
+  /* shadow demo */
+  .shadow-box{width:150px;height:80px;background:#fff;border-radius:var(--radius-xl);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:var(--n700)}
+
+  /* buttons */
+  .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:8px;font-size:12.5px;font-weight:600;border:1px solid transparent;cursor:default}
+  .btn-primary{background:#000;color:#fff}
+  .btn-secondary{background:var(--n100);color:var(--n800);border-color:var(--line)}
+  .btn-danger{background:#dc2626;color:#fff}
+  .btn-disabled{background:var(--n100);color:var(--n400);opacity:.55}
+  .btn-ghost{background:transparent;color:var(--n700);border-color:var(--line)}
+
+  /* badges */
+  .badge{display:inline-flex;align-items:center;gap:5px;padding:2px 10px;border-radius:999px;font-size:11px;font-weight:600;border:1px solid transparent}
+  .badge-high{background:#fee2e2;color:#b91c1c}
+  .badge-med{background:#e5e5e5;color:#262626}
+  .badge-low{background:#f5f5f5;color:#525252}
+  .badge-yt{background:rgba(255,218,214,.6);border-color:#ffdad6;color:#dc2626}
+  .badge-tt{background:rgba(220,226,243,.5);border-color:#dce2f3;color:#151c27}
+  .badge-ig{background:rgba(229,226,225,.8);border-color:#cfc4c5;color:#92400e}
+  .badge-fb{background:rgba(213,227,252,.6);border-color:#d5e3fc;color:#1d4ed8}
+  .stage-dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;vertical-align:middle}
+
+  /* form controls */
+  .field{max-width:260px}
+  .field label{display:block;font-size:11px;font-weight:700;color:var(--n600);margin-bottom:4px}
+  .field input, .field select{width:100%;padding:7px 10px;border:1px solid var(--n300);border-radius:8px;font-size:12.5px;font-family:inherit;color:var(--ink);background:#fff}
+  .field input:focus, .field select:focus{outline:2px solid #000;outline-offset:1px;border-color:#000}
+  .field.err input{border-color:#dc2626}
+  .field .msg-err{color:#dc2626;font-size:11px;margin-top:4px;font-weight:600}
+
+  /* card / dialog */
+  .card-demo{background:#fff;border:1px solid var(--line-soft);border-radius:var(--radius-xl);box-shadow:0 1px 2px rgba(0,0,0,.03);padding:16px;max-width:280px}
+  .card-demo .t{font-weight:700;font-size:13px;margin-bottom:4px}
+  .card-demo .d{font-size:11.5px;color:var(--n600)}
+  .dialog-demo{background:#fff;border-radius:var(--radius-xl);box-shadow:0 20px 40px -8px rgba(0,0,0,.25);border:1px solid var(--line);max-width:320px;overflow:hidden}
+  .dialog-demo .hd{padding:14px 16px;border-bottom:1px solid var(--line);font-weight:700;font-size:13px}
+  .dialog-demo .bd{padding:16px;font-size:12px;color:var(--n600)}
+  .dialog-demo .ft{padding:12px 16px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:8px}
+
+  /* grid table demo (DataGridView) */
+  .grid-demo{border:1px solid var(--line);border-radius:8px;overflow:hidden;font-size:12px}
+  .grid-demo table{width:100%}
+  .grid-demo th{background:var(--n50)}
+  .grid-demo tr:nth-child(even) td{background:var(--n50)}
+  .grid-demo tr:hover td{background:#f0f3ff}
+
+  /* state boxes */
+  .state-box{border:1px dashed var(--n300);border-radius:var(--radius-xl);padding:32px;text-align:center;color:var(--n600);font-size:12px;max-width:340px}
+  .state-box b{display:block;color:var(--ink);font-size:13px;margin-bottom:4px}
+
+  /* mainform wireframe */
+  .wire{border:1px solid var(--line);border-radius:10px;overflow:hidden;display:flex;height:220px}
+  .wire .side{width:70px;background:#000}
+  .wire .body{flex:1;display:flex;flex-direction:column}
+  .wire .top{height:36px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 12px;font-size:10px;color:var(--n600);gap:10px}
+  .wire .content{flex:1;background:var(--n50);padding:14px;font-size:10px;color:var(--n400)}
+  .pill{font-size:9px;background:var(--n900);color:#fff;border-radius:4px;padding:2px 6px}
+
+  code.copied::after{content:" ✓ đã copy"}
+  .icon-row{display:flex;flex-wrap:wrap;gap:22px}
+  .icon-item{display:flex;flex-direction:column;align-items:center;gap:6px;font-size:10.5px;color:var(--n600);width:74px;text-align:center}
+  .icon-item svg.ic{width:20px;height:20px}
+  svg.ic{fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+
+  /* bảng tra icon: icon + tên + dùng ở đâu, để không ai đọc mà không hiểu icon đó cho phần nào */
+  table.icon-table td{vertical-align:middle}
+  table.icon-table td.ic-cell{width:44px;text-align:center;background:var(--n50)}
+  table.icon-table td.ic-cell svg.ic{width:20px;height:20px;color:var(--n700)}
+  table.icon-table td.ic-name{font-weight:700;white-space:nowrap}
+
+  /* khung / viền demo */
+  .frame-row{display:flex;gap:18px;flex-wrap:wrap}
+  .frame-box{width:150px;height:64px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:var(--n700);background:#fff;border-radius:8px}
+
+  /* Tabs */
+  .tabs-demo{display:flex;gap:20px;border-bottom:1px solid var(--line);font-size:12.5px;font-weight:700}
+  .tabs-demo .tab{padding:10px 0;color:var(--n600);border-bottom:2px solid transparent}
+  .tabs-demo .tab.active{color:#000;border-color:#000}
+
+  /* Segmented control */
+  .segmented{display:inline-flex;background:var(--n100);border-radius:8px;padding:2px;font-size:12px;font-weight:600}
+  .segmented .seg{padding:6px 14px;border-radius:6px;color:var(--n600)}
+  .segmented .seg.active{background:#fff;color:#000;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+  .segmented.dark{background:#fff;border:1px solid var(--line)}
+  .segmented.dark .seg.active{background:#000;color:#fff;box-shadow:none}
+
+  /* Progress bar */
+  .progress-track{width:100%;height:8px;border-radius:999px;background:var(--n100);overflow:hidden}
+  .progress-fill{height:100%;background:#000;border-radius:999px}
+
+  /* Stat / KPI card */
+  .stat-card{background:#fff;border:1px solid var(--line-soft);border-radius:var(--radius-xl);padding:16px;min-width:190px;box-shadow:0 1px 2px rgba(0,0,0,.03)}
+  .stat-card .lbl{font-size:11px;font-weight:700;color:var(--n600);margin-bottom:6px}
+  .stat-card .val{font-size:26px;font-weight:800;font-family:Consolas,monospace;color:var(--ink)}
+  .stat-card .trend{font-size:11px;font-weight:700;margin-top:5px}
+  .stat-card .trend.up{color:#10b981}
+  .stat-card .trend.down{color:#dc2626}
+
+  /* Avatar */
+  .avatar-circle{border-radius:999px;background:#262626;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:800;vertical-align:middle}
+
+  /* Toast */
+  .toast-demo{display:inline-flex;align-items:center;gap:8px;background:#000;color:#fff;padding:10px 16px;border-radius:8px;font-size:12px;font-weight:600;box-shadow:0 10px 20px -4px rgba(0,0,0,.25)}
+
+  /* Dropdown / popover */
+  .dropdown-demo{width:230px;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 20px 40px -8px rgba(0,0,0,.22);overflow:hidden;font-size:12px}
+  .dropdown-demo .hd{padding:10px 12px;border-bottom:1px solid var(--line-soft);font-weight:700;color:var(--n600);font-size:11px}
+  .dropdown-demo .itm{padding:9px 12px;color:var(--n700);display:flex;align-items:center;gap:8px}
+
+  /* Pagination */
+  .pagination-demo{display:inline-flex;gap:4px;align-items:center;font-size:12px;font-weight:700}
+  .pagination-demo button{padding:5px 11px;border-radius:6px;background:var(--n100);color:var(--n800);border:none}
+  .pagination-demo button.active{background:#000;color:#fff}
+
+  /* Accordion */
+  .accordion-demo{border:1px solid var(--line);border-radius:8px;overflow:hidden;max-width:420px}
+  .accordion-demo .hd{padding:11px 14px;display:flex;align-items:center;gap:8px;font-weight:700;font-size:12.5px;background:#fff}
+  .accordion-demo .bd{padding:11px 14px;font-size:12px;color:var(--n600);border-top:1px solid var(--line-soft);background:var(--n50)}
+
+  /* Bulk action bar */
+  .bulkbar-demo{display:flex;align-items:center;justify-content:space-between;background:#000;color:#fff;padding:10px 14px;border-radius:8px;font-size:12px;font-weight:600;max-width:520px}
+
+  /* List row pattern */
+  .listrow-demo{display:flex;align-items:center;justify-content:space-between;padding:10px 4px;border-bottom:1px solid var(--line-soft);max-width:420px}
+  .listrow-demo:last-child{border-bottom:none}
+
+  footer{color:var(--n400);font-size:11px;border-top:1px solid var(--line);padding-top:16px;margin-top:60px}
+</style>
+</head>
+<body>
+<div class="layout">
+
+<nav class="toc">
+  <div class="brand">CreatorFlow<span>UI Style Guide v1.0</span></div>
+  <div class="grp">Nền tảng</div>
+  <a href="#mau">Bảng màu</a>
+  <a href="#typo">Typography</a>
+  <a href="#spacing">Spacing</a>
+  <a href="#radius">Bo góc</a>
+  <a href="#shadow">Đổ bóng</a>
+  <a href="#icon">Icon</a>
+  <a href="#khung">Khung · viền · định dạng</a>
+  <div class="grp">Component</div>
+  <a href="#button">Button</a>
+  <a href="#badge">Badge / Tag</a>
+  <a href="#form">TextBox · ComboBox · DateTimePicker</a>
+  <a href="#grid">DataGridView</a>
+  <a href="#card">Card & Dialog</a>
+  <a href="#state">Empty · Loading · Error</a>
+  <a href="#tabs">Tabs</a>
+  <a href="#drawer">Drawer (bảng trượt)</a>
+  <a href="#toast">Toast (thông báo nổi)</a>
+  <a href="#dropdown">Dropdown / Popover</a>
+  <a href="#segmented">Segmented Control</a>
+  <a href="#progress">Progress bar</a>
+  <a href="#statcard">Stat / KPI Card</a>
+  <a href="#avatar">Avatar</a>
+  <a href="#pagination">Pagination</a>
+  <a href="#bulkbar">Chọn nhiều dòng &amp; Bulk bar</a>
+  <a href="#accordion">Accordion (thu gọn khối)</a>
+  <a href="#listrow">Mẫu dòng danh sách</a>
+  <a href="#pageheader">Page Header màn hình module</a>
+  <div class="grp">Layout</div>
+  <a href="#layout">MainForm layout</a>
+  <a href="#cheatsheet">Bảng tra nhanh</a>
+</nav>
+
+<main>
+  <header class="hero">
+    <h1>CreatorFlow — UI Style Guide</h1>
+    <p>Tài liệu này trích xuất chính xác màu sắc, font chữ, khoảng cách, bo góc... từ bản mockup giao diện web (React/Tailwind) "CreatorFlow — Studio Content Backlog &amp; Pipeline" mà team đã thống nhất chọn làm hình mẫu. Mọi thành viên khi tự làm màn hình module của mình (WinForms) dùng đúng các thông số dưới đây thay vì tự chọn màu/size riêng. Bấm vào mã hex để copy.</p>
+  </header>
+
+  <!-- ================= MÀU SẮC ================= -->
+  <section id="mau">
+    <h2>1. Bảng màu <span class="tag">Colors</span></h2>
+    <p class="lead">Nền tảng chủ đạo là <b>đen – trắng – xám trung tính</b>; màu sắc chỉ xuất hiện ở các chi tiết cần nhấn: trạng thái (priority, pipeline) và badge nền tảng (YouTube/TikTok/Instagram/Facebook).</p>
+
+    <h3 class="sub">Nền & chữ (Neutral)</h3>
+    <div class="swatches">
+      <div class="swatch"><div class="fill" style="background:#151c27"></div><div class="info"><div class="name">Xanh đen (chữ tiêu đề)</div><div class="hex" onclick="cp(this,'#151c27')">#151C27</div><div class="use">Màu chữ H1/heading chính</div></div></div>
+      <div class="swatch"><div class="fill" style="background:#000000"></div><div class="info"><div class="name">Đen tuyền</div><div class="hex" onclick="cp(this,'#000000')">#000000</div><div class="use">Sidebar, nút Primary</div></div></div>
+      <div class="swatch"><div class="fill" style="background:#171717"></div><div class="info"><div class="name">Neutral 900</div><div class="hex" onclick="cp(this,'#171717')">#171717</div><div class="use">Chữ đậm phụ, hover đen</div></div></div>
+      <div class="swatch"><div class="fill" style="background:#262626"></div><div class="info"><div class="name">Neutral 800</div><div class="hex" onclick="cp(this,'#262626')">#262626</div><div class="use">Chữ trên badge Med</div></div></div>
+      <div class="swatch"><div class="fill" style="background:#525252"></div><div class="info"><div class="name">Neutral 600</div><div class="hex" onclick="cp(this,'#525252')">#525252</div><div class="use">Chữ phụ / caption</div></div></div>
+      <div class="swatch"><div class="fill" style="background:#a3a3a3"></div><div class="info"><div class="name">Neutral 400</div><div class="hex" onclick="cp(this,'#a3a3a3')">#A3A3A3</div><div class="use">Placeholder, icon mờ</div></div></div>
+      <div class="swatch"><div class="fill" style="background:#e5e5e5"></div><div class="info"><div class="name">Neutral 200 (border)</div><div class="hex" onclick="cp(this,'#e5e5e5')">#E5E5E5</div><div class="use">Viền mặc định mọi component</div></div></div>
+      <div class="swatch"><div class="fill" style="background:#f5f5f5"></div><div class="info"><div class="name">Neutral 100</div><div class="hex" onclick="cp(this,'#f5f5f5')">#F5F5F5</div><div class="use">Nền nút Secondary, hover nhẹ</div></div></div>
+      <div class="swatch"><div class="fill" style="background:#fafafa"></div><div class="info"><div class="name">Neutral 50</div><div class="hex" onclick="cp(this,'#fafafa')">#FAFAFA</div><div class="use">Nền header bảng, dòng chẵn</div></div></div>
+      <div class="swatch"><div class="fill" style="background:#ffffff;border-bottom:1px solid #eee"></div><div class="info"><div class="name">Trắng</div><div class="hex" onclick="cp(this,'#ffffff')">#FFFFFF</div><div class="use">Nền chính content area</div></div></div>
+    </div>
+
+    <h3 class="sub">Màu trạng thái (Priority / Status)</h3>
+    <div class="swatches">
+      <div class="swatch"><div class="fill" style="background:#fee2e2"></div><div class="info"><div class="name">Priority High</div><div class="hex" onclick="cp(this,'#fee2e2 / #b91c1c')">bg #FEE2E2 · text #B91C1C</div><div class="use">Badge ưu tiên cao</div></div></div>
+      <div class="swatch"><div class="fill" style="background:#dc2626"></div><div class="info"><div class="name">Danger / Error</div><div class="hex" onclick="cp(this,'#dc2626')">#DC2626</div><div class="use">Nút xoá, thông báo lỗi</div></div></div>
+      <div class="swatch"><div class="fill" style="background:#fbbf24"></div><div class="info"><div class="name">Warning</div><div class="hex" onclick="cp(this,'#fbbf24')">#FBBF24</div><div class="use">Giai đoạn "đang xử lý"</div></div></div>
+      <div class="swatch"><div class="fill" style="background:#10b981"></div><div class="info"><div class="name">Success</div><div class="hex" onclick="cp(this,'#10b981')">#10B981</div><div class="use">Đã duyệt / hoàn thành</div></div></div>
+      <div class="swatch"><div class="fill" style="background:#60a5fa"></div><div class="info"><div class="name">Info</div><div class="hex" onclick="cp(this,'#60a5fa')">#60A5FA</div><div class="use">Giai đoạn đang soạn thảo</div></div></div>
+      <div class="swatch"><div class="fill" style="background:#c084fc"></div><div class="info"><div class="name">Accent tím</div><div class="hex" onclick="cp(this,'#c084fc')">#C084FC</div><div class="use">Giai đoạn hậu kỳ</div></div></div>
+    </div>
+
+    <h3 class="sub">Màu nền tảng đăng nội dung (Platform badge)</h3>
+    <div class="swatches">
+      <div class="swatch"><div class="fill" style="background:#ffdad6"></div><div class="info"><div class="name">YouTube</div><div class="hex" onclick="cp(this,'#DC2626 / #FFDAD6')">text #DC2626 · bg #FFDAD6</div><div class="use">Badge trên item/hàng có nền tảng YouTube</div></div></div>
+      <div class="swatch"><div class="fill" style="background:#dce2f3"></div><div class="info"><div class="name">TikTok</div><div class="hex" onclick="cp(this,'#151C27 / #DCE2F3')">text #151C27 · bg #DCE2F3</div><div class="use">Badge trên item/hàng có nền tảng TikTok</div></div></div>
+      <div class="swatch"><div class="fill" style="background:#e5e2e1"></div><div class="info"><div class="name">Instagram</div><div class="hex" onclick="cp(this,'#92400E / #E5E2E1')">text #92400E · bg #E5E2E1</div><div class="use">Badge trên item/hàng có nền tảng Instagram</div></div></div>
+      <div class="swatch"><div class="fill" style="background:#d5e3fc"></div><div class="info"><div class="name">Facebook</div><div class="hex" onclick="cp(this,'#1D4ED8 / #D5E3FC')">text #1D4ED8 · bg #D5E3FC</div><div class="use">Badge trên item/hàng có nền tảng Facebook</div></div></div>
+    </div>
+  </section>
+
+  <!-- ================= TYPOGRAPHY ================= -->
+  <section id="typo">
+    <h2>2. Typography <span class="tag">Font</span></h2>
+    <p class="lead">Bản mockup web không khai báo font riêng — dùng font hệ thống mặc định. Trên Windows, font hệ thống tương đương chính là <b>Segoe UI</b>, nên team dùng Segoe UI cho toàn bộ app WinForms để giữ đúng "cảm giác" của mockup. Mã/ID (VD: CF-401) dùng font monospace (Consolas).</p>
+    <table style="margin-bottom:18px">
+      <tr><th>Vai trò</th><th>Font family</th><th>Ghi chú WinForms</th></tr>
+      <tr><td>Toàn bộ UI</td><td><code>Segoe UI</code></td><td><code>new Font("Segoe UI", size, style)</code></td></tr>
+      <tr><td>Mã / số liệu (ID, score)</td><td><code>Consolas</code></td><td>Dùng cho cột ID trong DataGridView</td></tr>
+    </table>
+
+    <h3 class="sub">Type scale</h3>
+    <div class="type-row"><div class="meta"><b>H1 — Page title</b>24–30px · Extrabold (800)</div><div class="type-sample" style="font-size:28px;font-weight:800;letter-spacing:-.01em">Content Backlog</div></div>
+    <div class="type-row"><div class="meta"><b>H2 — Section header</b>18–20px · Bold (700)</div><div class="type-sample" style="font-size:19px;font-weight:700">High Priority Production Queue</div></div>
+    <div class="type-row"><div class="meta"><b>H3 — Widget / card title</b>14–16px · Bold (700)</div><div class="type-sample" style="font-size:15px;font-weight:700">Sprint 25 Lock Date</div></div>
+    <div class="type-row"><div class="meta"><b>Body — nội dung chính</b>12–13px · Regular/Medium</div><div class="type-sample" style="font-size:13px;font-weight:500;color:var(--n700)">Đây là cỡ chữ dùng cho phần lớn nội dung, label, mô tả trong toàn bộ app.</div></div>
+    <div class="type-row"><div class="meta"><b>Label / Caption</b>11px · Semibold</div><div class="type-sample" style="font-size:11px;font-weight:600;color:var(--n600)">PRIORITY · SPRINT 25 · 12m ago</div></div>
+    <div class="type-row"><div class="meta"><b>Micro (badge/count)</b>10px · Bold</div><div class="type-sample" style="font-size:10px;font-weight:700;color:var(--n600)">NEW · 28 · 3</div></div>
+
+    <table style="margin-top:18px">
+      <tr><th>Tên</th><th>Px</th><th>Point (WinForms Font size)</th><th>Weight</th></tr>
+      <tr><td>H1</td><td>24–30px</td><td>~18–22pt</td><td>800 Extrabold</td></tr>
+      <tr><td>H2</td><td>18–20px</td><td>~13–15pt</td><td>700 Bold</td></tr>
+      <tr><td>H3</td><td>14–16px</td><td>~10.5–12pt</td><td>700 Bold</td></tr>
+      <tr><td>Body</td><td>12–13px</td><td>9–9.75pt</td><td>500 Medium</td></tr>
+      <tr><td>Label</td><td>11px</td><td>8.25pt</td><td>600 Semibold</td></tr>
+      <tr><td>Micro</td><td>10px</td><td>7.5pt</td><td>700 Bold</td></tr>
+    </table>
+    <p class="lead" style="margin-top:8px;font-size:11.5px">Quy đổi tham khảo ở 96 DPI: point ≈ px ÷ 1.333. WinForms mặc định dùng point nên số liệu trên chỉ là gợi ý — quan trọng là giữ đúng thứ bậc lớn/nhỏ và độ đậm giữa các cấp.</p>
+  </section>
+
+  <!-- ================= SPACING ================= -->
+  <section id="spacing">
+    <h2>3. Spacing <span class="tag">4px base unit</span></h2>
+    <p class="lead">Mọi khoảng cách (margin, padding, gap giữa control) đều là bội số của 4px. Không tự chế số lẻ như 13px hay 15px.</p>
+    <div class="space-row"><div class="lbl">2 — siêu nhỏ</div><div class="bar" style="width:2px"></div><div class="val">Đệm dọc badge/pill</div></div>
+    <div class="space-row"><div class="lbl">4 — inline</div><div class="bar" style="width:4px"></div><div class="val">Khoảng cách icon–label</div></div>
+    <div class="space-row"><div class="lbl">6 — nhỏ</div><div class="bar" style="width:6px"></div><div class="val">Padding trong badge nhỏ</div></div>
+    <div class="space-row"><div class="lbl">8 — mặc định</div><div class="bar" style="width:8px"></div><div class="val">Gap chuẩn giữa 2 control cùng hàng</div></div>
+    <div class="space-row"><div class="lbl">12 — vừa</div><div class="bar" style="width:12px"></div><div class="val">Padding ngang button, gap nhóm control</div></div>
+    <div class="space-row"><div class="lbl">16 — chuẩn card</div><div class="bar" style="width:16px"></div><div class="val">Padding trong Card/Panel</div></div>
+    <div class="space-row"><div class="lbl">20 — panel lớn</div><div class="bar" style="width:20px"></div><div class="val">Padding Card nội dung chính</div></div>
+    <div class="space-row"><div class="lbl">24 — section</div><div class="bar" style="width:24px"></div><div class="val">Khoảng cách giữa 2 khối/section</div></div>
+    <div class="space-row"><div class="lbl">32 — trang</div><div class="bar" style="width:32px"></div><div class="val">Padding lề ngoài của Form/trang</div></div>
+  </section>
+
+  <!-- ================= RADIUS ================= -->
+  <section id="radius">
+    <h2>4. Bo góc <span class="tag">Border radius</span></h2>
+    <div class="demo-row">
+      <div class="demo-box" style="border-radius:4px">4px<br>rounded</div>
+      <div class="demo-box" style="border-radius:6px">6px<br>md</div>
+      <div class="demo-box" style="border-radius:8px">8px<br>lg (phổ biến nhất)</div>
+      <div class="demo-box" style="border-radius:12px">12px<br>xl (card/dialog)</div>
+      <div class="demo-box" style="border-radius:999px">full<br>pill/avatar</div>
+    </div>
+    <table style="margin-top:16px">
+      <tr><th>Cấp</th><th>Giá trị</th><th>Dùng cho</th></tr>
+      <tr><td>md</td><td><code>6px</code></td><td>Nút nhỏ, icon-button</td></tr>
+      <tr><td>lg</td><td><code>8px</code></td><td>Button, TextBox, ComboBox, item danh sách — <b>mặc định cho hầu hết control</b></td></tr>
+      <tr><td>xl</td><td><code>12px</code></td><td>Card, Dialog, Panel lớn</td></tr>
+      <tr><td>full</td><td><code>9999px</code></td><td>Badge, Avatar, chip trạng thái</td></tr>
+    </table>
+  </section>
+
+  <!-- ================= SHADOW ================= -->
+  <section id="shadow">
+    <h2>5. Đổ bóng <span class="tag">Elevation</span></h2>
+    <div class="demo-row">
+      <div class="shadow-box" style="box-shadow:0 1px 2px rgba(0,0,0,.03);border:1px solid var(--line)">Card thường (xs)</div>
+      <div class="shadow-box" style="box-shadow:0 1px 2px rgba(0,0,0,.03),0 1px 1px rgba(0,0,0,.02)">Header / thanh trên</div>
+      <div class="shadow-box" style="box-shadow:0 20px 40px -8px rgba(0,0,0,.25)">Dialog / Modal (xl)</div>
+      <div class="shadow-box" style="box-shadow:0 10px 20px -4px rgba(0,0,0,.15)">Toast / thông báo nổi</div>
+    </div>
+  </section>
+
+  <!-- ================= ICON ================= -->
+  <section id="icon">
+    <h2>6. Icon</h2>
+    <p class="lead">Mockup web dùng bộ icon <b>Google Material Symbols Outlined</b>. WinForms không nhúng được font icon này trực tiếp, nên quy ước: dùng một bộ <b>SVG icon outline, nét mảnh (stroke ~1.8px), đơn sắc</b> — không trộn nhiều style icon khác nhau trong cùng app. Dưới đây là icon mẫu (tự vẽ, cùng phong cách) cho các mục nav chính, chỉ để tham khảo hình dáng/kích thước — team chọn 1 bộ icon SVG thật (gợi ý: Fluent System Icons hoặc Material Icons dạng SVG) rồi export theo đúng size này.</p>
+
+    <h3 class="sub">Icon sidebar (18px, màu trắng trên nền đen)</h3>
+    <div class="icon-row" style="background:#000;padding:16px;border-radius:10px">
+      <div class="icon-item" style="color:#cfc4c5">
+        <svg class="ic" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+        <span>Summary</span>
+      </div>
+      <div class="icon-item" style="color:#cfc4c5">
+        <svg class="ic" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20"/><line x1="15" y1="4" x2="15" y2="20"/></svg>
+        <span>Board</span>
+      </div>
+      <div class="icon-item" style="color:#fff">
+        <svg class="ic" viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="4" cy="6" r="0" fill="currentColor" stroke="none"/></svg>
+        <span>Backlog <i>(đang chọn)</i></span>
+      </div>
+      <div class="icon-item" style="color:#cfc4c5">
+        <svg class="ic" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="3" x2="8" y2="7"/><line x1="16" y1="3" x2="16" y2="7"/></svg>
+        <span>Calendar</span>
+      </div>
+      <div class="icon-item" style="color:#cfc4c5">
+        <svg class="ic" viewBox="0 0 24 24"><line x1="5" y1="20" x2="5" y2="11"/><line x1="12" y1="20" x2="12" y2="6"/><line x1="19" y1="20" x2="19" y2="14"/></svg>
+        <span>Reports</span>
+      </div>
+    </div>
+
+    <h3 class="sub">Icon header / toolbar (20px, màu xám)</h3>
+    <div class="icon-row">
+      <div class="icon-item"><svg class="ic" viewBox="0 0 24 24"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg><span>Menu</span></div>
+      <div class="icon-item"><svg class="ic" viewBox="0 0 24 24"><polyline points="9 5 16 12 9 19"/></svg><span>Chevron</span></div>
+      <div class="icon-item"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9 8v8l7-4-7-4z" fill="currentColor" stroke="none"/></svg><span>Play (YouTube)</span></div>
+      <div class="icon-item"><svg class="ic" viewBox="0 0 24 24"><path d="M9 18V5l9-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="15" cy="16" r="3"/></svg><span>Music (TikTok)</span></div>
+      <div class="icon-item"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="14" rx="2"/><circle cx="12" cy="13" r="4"/><path d="M8 6l1.5-2h5L16 6"/></svg><span>Camera (Instagram)</span></div>
+      <div class="icon-item"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="3" y1="12" x2="21" y2="12"/><path d="M12 3c2.5 2.5 2.5 15.5 0 18M12 3c-2.5 2.5-2.5 15.5 0 18"/></svg><span>Globe (Facebook)</span></div>
+      <div class="icon-item"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="8 12.5 10.5 15 16 9"/></svg><span>Check</span></div>
+      <div class="icon-item"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3l2 5 5 2-5 2-2 5-2-5-5-2 5-2 2-5z"/></svg><span>AI / Sparkle</span></div>
+    </div>
+
+    <table style="margin-top:20px">
+      <tr><th>Vị trí</th><th>Kích thước</th></tr>
+      <tr><td>Icon trong sidebar / menu item</td><td>18px</td></tr>
+      <tr><td>Icon trên header / toolbar</td><td>20px</td></tr>
+      <tr><td>Icon nhỏ trong badge/tag</td><td>13–14px</td></tr>
+      <tr><td>Màu icon mặc định</td><td>xám neutral-600, hoặc trắng nếu icon nằm trên nền đen (sidebar)</td></tr>
+    </table>
+
+    <h3 class="sub">Bộ icon dùng chung cho toàn app (không chỉ những màn hình có trong file mẫu)</h3>
+    <p class="lead" style="margin-bottom:14px">Đây là danh sách icon <b>tối thiểu mọi module đều có thể cần dùng tới</b>, chia theo nhóm mục đích. Cột "Dùng ở đâu" ghi rõ icon đó xuất hiện ở màn hình/tình huống nào để không ai phải đoán. Nếu module cần icon khác không có trong bảng, báo lại để bổ sung — không tự ý lấy icon ở nơi khác cho vào app.</p>
+
+    <h3 class="sub">Nhóm 1 — Điều hướng (Navigation)</h3>
+    <table class="icon-table">
+      <tr><th style="width:44px"></th><th>Tên icon</th><th>Dùng ở đâu</th></tr>
+      <tr><td class="ic-cell"><svg class="ic" viewBox="0 0 24 24"><polyline points="15 6 9 12 15 18"/></svg></td><td class="ic-name">Quay lại (Back)</td><td>Góc trên-trái Header khi đang ở màn hình chi tiết/con — bấm để về màn hình trước đó, đúng "quy tắc quay lại màn hình trước" đã nêu ở phần Main Layout</td></tr>
+      <tr><td class="ic-cell"><svg class="ic" viewBox="0 0 24 24"><polyline points="9 6 15 12 9 18"/></svg></td><td class="ic-name">Đi tiếp (Forward)</td><td>Nút "Tiếp theo" trong form nhiều bước (wizard), phân trang bảng (trang sau)</td></tr>
+      <tr><td class="ic-cell"><svg class="ic" viewBox="0 0 24 24"><path d="M4 11.5 12 4l8 7.5"/><path d="M6 10v9a1 1 0 0 0 1 1h4v-6h2v6h4a1 1 0 0 0 1-1v-9"/></svg></td><td class="ic-name">Trang chủ (Home)</td><td>Icon đầu tiên trong Sidebar hoặc breadcrumb — quay về màn hình Summary/Dashboard</td></tr>
+      <tr><td class="ic-cell"><svg class="ic" viewBox="0 0 24 24"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg></td><td class="ic-name">Menu (Hamburger)</td><td>Header, chỉ hiện trên màn hình nhỏ/mobile để mở Sidebar; bấm lại icon Close để đóng</td></tr>
+      <tr><td class="ic-cell"><svg class="ic" viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg></td><td class="ic-name">Đóng (Close / X)</td><td>Góc trên-phải Dialog/Modal, trên mỗi Tag/Chip có thể gỡ, trên ô tìm kiếm để xoá nhanh nội dung đã gõ</td></tr>
+      <tr><td class="ic-cell"><svg class="ic" viewBox="0 0 24 24"><polyline points="6 15 12 9 18 15"/></svg></td><td class="ic-name">Mũi tên lên (Chevron up)</td><td>Thu gọn (collapse) một nhóm/section đang mở rộng</td></tr>
+      <tr><td class="ic-cell"><svg class="ic" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg></td><td class="ic-name">Mũi tên xuống (Chevron down)</td><td>Mở rộng (expand) một nhóm; cũng dùng làm icon "mũi tên xổ xuống" bên phải ComboBox</td></tr>
+      <tr><td class="ic-cell"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1.4" fill="currentColor" stroke="none"/></svg></td><td class="ic-name">Xem thêm (More / 3 chấm dọc)</td><td>Cuối mỗi dòng trong DataGridView hoặc góc Card — bấm ra menu phụ (Sửa/Xoá/Nhân bản...)</td></tr>
+    </table>
+
+    <h3 class="sub">Nhóm 2 — Hành động (Actions)</h3>
+    <table class="icon-table">
+      <tr><th style="width:44px"></th><th>Tên icon</th><th>Dùng ở đâu</th></tr>
+      <tr><td class="ic-cell"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg></td><td class="ic-name">Thêm mới (Add)</td><td>Nút Primary "Tạo nội dung mới" ở Header của Backlog/Board; icon "+" đứng riêng để thêm nhanh 1 dòng trong Grid</td></tr>
+      <tr><td class="ic-cell"><svg class="ic" viewBox="0 0 24 24"><path d="M4 20l3.5-1 10-10-2.5-2.5-10 10L4 20z"/><line x1="14" y1="6.5" x2="17.5" y2="10"/></svg></td><td class="ic-name">Sửa (Edit)</td><td>Trong ItemDetailDrawer, trên mỗi dòng Grid khi hover — mở form chỉnh sửa nội dung</td></tr>
+      <tr><td class="ic-cell"><svg class="ic" viewBox="0 0 24 24"><polyline points="4 7 20 7"/><path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/><path d="M6 7l1 12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-12"/><line x1="10" y1="11" x2="10" y2="16"/><line x1="14" y1="11" x2="14" y2="16"/></svg></td><td class="ic-name">Xoá (Delete)</td><td>Dùng đi kèm nút Danger; luôn hiện Dialog xác nhận trước khi xoá thật (xem mục Dialog)</td></tr>
+      <tr><td class="ic-cell"><svg class="ic" viewBox="0 0 24 24"><path d="M8 16h9a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1H10a1 1 0 0 0-1 1v1"/><rect x="4" y="8" width="10" height="12" rx="1.5"/></svg></td><td class="ic-name">Sao chép (Copy)</td><td>Cạnh ô mã ID (VD CF-401) hoặc link chia sẻ — bấm copy vào clipboard, giống hàm cp() copy mã màu trong tài liệu này</td></tr>
+      <tr><td class="ic-cell"><svg class="ic" viewBox="0 0 24 24"><path d="M12 4v11"/><polyline points="8 11 12 15 16 11"/><path d="M5 17v2a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2"/></svg></td><td class="ic-name">Tải xuống (Download)</td><td>Nút xuất báo cáo ở màn hình Reports, tải file đính kèm trong ItemDetailDrawer</td></tr>
+      <tr><td class="ic-cell"><svg class="ic" viewBox="0 0 24 24"><path d="M12 20V9"/><polyline points="8 13 12 9 16 13"/><path d="M5 17v2a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2"/></svg></td><td class="ic-name">Tải lên (Upload)</td><td>Kéo-thả hoặc chọn file đính kèm (ảnh/video kịch bản) trong form Tạo nội dung mới</td></tr>
+      <tr><td class="ic-cell"><svg class="ic" viewBox="0 0 24 24"><path d="M20 8a8 8 0 1 0 1.5 5"/><polyline points="21 3 21 8 16 8"/></svg></td><td class="ic-name">Làm mới (Refresh)</td><td>Nút reload dữ liệu Grid/Board sau khi bấm Lưu, hoặc khi dữ liệu tải lỗi cần thử lại</td></tr>
+      <tr><td class="ic-cell"><svg class="ic" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><line x1="15.5" y1="15.5" x2="21" y2="21"/></svg></td><td class="ic-name">Tìm kiếm (Search)</td><td>Ô tìm kiếm trên Header, thanh tìm nhanh trong Combobox lớn (nhiều lựa chọn)</td></tr>
+      <tr><td class="ic-cell"><svg class="ic" viewBox="0 0 24 24"><polygon points="4 5 20 5 14 13 14 19 10 21 10 13 4 5"/></svg></td><td class="ic-name">Bộ lọc (Filter)</td><td>Nút "Bộ lọc" cạnh ô tìm kiếm trong Backlog/Board — mở panel lọc theo Priority, Nền tảng, Giai đoạn</td></tr>
+      <tr><td class="ic-cell"><svg class="ic" viewBox="0 0 24 24"><path d="M4 6h11"/><path d="M4 12h7"/><path d="M4 18h4"/><polyline points="16 15 19 18 22 15"/><line x1="19" y1="8" x2="19" y2="18"/></svg></td><td class="ic-name">Sắp xếp (Sort)</td><td>Header cột trong DataGridView — bấm để sắp xếp tăng/giảm theo cột đó</td></tr>
+    </table>
+
+    <h3 class="sub">Nhóm 3 — Trạng thái &amp; phản hồi (Status / Feedback)</h3>
+    <table class="icon-table">
+      <tr><th style="width:44px"></th><th>Tên icon</th><th>Dùng ở đâu</th></tr>
+      <tr><td class="ic-cell" style="color:#10b981"><svg class="ic" viewBox="0 0 24 24" style="color:#10b981"><circle cx="12" cy="12" r="9"/><polyline points="8 12.5 10.5 15 16 9"/></svg></td><td class="ic-name">Thành công / Đã tick (Check / Success)</td><td>Toast báo "Lưu thành công", trạng thái "Đã duyệt" trong Review Queue, checkbox đã chọn</td></tr>
+      <tr><td class="ic-cell" style="color:#dc2626"><svg class="ic" viewBox="0 0 24 24" style="color:#dc2626"><circle cx="12" cy="12" r="9"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg></td><td class="ic-name">Lỗi (Error / X trong vòng tròn)</td><td>Toast báo lỗi, dòng chữ validate màu đỏ dưới TextBox, trạng thái tải dữ liệu thất bại</td></tr>
+      <tr><td class="ic-cell" style="color:#fbbf24"><svg class="ic" viewBox="0 0 24 24" style="color:#fbbf24"><path d="M12 4 2.5 20.5h19L12 4z"/><line x1="12" y1="10" x2="12" y2="15"/><circle cx="12" cy="18" r="0.9" fill="currentColor" stroke="none"/></svg></td><td class="ic-name">Cảnh báo (Warning)</td><td>Dialog xác nhận Xoá, cảnh báo "Sprint sắp khoá" trong Card nhắc việc, cảnh báo dữ liệu chưa lưu khi thoát form</td></tr>
+      <tr><td class="ic-cell" style="color:#60a5fa"><svg class="ic" viewBox="0 0 24 24" style="color:#60a5fa"><circle cx="12" cy="12" r="9"/><line x1="12" y1="10.5" x2="12" y2="16"/><circle cx="12" cy="7.5" r="0.9" fill="currentColor" stroke="none"/></svg></td><td class="ic-name">Thông tin (Info)</td><td>Tooltip giải thích thêm cạnh label khó hiểu, banner thông báo tính năng mới</td></tr>
+      <tr><td class="ic-cell"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14"/></svg></td><td class="ic-name">Đang chờ (Pending / Clock)</td><td>Badge giai đoạn pipeline "Filming/Studio" đang xử lý, trạng thái item chờ duyệt trong Review Queue</td></tr>
+      <tr><td class="ic-cell"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3a9 9 0 0 1 9 9" stroke-dasharray="4 4"/></svg></td><td class="ic-name">Đang tải (Loading spinner)</td><td>Xoay liên tục khi đang tải dữ liệu Grid/Board — đi kèm chữ "Đang tải dữ liệu…" (xem mục Empty/Loading/Error)</td></tr>
+    </table>
+
+    <h3 class="sub">Nhóm 4 — Người dùng &amp; hệ thống (User / System)</h3>
+    <table class="icon-table">
+      <tr><th style="width:44px"></th><th>Tên icon</th><th>Dùng ở đâu</th></tr>
+      <tr><td class="ic-cell"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7"/></svg></td><td class="ic-name">Người dùng (User / Profile)</td><td>Khu vực Current User góc dưới Sidebar; avatar người được gán việc trong Grid/Card</td></tr>
+      <tr><td class="ic-cell"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M21 12h-2.5M5.5 12H3M18 6l-1.7 1.7M7.7 16.3 6 18M18 18l-1.7-1.7M7.7 7.7 6 6"/></svg></td><td class="ic-name">Cài đặt (Settings)</td><td>Cuối Sidebar — mở màn hình Project Settings</td></tr>
+      <tr><td class="ic-cell"><svg class="ic" viewBox="0 0 24 24"><path d="M8 8a4 4 0 0 1 8 0c0 5 2 6 2 6H6s2-1 2-6"/><path d="M10.5 18a1.5 1.5 0 0 0 3 0"/></svg></td><td class="ic-name">Thông báo (Notification / Bell)</td><td>Header — có chấm đỏ nhỏ góc trên-phải khi có thông báo mới chưa đọc</td></tr>
+      <tr><td class="ic-cell"><svg class="ic" viewBox="0 0 24 24"><path d="M9 4H6a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h3"/><line x1="20" y1="12" x2="10" y2="12"/><polyline points="16 8 20 12 16 16"/></svg></td><td class="ic-name">Đăng xuất (Logout)</td><td>Menu bấm vào Current User góc dưới Sidebar</td></tr>
+      <tr><td class="ic-cell"><svg class="ic" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="1.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></td><td class="ic-name">Khoá (Lock)</td><td>Nhắc "Sprint đã khoá" không cho sửa nữa; icon quyền hạn (chỉ Admin mới thấy)</td></tr>
+      <tr><td class="ic-cell"><svg class="ic" viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></td><td class="ic-name">Hiện (Eye)</td><td>Ô nhập mật khẩu — bấm để hiện chữ đang gõ. Khi đang hiện thì đổi sang icon Ẩn (Eye-off) bên dưới</td></tr>
+      <tr><td class="ic-cell"><svg class="ic" viewBox="0 0 24 24"><path d="M2 12s4-7 10-7c1.8 0 3.4.5 4.8 1.3M22 12s-1.6 3-4.3 5"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/><line x1="3" y1="3" x2="21" y2="21"/></svg></td><td class="ic-name">Ẩn (Eye-off)</td><td>Ô nhập mật khẩu — bấm để ẩn lại chữ đã gõ</td></tr>
+      <tr><td class="ic-cell"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3.5 14.3 9l5.7.5-4.3 3.8 1.3 5.6-5-3-5 3 1.3-5.6L4 9.5 9.7 9z"/></svg></td><td class="ic-name">Yêu thích (Star / Favorite)</td><td>Đánh dấu ghim item quan trọng trong Backlog để lên đầu danh sách</td></tr>
+    </table>
+
+    <h3 class="sub">Nhóm 5 — Media &amp; tệp (Media / File)</h3>
+    <table class="icon-table">
+      <tr><th style="width:44px"></th><th>Tên icon</th><th>Dùng ở đâu</th></tr>
+      <tr><td class="ic-cell"><svg class="ic" viewBox="0 0 24 24"><path d="M7 3h7l4 4v14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><polyline points="14 3 14 7 18 7"/></svg></td><td class="ic-name">Tệp / Tài liệu (File)</td><td>Danh sách file đính kèm trong ItemDetailDrawer (kịch bản, tài liệu brief)</td></tr>
+      <tr><td class="ic-cell"><svg class="ic" viewBox="0 0 24 24"><path d="M3 7a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7z"/></svg></td><td class="ic-name">Thư mục (Folder)</td><td>Nhóm tài liệu/nội dung theo dự án trong Project Settings</td></tr>
+      <tr><td class="ic-cell"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="1.5"/><circle cx="8.5" cy="10" r="1.6"/><path d="M4 17l5-4 3.5 3 3-2.5L20 17"/></svg></td><td class="ic-name">Hình ảnh (Image)</td><td>Ảnh thumbnail đại diện của nội dung trong Card/Grid, ảnh cover video</td></tr>
+      <tr><td class="ic-cell"><svg class="ic" viewBox="0 0 24 24"><path d="M19 11.5 10.7 19.8a4 4 0 1 1-5.7-5.7L13.6 5.7a2.7 2.7 0 1 1 3.8 3.8l-8 8a1.3 1.3 0 1 1-1.9-1.9l7-7"/></svg></td><td class="ic-name">Đính kèm (Attachment / Paperclip)</td><td>Nút đính kèm file trong form Tạo nội dung mới, số lượng file đính kèm trên Card</td></tr>
+      <tr><td class="ic-cell"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="3" x2="8" y2="7"/><line x1="16" y1="3" x2="16" y2="7"/></svg></td><td class="ic-name">Lịch (Calendar)</td><td>Icon mở DateTimePicker cạnh ô ngày, nút vào màn hình Calendar</td></tr>
+    </table>
+  </section>
+
+  <!-- ================= KHUNG / VIỀN ================= -->
+  <section id="khung">
+    <h2>7. Khung · viền · định dạng <span class="tag">Border &amp; Frame</span></h2>
+    <p class="lead">Mọi control đều được "đóng khung" theo đúng 1 bộ quy tắc dưới đây — không ai tự đặt viền dày/mỏng hay màu viền khác. Viền dùng để phân biệt <b>ranh giới của 1 khối</b> (control, card, panel...) với nền xung quanh; khi 2 khối lồng nhau (VD Card nằm trong Content area) thì khối con luôn phải có viền/nền riêng để người dùng thấy rõ ranh giới, không để 2 khối dính liền nhau không phân biệt được.</p>
+
+    <h3 class="sub">Độ dày &amp; màu viền theo trạng thái</h3>
+    <div class="frame-row">
+      <div class="frame-box" style="border:1px solid #d4d4d4">Mặc định<br>1px #D4D4D4</div>
+      <div class="frame-box" style="border:1px solid #a3a3a3">Hover<br>1px #A3A3A3</div>
+      <div class="frame-box" style="border:2px solid #000;box-shadow:0 0 0 1px #fff inset">Focus (đang nhập)<br>2px #000</div>
+      <div class="frame-box" style="border:1px solid #dc2626">Lỗi (Error)<br>1px #DC2626</div>
+      <div class="frame-box" style="border:1px solid #e5e5e5;opacity:.55">Disabled<br>1px #E5E5E5, mờ 55%</div>
+    </div>
+    <table style="margin-top:16px">
+      <tr><th>Trạng thái</th><th>Viền</th><th>Áp dụng cho</th></tr>
+      <tr><td>Mặc định (Normal)</td><td><code>1px solid #D4D4D4</code></td><td>TextBox, ComboBox, DateTimePicker, Card, ô Grid — viền nhạt nhất, không gây chú ý</td></tr>
+      <tr><td>Hover (di chuột qua)</td><td><code>1px solid #A3A3A3</code></td><td>Đậm hơn 1 cấp so với mặc định, báo hiệu control có thể bấm/nhập được</td></tr>
+      <tr><td>Focus (đang thao tác)</td><td><code>2px solid #000000</code>, offset 1px</td><td>TextBox/ComboBox đang được gõ, Button vừa Tab tới — viền đậm nhất để biết đang ở đâu</td></tr>
+      <tr><td>Error (sai dữ liệu)</td><td><code>1px solid #DC2626</code></td><td>TextBox sau khi validate lỗi, đi kèm dòng chữ đỏ bên dưới (xem mục 10)</td></tr>
+      <tr><td>Disabled (không thao tác được)</td><td><code>1px solid #E5E5E5</code>, cả khối mờ 55%</td><td>Control chưa đủ điều kiện bấm/nhập</td></tr>
+    </table>
+
+    <h3 class="sub">Đường phân cách (Divider)</h3>
+    <p class="lead" style="margin:8px 0">Dùng 1 đường kẻ mảnh <code>1px solid #E5E5E5</code> để tách 2 vùng nằm cạnh nhau mà không cần đóng khung cả 2 bên (nhẹ hơn viền/Card). Không dùng nét đứt, không dùng đường dày hơn 1px.</p>
+    <table>
+      <tr><th>Vị trí</th><th>Ví dụ cụ thể</th></tr>
+      <tr><td>Dưới Header (56px)</td><td>Tách Header khỏi Content area phía dưới</td></tr>
+      <tr><td>Giữa các dòng trong Grid/List</td><td>Tách từng dòng dữ liệu trong DataGridView, danh sách file đính kèm</td></tr>
+      <tr><td>Trong Sidebar</td><td>Tách logo/brand khỏi menu, tách menu khỏi khu vực Current User (viền màu trắng mờ 10% vì nền đen)</td></tr>
+      <tr><td>Trong Dialog</td><td>Tách phần tiêu đề (header) và phần nút hành động (footer) khỏi nội dung ở giữa</td></tr>
+    </table>
+
+    <h3 class="sub">Quy tắc lồng khung (khối trong khối)</h3>
+    <table>
+      <tr><th>Khối ngoài</th><th>Khối trong</th><th>Cách phân biệt ranh giới</th></tr>
+      <tr><td>Content area (nền #FAFAFA)</td><td>Card (nền trắng)</td><td>Card đổi màu nền sang trắng + viền 1px #E5E5E5 + đổ bóng nhẹ (xs) để nổi lên trên nền content</td></tr>
+      <tr><td>Toàn màn hình</td><td>Dialog/Modal</td><td>Phủ lớp overlay đen 60% lên toàn bộ phía sau, Dialog nổi ở giữa với bo góc 12px + đổ bóng đậm (xl)</td></tr>
+      <tr><td>Card</td><td>Badge/Tag trạng thái bên trong Card</td><td>Badge có nền màu riêng (theo mục 9) + bo góc pill để tách khỏi nền trắng của Card</td></tr>
+      <tr><td>Ô Grid (cell)</td><td>Badge trạng thái trong ô</td><td>Badge giữ nguyên kiểu như ngoài Grid, chỉ giảm padding còn <code>1px 8px</code> cho gọn trong ô nhỏ</td></tr>
+    </table>
+    <p class="lead" style="margin-top:10px">Nguyên tắc chung: <b>không được để 2 khối khác chức năng dùng chung 1 đường viền</b> — mỗi khối luôn tự có viền/nền/bóng riêng của nó, để khi nhìn vào là biết ngay đâu là ranh giới của cái gì.</p>
+  </section>
+
+  <!-- ================= BUTTON ================= -->
+  <section id="button">
+    <h2>8. Button</h2>
+    <p class="lead">Padding chuẩn: <code>8px 16px</code>. Bo góc <code>8px</code>. Font 12.5px, Semibold.</p>
+    <div class="demo-row" style="align-items:center">
+      <button class="btn btn-primary">Lưu thay đổi</button>
+      <button class="btn btn-secondary">Huỷ</button>
+      <button class="btn btn-danger">Xoá</button>
+      <button class="btn btn-ghost">Xem chi tiết</button>
+      <button class="btn btn-disabled" disabled>Không khả dụng</button>
+    </div>
+    <table style="margin-top:14px">
+      <tr><th>Loại</th><th>Nền</th><th>Chữ</th><th>Dùng khi</th></tr>
+      <tr><td>Primary</td><td><code>#000000</code></td><td><code>#FFFFFF</code></td><td>Hành động chính của màn hình (Lưu, Tạo mới)</td></tr>
+      <tr><td>Secondary</td><td><code>#F5F5F5</code></td><td><code>#262626</code></td><td>Hành động phụ (Huỷ, Bộ lọc)</td></tr>
+      <tr><td>Danger</td><td><code>#DC2626</code></td><td><code>#FFFFFF</code></td><td>Xoá, hành động không thể hoàn tác</td></tr>
+      <tr><td>Ghost</td><td>trong suốt, viền <code>#E5E5E5</code></td><td><code>#404040</code></td><td>Hành động phụ nhẹ trong toolbar</td></tr>
+      <tr><td>Disabled</td><td><code>#F5F5F5</code>, opacity 55%</td><td><code>#A3A3A3</code></td><td>Chưa đủ điều kiện thao tác</td></tr>
+    </table>
+  </section>
+
+  <!-- ================= BADGE ================= -->
+  <section id="badge">
+    <h2>9. Badge / Tag trạng thái</h2>
+    <h3 class="sub">Priority</h3>
+    <div class="demo-row"><span class="badge badge-high">High</span><span class="badge badge-med">Med</span><span class="badge badge-low">Low</span></div>
+    <h3 class="sub">Nền tảng đăng bài</h3>
+    <div class="demo-row"><span class="badge badge-yt">▶ YouTube</span><span class="badge badge-tt">♪ TikTok</span><span class="badge badge-ig">📷 Instagram</span><span class="badge badge-fb">🌐 Facebook</span></div>
+    <h3 class="sub">Giai đoạn pipeline (dùng chấm màu + tên, ví dụ trong DataGridView)</h3>
+    <div class="demo-row" style="flex-direction:column;gap:8px;align-items:flex-start">
+      <div><span class="stage-dot" style="background:#d4d4d4"></span>Ideas &amp; Discovery</div>
+      <div><span class="stage-dot" style="background:#60a5fa"></span>Scripting &amp; Outline</div>
+      <div><span class="stage-dot" style="background:#fbbf24"></span>Filming / Studio</div>
+      <div><span class="stage-dot" style="background:#c084fc"></span>Post-Production</div>
+      <div><span class="stage-dot" style="background:#10b981"></span>Review &amp; QA</div>
+      <div><span class="stage-dot" style="background:#000"></span>Scheduled &amp; Live</div>
+    </div>
+  </section>
+
+  <!-- ================= FORM ================= -->
+  <section id="form">
+    <h2>10. TextBox · ComboBox · DateTimePicker</h2>
+    <p class="lead">Cùng một khuôn: viền <code>1px #D4D4D4</code>, bo góc <code>8px</code>, padding <code>7px 10px</code>, focus viền đen 2px. Lỗi validate → viền đỏ + dòng chữ đỏ bên dưới.</p>
+    <div class="demo-row">
+      <div class="field"><label>Tiêu đề nội dung</label><input placeholder="Nhập tiêu đề..."></div>
+      <div class="field"><label>Nền tảng</label><select><option>YouTube</option><option>TikTok</option></select></div>
+      <div class="field err"><label>Ngày đăng dự kiến</label><input value="32/13/2026"><div class="msg-err">Ngày không hợp lệ</div></div>
+    </div>
+  </section>
+
+  <!-- ================= GRID ================= -->
+  <section id="grid">
+    <h2>11. DataGridView</h2>
+    <p class="lead">Header nền xám nhạt <code>#FAFAFA</code>, chữ header viết hoa 11px đậm. Viền toàn bộ ô <code>#E5E5E5</code>. Dòng chẵn tô nhẹ <code>#FAFAFA</code>, hover tô <code>#F0F3FF</code>.</p>
+    <div class="grid-demo">
+      <table>
+        <tr><th>ID</th><th>Tiêu đề</th><th>Nền tảng</th><th>Priority</th></tr>
+        <tr><td style="font-family:Consolas,monospace">CF-401</td><td>Video review M4 Max</td><td><span class="badge badge-yt" style="padding:1px 8px">YouTube</span></td><td><span class="badge badge-high">High</span></td></tr>
+        <tr><td style="font-family:Consolas,monospace">CF-320</td><td>Hook thử nghiệm retention</td><td><span class="badge badge-tt" style="padding:1px 8px">TikTok</span></td><td><span class="badge badge-med">Med</span></td></tr>
+      </table>
+    </div>
+  </section>
+
+  <!-- ================= CARD/DIALOG ================= -->
+  <section id="card">
+    <h2>12. Card &amp; Dialog</h2>
+    <div class="demo-row">
+      <div class="card-demo"><div class="t">Sprint 25 Lock Date</div><div class="d">Sprint planning cutoff là thứ Sáu 6 giờ chiều.</div></div>
+      <div class="dialog-demo">
+        <div class="hd">Tạo nội dung mới</div>
+        <div class="bd">Điền thông tin ý tưởng để đưa vào backlog.</div>
+        <div class="ft"><button class="btn btn-secondary">Huỷ</button><button class="btn btn-primary">Tạo</button></div>
+      </div>
+    </div>
+    <p class="lead" style="margin-top:10px">Card: nền trắng, viền <code>#E5E5E5</code>, bo góc 12px, đổ bóng xs, padding 16–20px. Dialog: bo góc 12px, đổ bóng đậm hơn (xl), có lớp phủ nền đen 60% phía sau.</p>
+  </section>
+
+  <!-- ================= STATE ================= -->
+  <section id="state">
+    <h2>13. Empty · Loading · Error · Validation</h2>
+    <div class="demo-row">
+      <div class="state-box"><b>Chưa có nội dung nào</b>Bắt đầu bằng cách tạo ý tưởng đầu tiên cho dự án.</div>
+      <div class="state-box"><b>Đang tải dữ liệu…</b>Vui lòng đợi trong giây lát.</div>
+      <div class="state-box" style="border-color:#fecaca;color:#b91c1c"><b>Không tải được dữ liệu</b>Kiểm tra kết nối và thử lại.</div>
+    </div>
+    <p class="lead" style="margin-top:10px">Validation message luôn đặt ngay dưới control liên quan, màu đỏ <code>#DC2626</code>, cỡ 11px, đậm — xem ví dụ ở mục 9.</p>
+  </section>
+
+  <!-- ================= TABS ================= -->
+  <section id="tabs">
+    <h2>14. Tabs <span class="tag">Thanh chuyển tab trong 1 khối</span></h2>
+    <p class="lead">Dùng khi 1 khối nội dung (VD panel chi tiết 1 item) có nhiều "trang con" cùng cấp, xem cái nào cũng được, không theo thứ tự trước-sau. Khác với Button: Tab không phải hành động, chỉ để chuyển view. Khác với ComboBox: tất cả lựa chọn hiện sẵn, không ẩn trong danh sách xổ xuống.</p>
+    <div class="tabs-demo" style="max-width:460px">
+      <div class="tab active">Overview</div>
+      <div class="tab">Script</div>
+      <div class="tab">Checklist (3/5)</div>
+      <div class="tab">Comments (4)</div>
+    </div>
+    <table style="margin-top:14px">
+      <tr><th>Thuộc tính</th><th>Giá trị</th></tr>
+      <tr><td>Vị trí gạch chân tab đang chọn</td><td><code>border-bottom: 2px solid #000</code>, chữ đổi màu đen đậm</td></tr>
+      <tr><td>Tab chưa chọn</td><td>chữ xám Neutral 600, viền dưới trong suốt</td></tr>
+      <tr><td>Đếm số trong tên tab</td><td>Ghi trong ngoặc, VD "Checklist (3/5)" = đã xong 3/5 việc, "Comments (4)" = có 4 bình luận</td></tr>
+      <tr><td>Dùng ở đâu</td><td>Panel chi tiết 1 item (xem mục Drawer bên dưới): 4 tab Overview / Script / Checklist / Comments để xem đủ thông tin của 1 nội dung mà không cần mở nhiều màn hình</td></tr>
+    </table>
+  </section>
+
+  <!-- ================= DRAWER ================= -->
+  <section id="drawer">
+    <h2>15. Drawer <span class="tag">Bảng trượt chi tiết — khác Dialog</span></h2>
+    <p class="lead">Đây là 1 kiểu popup <b>khác với Dialog</b> ở mục 12: Dialog nổi ở giữa màn hình, nhỏ, dùng để hỏi/xác nhận 1 việc ngắn (VD "Tạo nội dung mới", "Xác nhận xoá"). Drawer trượt ra từ <b>cạnh phải</b>, chiếm gần hết chiều cao màn hình, dùng khi cần xem/sửa <b>toàn bộ chi tiết của 1 bản ghi</b> (nhiều trường dữ liệu, nhiều tab) mà không muốn rời khỏi màn hình danh sách phía sau.</p>
+    <div class="wire" style="height:200px">
+      <div class="side" style="width:35%;background:rgba(0,0,0,.5)"></div>
+      <div class="body" style="width:65%;border-left:1px solid var(--line)">
+        <div class="top" style="justify-content:space-between"><span class="pill">CF-401 · YouTube</span><span style="color:var(--n400)">✕ Đóng</span></div>
+        <div class="content">Tabs: Overview / Script / Checklist / Comments — nội dung cuộn dọc bên trong</div>
+      </div>
+    </div>
+    <table style="margin-top:14px">
+      <tr><th>Vùng</th><th>Quy định</th></tr>
+      <tr><td>Lớp phủ bên trái (Scrim)</td><td>Nền đen mờ 50%, bấm vào để đóng Drawer, không thao tác được nội dung phía sau</td></tr>
+      <tr><td>Khối Drawer</td><td>Nền trắng, viền trái <code>1px #E5E5E5</code>, đổ bóng rất đậm (2xl), rộng tối đa ~672px (max-w-2xl), cao full màn hình</td></tr>
+      <tr><td>Phần đầu Drawer (Header)</td><td>Nền xám rất nhạt, chứa mã ID (font mono), Badge nền tảng, nút Xoá và nút Đóng (X) góc phải</td></tr>
+      <tr><td>Phần thân (Body)</td><td>Có Tabs ngay dưới Header (xem mục 14), nội dung mỗi tab cuộn dọc riêng</td></tr>
+      <tr><td>Phần chân (Footer)</td><td>Nền xám nhạt, viền trên, chứa ngày tạo bên trái + nút hành động chính bên phải (VD "Done &amp; Close")</td></tr>
+      <tr><td>Dùng ở đâu</td><td>Bấm vào 1 dòng trong Backlog/Board/Calendar/Review Queue → mở Drawer xem/sửa chi tiết nội dung đó</td></tr>
+    </table>
+  </section>
+
+  <!-- ================= TOAST ================= -->
+  <section id="toast">
+    <h2>16. Toast <span class="tag">Thông báo nổi tạm thời</span></h2>
+    <p class="lead">Khác với Empty/Loading/Error ở mục 13 (nằm cố định trong khung nội dung, không tự mất), Toast là 1 thông báo nhỏ <b>tự nổi lên rồi tự biến mất sau 2–3 giây</b>, không chặn thao tác khác. Dùng để xác nhận 1 hành động vừa thành công.</p>
+    <div class="toast-demo">
+      <span class="material-symbols-outlined" style="color:#34d399;font-size:18px">check_circle</span>
+      <span>Đã duyệt ticket CF-401 để lên lịch đăng!</span>
+    </div>
+    <table style="margin-top:14px">
+      <tr><th>Thuộc tính</th><th>Giá trị</th></tr>
+      <tr><td>Vị trí</td><td>Cố định (fixed) góc trên-phải màn hình, cách mép trên ~64px để không đè lên Header</td></tr>
+      <tr><td>Màu nền</td><td><code>#000000</code>, chữ trắng, bo góc 8px, đổ bóng đậm (xl)</td></tr>
+      <tr><td>Icon</td><td>check_circle màu xanh lá khi thành công; có thể đổi icon cảnh báo/lỗi tương ứng (xem mục 6 nhóm Trạng thái)</td></tr>
+      <tr><td>Thời gian hiện</td><td>2.5–3 giây rồi tự ẩn, không cần người dùng bấm tắt</td></tr>
+      <tr><td>Dùng ở đâu</td><td>Sau khi Lưu Project Settings thành công, sau khi Duyệt (Approve) hoặc Yêu cầu sửa lại 1 ticket trong Review Queue</td></tr>
+    </table>
+  </section>
+
+  <!-- ================= DROPDOWN ================= -->
+  <section id="dropdown">
+    <h2>17. Dropdown / Popover <span class="tag">Menu thả xuống</span></h2>
+    <p class="lead">Bấm vào 1 icon hoặc khối thông tin ở Header → hiện 1 bảng nhỏ nổi ngay bên dưới, sát lề phải icon đó. Bấm ra ngoài thì tự đóng lại. Khác Dropdown của ComboBox (mục 10) ở chỗ đây không phải để chọn 1 giá trị cho ô nhập liệu, mà là 1 menu hành động hoặc danh sách thông tin.</p>
+    <div class="demo-row">
+      <div class="dropdown-demo">
+        <div class="hd">Thông báo · 2 chưa đọc</div>
+        <div class="itm"><b>Sprint 25 Lock Date</b></div>
+        <div class="itm" style="border-top:1px solid var(--line-soft)">Alex đã duyệt hook</div>
+      </div>
+      <div class="dropdown-demo">
+        <div class="itm" style="border-bottom:1px solid var(--line-soft);flex-direction:column;align-items:flex-start;gap:2px">
+          <b style="color:var(--ink)">Elena Vance</b><span style="color:var(--n600)">Producer · Studio Alpha</span>
+        </div>
+        <div class="itm"><span class="material-symbols-outlined" style="font-size:16px">person</span>Hồ sơ &amp; Tiểu sử</div>
+        <div class="itm"><span class="material-symbols-outlined" style="font-size:16px">tune</span>Tuỳ chỉnh Studio</div>
+      </div>
+    </div>
+    <table style="margin-top:14px">
+      <tr><th>Thuộc tính</th><th>Giá trị</th></tr>
+      <tr><td>Khối menu</td><td>Nền trắng, viền <code>1px #E5E5E5</code>, bo góc 8px, đổ bóng đậm (xl), rộng 220–320px</td></tr>
+      <tr><td>Vị trí</td><td>Ngay dưới control kích hoạt, lệch sát theo cạnh phải của control đó</td></tr>
+      <tr><td>Dòng trong menu</td><td>Padding <code>9px 12px</code>, hover tô nền xám 50</td></tr>
+      <tr><td>Dùng ở đâu</td><td>Icon chuông thông báo và khối Current User ở góc phải Header — xem mục Main Layout</td></tr>
+    </table>
+  </section>
+
+  <!-- ================= SEGMENTED ================= -->
+  <section id="segmented">
+    <h2>18. Segmented Control <span class="tag">Nhóm nút lọc liền nhau — khác Tabs</span></h2>
+    <p class="lead">Nhìn giống Tabs (mục 14) nhưng bản chất khác: Segmented Control dùng để <b>lọc dữ liệu đang xem</b> (không chuyển sang view khác), các nút nằm chung 1 khối bo góc, nút đang chọn có nền riêng nổi lên trên nền xám của cả khối.</p>
+    <div class="demo-row" style="align-items:center">
+      <div class="segmented">
+        <span class="seg active">Ý tưởng</span><span class="seg">Kế hoạch sản xuất</span>
+      </div>
+      <div class="segmented dark">
+        <span class="seg">All</span><span class="seg active">YouTube</span><span class="seg">TikTok</span><span class="seg">Instagram</span>
+      </div>
+    </div>
+    <table style="margin-top:14px">
+      <tr><th>Biến thể</th><th>Khi nào dùng</th></tr>
+      <tr><td>Nền xám nhạt, nút chọn nền trắng (biến thể 1 ở trên)</td><td>Chọn 1 trong 2 loại nội dung khi Tạo mới (Ý tưởng / Kế hoạch sản xuất) — nằm trong Dialog</td></tr>
+      <tr><td>Nền trắng viền xám, nút chọn nền đen (biến thể 2 ở trên)</td><td>Lọc nhanh theo nền tảng trên thanh công cụ của Board/Calendar, không nằm trong Dialog</td></tr>
+    </table>
+  </section>
+
+  <!-- ================= PROGRESS ================= -->
+  <section id="progress">
+    <h2>19. Progress bar <span class="tag">Thanh tiến độ / phần trăm — khác Loading spinner</span></h2>
+    <p class="lead">Spinner (mục 6, nhóm Trạng thái) báo "đang xử lý, chưa biết bao lâu". Progress bar báo <b>tỉ lệ phần trăm cụ thể đã biết trước</b> — dùng cho số liệu thống kê, không dùng cho việc tải trang.</p>
+    <div style="max-width:340px">
+      <div class="progress-track"><div class="progress-fill" style="width:77%"></div></div>
+    </div>
+    <table style="margin-top:14px">
+      <tr><th>Thuộc tính</th><th>Giá trị</th></tr>
+      <tr><td>Chiều cao thanh</td><td>6–12px tuỳ ngữ cảnh (thanh nhỏ trong Stat Card ~6px, thanh trong báo cáo Funnel ~12px)</td></tr>
+      <tr><td>Nền thanh (chưa đầy)</td><td><code>#F5F5F5</code>, bo góc pill</td></tr>
+      <tr><td>Màu phần đã đầy</td><td>Mặc định đen <code>#000</code>; đổi theo màu nền tảng khi biểu diễn tỉ lệ theo YouTube/TikTok/Instagram/Facebook</td></tr>
+      <tr><td>Dùng ở đâu</td><td>Thẻ "Sprint 25 Allocation" ở Summary (14/18 = 77%), biểu đồ phễu chuyển đổi và lịch sử sản lượng ở Reports</td></tr>
+    </table>
+  </section>
+
+  <!-- ================= STAT CARD ================= -->
+  <section id="statcard">
+    <h2>20. Stat / KPI Card <span class="tag">Thẻ số liệu lớn</span></h2>
+    <p class="lead">Khác với Card thường (mục 12, dùng cho tiêu đề + mô tả), Stat Card luôn có <b>1 con số lớn làm trọng tâm</b>, kèm nhãn phía trên và ghi chú xu hướng phía dưới.</p>
+    <div class="demo-row">
+      <div class="stat-card">
+        <div class="lbl">Tổng số nội dung trong Backlog</div>
+        <div class="val">42</div>
+        <div style="font-size:11px;color:var(--n600);margin-top:5px">28 ý tưởng thô · 14 đã lên kế hoạch</div>
+      </div>
+      <div class="stat-card">
+        <div class="lbl">Tỉ lệ chuyển đổi ý tưởng</div>
+        <div class="val">64.2%</div>
+        <div class="trend up">↑ tăng 8.4% so với Sprint 24</div>
+      </div>
+    </div>
+    <table style="margin-top:14px">
+      <tr><th>Thuộc tính</th><th>Giá trị</th></tr>
+      <tr><td>Số liệu chính</td><td>26px, Extrabold, font Consolas/mono để các số thẳng hàng nhau</td></tr>
+      <tr><td>Nhãn phía trên</td><td>11px, Semibold, màu xám Neutral 600</td></tr>
+      <tr><td>Ghi chú xu hướng</td><td>11px, đậm; màu <code>#10B981</code> (xanh) nếu tăng/tốt, màu <code>#DC2626</code> (đỏ) nếu giảm/xấu, kèm mũi tên ↑ hoặc ↓</td></tr>
+      <tr><td>Dùng ở đâu</td><td>Hàng 4 thẻ số liệu đầu màn hình Summary và Reports</td></tr>
+    </table>
+  </section>
+
+  <!-- ================= AVATAR ================= -->
+  <section id="avatar">
+    <h2>21. Avatar <span class="tag">Ảnh đại diện người dùng</span></h2>
+    <p class="lead">Ưu tiên hiện ảnh thật; nếu không có ảnh hoặc ảnh lỗi, tự động thay bằng vòng tròn màu nền đậm + 2 chữ cái viết tắt tên (initials) — không bao giờ để trống hoặc hiện ảnh vỡ.</p>
+    <div class="demo-row" style="align-items:center;gap:16px">
+      <div class="avatar-circle" style="width:20px;height:20px;font-size:9px">EV</div>
+      <div class="avatar-circle" style="width:24px;height:24px;font-size:10px">EV</div>
+      <div class="avatar-circle" style="width:32px;height:32px;font-size:12px">EV</div>
+      <div class="avatar-circle" style="width:40px;height:40px;font-size:14px">EV</div>
+    </div>
+    <table style="margin-top:14px">
+      <tr><th>Cỡ</th><th>Kích thước</th><th>Dùng ở đâu</th></tr>
+      <tr><td>xs</td><td>20px</td><td>Avatar tác giả bình luận (Comments), avatar trong thẻ Kanban/Calendar nhỏ</td></tr>
+      <tr><td>sm</td><td>24px</td><td>Avatar trong danh sách nhân sự (Team Roster, Project Settings)</td></tr>
+      <tr><td>md</td><td>32px</td><td>Avatar "Đạo diễn / Trưởng nhóm" trong Drawer chi tiết, avatar Current User ở Header</td></tr>
+      <tr><td>lg</td><td>40px</td><td>Dự trữ cho màn hình Hồ sơ cá nhân (Profile) chi tiết hơn</td></tr>
+      <tr><td>Viền quanh avatar</td><td colspan="2"><code>ring 1px rgba(0,0,0,.05)</code> — viền rất mảnh để avatar không dính chìm vào nền trắng</td></tr>
+    </table>
+  </section>
+
+  <!-- ================= PAGINATION ================= -->
+  <section id="pagination">
+    <h2>22. Pagination <span class="tag">Phân trang cuối bảng</span></h2>
+    <p class="lead">Đặt ở cuối mỗi bảng/danh sách dài, cùng hàng với dòng chữ tóm tắt "đang hiện bao nhiêu mục".</p>
+    <div class="demo-row" style="justify-content:space-between;align-items:center;max-width:520px">
+      <span style="font-size:12px;color:var(--n600)">Đang hiện <b>28</b> mục trong Backlog</span>
+      <div class="pagination-demo">
+        <button disabled style="opacity:.4">Trước</button>
+        <button class="active">1</button>
+        <button>2</button>
+        <button>Sau</button>
+      </div>
+    </div>
+    <table style="margin-top:14px">
+      <tr><th>Thuộc tính</th><th>Giá trị</th></tr>
+      <tr><td>Nút số trang đang chọn</td><td>Nền đen, chữ trắng — giống hệt màu nút Primary</td></tr>
+      <tr><td>Nút số trang khác / Trước-Sau</td><td>Nền xám Neutral 100, chữ đen; mờ 40% và không bấm được khi đã ở trang đầu/cuối</td></tr>
+      <tr><td>Dùng ở đâu</td><td>Cuối bảng Backlog khi danh sách dài hơn 1 trang</td></tr>
+    </table>
+  </section>
+
+  <!-- ================= BULK BAR ================= -->
+  <section id="bulkbar">
+    <h2>23. Chọn nhiều dòng &amp; Bulk Action Bar <span class="tag">Thanh hành động hàng loạt</span></h2>
+    <p class="lead">Mỗi dòng trong DataGridView có checkbox riêng (kể cả 1 checkbox "chọn tất cả" trên header cột đầu). Khi có ít nhất 1 dòng được chọn, 1 thanh hành động màu đen tự nổi lên, dính ở đầu vùng nội dung (sticky) để luôn nhìn thấy dù cuộn xuống.</p>
+    <div class="bulkbar-demo">
+      <span><b style="background:rgba(255,255,255,.2);padding:2px 8px;border-radius:4px;margin-right:8px">3 đã chọn</b>Chọn hành động hàng loạt:</span>
+      <span style="display:flex;gap:8px">
+        <span class="btn" style="background:#fff;color:#000;padding:5px 10px">Thêm vào Sprint 25</span>
+        <span class="btn" style="background:#dc2626;color:#fff;padding:5px 10px">Xoá</span>
+        <span style="color:#a3a3a3">Bỏ chọn</span>
+      </span>
+    </div>
+    <table style="margin-top:14px">
+      <tr><th>Thuộc tính</th><th>Giá trị</th></tr>
+      <tr><td>Checkbox chọn dòng</td><td>14–16px, bo góc nhỏ, màu tick đen (accent-black), tô nhẹ nền dòng khi đã chọn</td></tr>
+      <tr><td>Thanh hành động</td><td>Nền đen, dính (sticky) ngay dưới Header khi cuộn, chỉ hiện khi có ít nhất 1 dòng được chọn</td></tr>
+      <tr><td>Dùng ở đâu</td><td>Bảng Backlog — chọn nhiều ý tưởng để thêm hàng loạt vào Sprint hoặc xoá hàng loạt</td></tr>
+    </table>
+  </section>
+
+  <!-- ================= ACCORDION ================= -->
+  <section id="accordion">
+    <h2>24. Accordion <span class="tag">Thu gọn / mở rộng 1 khối</span></h2>
+    <p class="lead">Dùng khi 1 màn hình có nhiều khối nội dung lớn (VD nhiều nhóm giai đoạn) và người dùng cần tạm ẩn bớt khối chưa cần xem, khác Tabs ở chỗ Accordion vẫn hiện tiêu đề của khối đang ẩn, còn Tabs thì ẩn hẳn nội dung tab không chọn.</p>
+    <div class="accordion-demo">
+      <div class="hd"><span class="material-symbols-outlined" style="font-size:20px;color:var(--n400)">expand_more</span>Ideas &amp; Discovery <span class="badge badge-tt" style="margin-left:4px">28</span></div>
+      <div class="bd">Danh sách ý tưởng thô, hiện đang mở rộng...</div>
+    </div>
+    <table style="margin-top:14px">
+      <tr><th>Thuộc tính</th><th>Giá trị</th></tr>
+      <tr><td>Icon mở/đóng</td><td>chevron_down (mục 6), xoay 90° khi khối đang thu gọn</td></tr>
+      <tr><td>Tiêu đề khối</td><td>Kèm 1 badge tròn đếm số lượng mục bên trong (dùng màu badge nền tảng bất kỳ cho nổi bật)</td></tr>
+      <tr><td>Dùng ở đâu</td><td>2 khối "Ideas &amp; Discovery" và "Planned Production" trong màn hình Backlog</td></tr>
+    </table>
+  </section>
+
+  <!-- ================= LIST ROW ================= -->
+  <section id="listrow">
+    <h2>25. Mẫu dòng danh sách chuẩn <span class="tag">List row pattern</span></h2>
+    <p class="lead">Rất nhiều nơi trong app lặp lại đúng 1 khuôn dòng: <b>[hình tròn/avatar] + [tên đậm + phụ đề xám nhỏ] ..... [trạng thái hoặc số liệu bên phải]</b>. Team dùng chung khuôn này thay vì mỗi module tự bố trí lại từ đầu.</p>
+    <div class="listrow-demo">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="avatar-circle" style="width:32px;height:32px;font-size:12px;background:#fee2e2;color:#dc2626">YT</div>
+        <div><div style="font-weight:700;font-size:12.5px">YouTube Primary (@StudioAlphaLive)</div><div style="font-size:11px;color:var(--n600)">124k người theo dõi</div></div>
+      </div>
+      <span class="badge" style="background:#d1fae5;color:#065f46">Đã kết nối</span>
+    </div>
+    <table style="margin-top:14px">
+      <tr><th>Thành phần</th><th>Quy định</th></tr>
+      <tr><td>Hình tròn bên trái</td><td>32–40px, dùng Avatar (mục 21) nếu là người, hoặc vòng tròn 2 chữ cái màu riêng nếu là kênh/hệ thống</td></tr>
+      <tr><td>Tên + phụ đề</td><td>Tên 12.5px đậm, phụ đề 11px màu xám Neutral 600, ngay dưới tên</td></tr>
+      <tr><td>Trạng thái bên phải</td><td>1 Badge (mục 9) hoặc chữ số liệu căn phải</td></tr>
+      <tr><td>Khoảng cách giữa các dòng</td><td>Đường phân cách mảnh 1px (mục 7), dòng cuối cùng không có đường kẻ</td></tr>
+      <tr><td>Dùng ở đâu</td><td>Danh sách "Connected Media Accounts" và "Studio Members" trong Project Settings, danh sách "Key Production Staff" trong Summary</td></tr>
+    </table>
+  </section>
+
+  <!-- ================= PAGE HEADER ================= -->
+  <section id="pageheader">
+    <h2>26. Page Header chuẩn cho màn hình module <span class="tag">Quan trọng — áp dụng cho mọi module</span></h2>
+    <p class="lead">Đây là khuôn bắt buộc cho <b>đầu mỗi màn hình module</b> (Board, Backlog, Calendar, Reports, AI Assistant, Review Queue, Project Settings...) — để mọi màn hình nhìn thống nhất dù nội dung bên dưới khác nhau hoàn toàn.</p>
+    <div class="pageheader-demo">
+      <div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px">
+        <div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+            <span style="font-size:22px;font-weight:800;letter-spacing:-.01em">Production Board</span>
+            <span class="badge badge-med">Sprint 25 Pipeline</span>
+          </div>
+          <div style="font-size:12px;color:var(--n600)">Mô tả ngắn 1 dòng giải thích màn hình này dùng để làm gì.</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <span style="font-size:11px;color:var(--n600);border:1px solid var(--line);border-radius:6px;padding:5px 10px">🔍 Tìm kiếm</span>
+          <span class="segmented dark" style="font-size:11px"><span class="seg active">All</span><span class="seg">YouTube</span></span>
+          <span class="btn btn-primary" style="padding:6px 12px">+ Thêm mới</span>
+        </div>
+      </div>
+    </div>
+    <table style="margin-top:14px">
+      <tr><th>Thành phần</th><th>Quy định</th></tr>
+      <tr><td>Khối bọc ngoài</td><td>Nền trắng, viền <code>1px #E5E5E5</code>, bo góc 12px, đổ bóng xs — giống 1 Card lớn nằm ngay đầu trang</td></tr>
+      <tr><td>Tiêu đề (bên trái)</td><td>H1 22–24px Extrabold + 1 Badge phụ ngay cạnh (VD "Sprint 25 Pipeline") + 1 dòng mô tả 12px màu xám bên dưới</td></tr>
+      <tr><td>Thanh công cụ (bên phải)</td><td>Xếp ngang, thứ tự cố định: Ô tìm kiếm → Segmented Control lọc nhanh → ComboBox lọc thêm (nếu có) → Button hành động chính</td></tr>
+      <tr><td>Bắt buộc với mọi module</td><td>Không tự đổi thứ tự, không tự thêm màu nền khác, không bỏ dòng mô tả — nếu màn hình không cần lọc thì bỏ trống phần đó, không thay bằng thứ khác</td></tr>
+    </table>
+  </section>
+
+  <!-- ================= LAYOUT ================= -->
+  <section id="layout">
+    <h2>27. MainForm layout</h2>
+    <div class="wire">
+      <div class="side"></div>
+      <div class="body">
+        <div class="top"><span class="pill">Current User</span><span class="pill">Current Project</span><span style="margin-left:auto;color:var(--n400)">Header 56px</span></div>
+        <div class="content">Content area — nơi load UserControl/Form của từng module. Không chứa logic riêng của Main Layout.</div>
+      </div>
+    </div>
+    <table style="margin-top:14px">
+      <tr><th>Vùng</th><th>Kích thước / màu</th><th>Ghi chú</th></tr>
+      <tr><td>Sidebar</td><td>rộng 260px, nền <code>#000000</code></td><td>Chứa nav + Current User; không tự thêm sidebar riêng ở màn hình module</td></tr>
+      <tr><td>Header</td><td>cao 56px, nền trắng, viền dưới <code>#E5E5E5</code></td><td>Chứa breadcrumb, Current Project, action chính</td></tr>
+      <tr><td>Content area</td><td>nền <code>#FAFAFA</code>, padding 32px</td><td>Nơi mỗi module load UserControl của mình vào; luôn có 1 điểm vào/ra thống nhất (mở/đóng/quay lại)</td></tr>
+    </table>
+  </section>
+
+  <!-- ================= CHEATSHEET ================= -->
+  <section id="cheatsheet">
+    <h2>28. Bảng tra nhanh</h2>
+    <table>
+      <tr><th>Token</th><th>Giá trị</th></tr>
+      <tr><td>Màu chữ chính</td><td><code onclick="cp(this,'#151c27')">#151C27</code></td></tr>
+      <tr><td>Nền sidebar</td><td><code onclick="cp(this,'#000000')">#000000</code></td></tr>
+      <tr><td>Viền mặc định</td><td><code onclick="cp(this,'#e5e5e5')">#E5E5E5</code></td></tr>
+      <tr><td>Nền hover nhẹ</td><td><code onclick="cp(this,'#f5f5f5')">#F5F5F5</code></td></tr>
+      <tr><td>Nút Primary</td><td><code onclick="cp(this,'#000000')">bg #000000</code> / <code onclick="cp(this,'#ffffff')">chữ #FFFFFF</code></td></tr>
+      <tr><td>Danger</td><td><code onclick="cp(this,'#dc2626')">#DC2626</code></td></tr>
+      <tr><td>Bo góc chuẩn</td><td>8px (control) / 12px (card, dialog)</td></tr>
+      <tr><td>Base spacing unit</td><td>4px</td></tr>
+      <tr><td>Font</td><td>Segoe UI</td></tr>
+      <tr><td>Sidebar width</td><td>260px</td></tr>
+      <tr><td>Header height</td><td>56px</td></tr>
+      <tr><td>Drawer width</td><td>tối đa ~672px, cao full màn hình, trượt từ phải</td></tr>
+      <tr><td>Dialog vs Drawer</td><td>Dialog = giữa màn hình, việc ngắn · Drawer = trượt từ phải, xem/sửa chi tiết đầy đủ</td></tr>
+      <tr><td>Tabs vs Segmented Control</td><td>Tabs = chuyển view trong 1 khối · Segmented = lọc dữ liệu đang xem</td></tr>
+      <tr><td>Toast tự ẩn sau</td><td>2.5–3 giây</td></tr>
+      <tr><td>Viền focus</td><td>2px #000000</td></tr>
+      <tr><td>Avatar size chuẩn</td><td>20 / 24 / 32 / 40px (xs/sm/md/lg)</td></tr>
+    </table>
+  </section>
+
+  <footer>CreatorFlow UI Style Guide — trích xuất từ mockup "Studio Content Backlog &amp; Pipeline". Cập nhật khi mockup thay đổi.</footer>
+</main>
+</div>
+
+<script>
+function cp(el, text){
+  navigator.clipboard?.writeText(text).catch(()=>{});
+  const orig = el.textContent;
+  el.classList.add('copied');
+  setTimeout(()=>el.classList.remove('copied'), 900);
+}
+</script>
+</body>
+</html>

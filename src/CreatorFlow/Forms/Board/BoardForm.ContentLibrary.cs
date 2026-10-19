@@ -161,6 +161,7 @@ public partial class BoardForm
         CloseAdmin();
         CloseReports();
         CloseCalendar();
+        CloseDashboard();
         _pnlBoardArea.Visible = true;
         _modulePageHeader.Visible = true;
         _flowColumns.Visible = true;

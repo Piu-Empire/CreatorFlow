@@ -132,6 +132,7 @@ public class ScriptService
     /// <summary>
     /// Chuẩn bị dữ liệu gửi AI từ script ĐÃ LƯU của Content (không gửi nội dung đang gõ dở).
     /// Mọi thành viên Project đều chuẩn bị/gửi được; việc này không sửa dữ liệu.
+    /// SCRUM-58: cho phép script trống để sinh Outline/Script từ thông tin Content.
     /// </summary>
     public AiScriptRequest PrepareAiRequest(long contentId, long userId,
         AiRequestType requestType = AiRequestType.Script, string? instruction = null)
@@ -145,9 +146,6 @@ public class ScriptService
 
         var (script, _) = LoadForMember(contentId, userId);
 
-        if (ScriptTextAnalyzer.Normalize(script.Script).Length == 0)
-            throw new ContentValidationException("Kịch bản đang trống nên chưa thể gửi sang AI.");
-
         Content detail = _detailsRepo.GetDetail(contentId)
             ?? throw new InvalidOperationException($"Không tìm thấy Content #{contentId}.");
         List<string> platforms = _platformRepo.GetByContentId(contentId).Select(p => p.PlatformName).ToList();
@@ -157,7 +155,7 @@ public class ScriptService
 
     /// <summary>
     /// Chuẩn bị dữ liệu rồi gửi sang IAiService. Lỗi AI (chưa cấu hình, mất kết nối) trả về Failure thay vì ném exception;
-    /// lỗi nghiệp vụ (không phải thành viên, script trống...) vẫn ném như PrepareAiRequest.
+    /// lỗi nghiệp vụ (không phải thành viên...) vẫn ném như PrepareAiRequest.
     /// </summary>
     public async Task<AiScriptResponse> SendToAiAsync(long contentId, long userId,
         AiRequestType requestType = AiRequestType.Script, string? instruction = null,

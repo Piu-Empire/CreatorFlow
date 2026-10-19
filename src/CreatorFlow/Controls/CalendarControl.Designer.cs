@@ -37,8 +37,8 @@
             this.flpToolbar = new System.Windows.Forms.FlowLayoutPanel();
             this.pnlViewSwitch = new System.Windows.Forms.Panel();
             this.btnToday = new RoundedButton();
-            this.segPlatform = new SegmentedControl();
-            this.cboStatus = new System.Windows.Forms.ComboBox();
+            this.searchBox = new SearchBox();
+            this.btnFilter = new RoundedButton();
             this.pnlGridHost = new System.Windows.Forms.Panel();
             this.pnlState = new System.Windows.Forms.Panel();
             this.lblStateTitle = new System.Windows.Forms.Label();
@@ -105,8 +105,8 @@
             this.flpToolbar.AutoSizeMode = System.Windows.Forms.AutoSizeMode.GrowAndShrink;
             this.flpToolbar.Controls.Add(this.pnlViewSwitch);
             this.flpToolbar.Controls.Add(this.btnToday);
-            this.flpToolbar.Controls.Add(this.segPlatform);
-            this.flpToolbar.Controls.Add(this.cboStatus);
+            this.flpToolbar.Controls.Add(this.searchBox);
+            this.flpToolbar.Controls.Add(this.btnFilter);
             this.flpToolbar.Location = new System.Drawing.Point(20, 84);
             this.flpToolbar.Name = "flpToolbar";
             this.flpToolbar.Size = new System.Drawing.Size(700, 42);
@@ -131,22 +131,23 @@
             this.btnToday.TabIndex = 1;
             this.btnToday.Text = "‹ Hôm nay ›";
             //
-            // segPlatform
+            // searchBox
             //
-            this.segPlatform.Location = new System.Drawing.Point(357, 3);
-            this.segPlatform.Margin = new System.Windows.Forms.Padding(0, 0, 0, 0);
-            this.segPlatform.Name = "segPlatform";
-            this.segPlatform.Size = new System.Drawing.Size(320, 36);
-            this.segPlatform.TabIndex = 2;
+            this.searchBox.Location = new System.Drawing.Point(357, 3);
+            this.searchBox.Margin = new System.Windows.Forms.Padding(0, 0, 12, 0);
+            this.searchBox.Name = "searchBox";
+            this.searchBox.Size = new System.Drawing.Size(260, 36);
+            this.searchBox.TabIndex = 2;
             //
-            // cboStatus
+            // btnFilter
             //
-            this.cboStatus.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
-            this.cboStatus.Location = new System.Drawing.Point(689, 3);
-            this.cboStatus.Margin = new System.Windows.Forms.Padding(0, 4, 0, 0);
-            this.cboStatus.Name = "cboStatus";
-            this.cboStatus.Size = new System.Drawing.Size(170, 28);
-            this.cboStatus.TabIndex = 3;
+            this.btnFilter.Location = new System.Drawing.Point(629, 3);
+            this.btnFilter.Margin = new System.Windows.Forms.Padding(0, 0, 0, 0);
+            this.btnFilter.Name = "btnFilter";
+            this.btnFilter.Size = new System.Drawing.Size(120, 36);
+            this.btnFilter.Style = RoundButtonStyle.Secondary;
+            this.btnFilter.TabIndex = 3;
+            this.btnFilter.Text = "Bộ lọc";
             //
             // pnlGridHost
             //
@@ -292,8 +293,8 @@
         private System.Windows.Forms.FlowLayoutPanel flpToolbar;
         private System.Windows.Forms.Panel pnlViewSwitch;
         private RoundedButton btnToday;
-        private SegmentedControl segPlatform;
-        private System.Windows.Forms.ComboBox cboStatus;
+        private SearchBox searchBox;
+        private RoundedButton btnFilter;
         private System.Windows.Forms.Panel pnlGridHost;
         private System.Windows.Forms.Panel pnlState;
         private System.Windows.Forms.Label lblStateTitle;
