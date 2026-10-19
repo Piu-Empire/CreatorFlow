@@ -5,6 +5,7 @@ using System.Text.Json.Serialization;
 using CreatorFlow.Api.Authentication;
 using CreatorFlow.Api.Endpoints;
 using CreatorFlow.Api.Models.Auth;
+using CreatorFlow.Api.Models.ContentDetail;
 using CreatorFlow.Api.Models.Invitations;
 using CreatorFlow.Api.Models.Tasks;
 using CreatorFlow.Api.Repositories.ContentDetail;
@@ -123,6 +124,10 @@ public sealed class FeatureRoutingTests
         (HttpMethod.Get, "/api/contents/10/script", null),
         (HttpMethod.Put, "/api/contents/10/script", new { text = "x", expectedVersion = "v" }),
         (HttpMethod.Get, "/api/contents/10/activity", null),
+        (HttpMethod.Get, "/api/contents/10/references", null),
+        (HttpMethod.Post, "/api/contents/10/references", new { displayName = "Brief", resourceUrl = "https://example.test/brief.pdf" }),
+        (HttpMethod.Put, "/api/contents/10/references", new { additions = Array.Empty<object>(), deletedReferenceIds = Array.Empty<long>() }),
+        (HttpMethod.Delete, "/api/contents/10/references/1", null),
         (HttpMethod.Get, "/api/projects/1/reviews/pending", null),
         (HttpMethod.Get, "/api/projects/1/overdue", null),
         (HttpMethod.Post, "/api/projects/1/invitations", new { email = "a@x.vn", role = "Creator" }),
@@ -142,6 +147,75 @@ public sealed class FeatureRoutingTests
             using var request = new HttpRequestMessage(method, path) { Content = body is null ? null : JsonContent.Create(body) };
             Assert.AreEqual(HttpStatusCode.Unauthorized, (await host.Client.SendAsync(request)).StatusCode, $"{method} {path}");
         }
+    }
+
+    [TestMethod]
+    public async Task ContentReferences_FullLifecycleOverHttp_BrokenLinkDoesNotAffectContent()
+    {
+        await using Host host = await StartAsync();
+        host.Contents.Add(10, ProjectId, ActorId);
+
+        using var invalid = await host.Client.PostAsJsonAsync("/api/contents/10/references",
+            new { displayName = "Bad URL", resourceUrl = "file:///C:/private.pdf" }, Web);
+        Assert.AreEqual(HttpStatusCode.BadRequest, invalid.StatusCode);
+
+        using var created = await host.Client.PostAsJsonAsync("/api/contents/10/references",
+            new { displayName = "Missing file", resourceUrl = "https://example.invalid/missing.pdf" }, Web);
+        Assert.AreEqual(HttpStatusCode.Created, created.StatusCode);
+        JsonElement createdJson = (await created.Content.ReadFromJsonAsync<JsonElement>(Web));
+        long referenceId = createdJson.GetProperty("referenceId").GetInt64();
+
+        JsonElement list = await host.Client.GetFromJsonAsync<JsonElement>("/api/contents/10/references", Web);
+        Assert.AreEqual(1, list.GetProperty("references").GetArrayLength());
+        Assert.AreEqual("https://example.invalid/missing.pdf", list.GetProperty("references")[0].GetProperty("resourceUrl").GetString());
+        Assert.AreEqual(HttpStatusCode.OK, (await host.Client.GetAsync("/api/contents/10")).StatusCode);
+        list = await host.Client.GetFromJsonAsync<JsonElement>("/api/contents/10/references", Web);
+        Assert.AreEqual(1, list.GetProperty("references").GetArrayLength());
+
+        using var deleted = await host.Client.DeleteAsync($"/api/contents/10/references/{referenceId}");
+        Assert.AreEqual(HttpStatusCode.OK, deleted.StatusCode);
+        list = await host.Client.GetFromJsonAsync<JsonElement>("/api/contents/10/references", Web);
+        Assert.AreEqual(0, list.GetProperty("references").GetArrayLength());
+    }
+
+    [TestMethod]
+    public async Task ContentReferences_SaveChangesAppliesAddsAndDeletesTogether()
+    {
+        await using Host host = await StartAsync();
+        host.Contents.Add(10, ProjectId, ActorId);
+        var first = await host.Contents.AddReferenceAsync(10, "Old", "https://example.test/old", ActorId);
+
+        using var saved = await host.Client.PutAsJsonAsync("/api/contents/10/references", new
+        {
+            additions = new[] { new { displayName = "New", resourceUrl = "https://example.test/new" } },
+            deletedReferenceIds = new[] { first.ReferenceId },
+        }, Web);
+
+        Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode);
+        JsonElement response = (await saved.Content.ReadFromJsonAsync<JsonElement>(Web));
+        Assert.AreEqual(1, response.GetProperty("references").GetArrayLength());
+        Assert.AreEqual("New", response.GetProperty("references")[0].GetProperty("displayName").GetString());
+        Assert.AreEqual(1, (await host.Contents.GetReferencesAsync(10)).Count);
+    }
+
+    [TestMethod]
+    public async Task ContentReferences_SaveChangesWithMissingDelete_ReturnsNotFoundWithoutPartialWrite()
+    {
+        await using Host host = await StartAsync();
+        host.Contents.Add(10, ProjectId, ActorId);
+        var existing = await host.Contents.AddReferenceAsync(10, "Old", "https://example.test/old", ActorId);
+
+        using var saved = await host.Client.PutAsJsonAsync("/api/contents/10/references", new
+        {
+            additions = new[] { new { displayName = "New", resourceUrl = "https://example.test/new" } },
+            deletedReferenceIds = new[] { existing.ReferenceId, long.MaxValue },
+        }, Web);
+
+        Assert.AreEqual(HttpStatusCode.NotFound, saved.StatusCode);
+        IReadOnlyList<ContentReferenceRecord> references = await host.Contents.GetReferencesAsync(10);
+        Assert.AreEqual(1, references.Count);
+        Assert.AreEqual(existing.ReferenceId, references[0].ReferenceId);
+        Assert.AreEqual("Old", references[0].DisplayName);
     }
 
     [TestMethod]

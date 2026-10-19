@@ -300,6 +300,98 @@ public sealed class ContentDetailRepository(IDbConnectionFactory connectionFacto
             .ToList();
     }
 
+    public async Task<IReadOnlyList<ContentReferenceRecord>> GetReferencesAsync(long contentId, CancellationToken cancellationToken = default)
+    {
+        const string sql = """
+            SELECT attachment_id, content_id, display_name, resource_url, added_by, created_at
+            FROM content_attachments
+            WHERE content_id = @content_id AND attachment_type = 'LINK'
+            ORDER BY created_at DESC, attachment_id DESC;
+            """;
+
+        await using NpgsqlConnection connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
+        await using var command = new NpgsqlCommand(sql, connection);
+        command.Parameters.AddWithValue("content_id", NpgsqlDbType.Bigint, contentId);
+        await using NpgsqlDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+        var references = new List<ContentReferenceRecord>();
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            references.Add(new ContentReferenceRecord(
+                reader.GetInt64(0), reader.GetInt64(1), reader.GetString(2), reader.GetString(3),
+                reader.IsDBNull(4) ? null : reader.GetInt64(4), reader.GetDateTime(5)));
+        }
+        return references;
+    }
+
+    public async Task<ContentReferenceRecord> AddReferenceAsync(long contentId, string displayName, string resourceUrl,
+        long addedBy, CancellationToken cancellationToken = default)
+    {
+        const string sql = """
+            INSERT INTO content_attachments (content_id, display_name, attachment_type, resource_url, added_by)
+            VALUES (@content_id, @display_name, 'LINK', @resource_url, @added_by)
+            RETURNING attachment_id, content_id, display_name, resource_url, added_by, created_at;
+            """;
+
+        await using NpgsqlConnection connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
+        await using var command = new NpgsqlCommand(sql, connection);
+        command.Parameters.AddWithValue("content_id", NpgsqlDbType.Bigint, contentId);
+        command.Parameters.AddWithValue("display_name", NpgsqlDbType.Varchar, displayName);
+        command.Parameters.AddWithValue("resource_url", NpgsqlDbType.Text, resourceUrl);
+        command.Parameters.AddWithValue("added_by", NpgsqlDbType.Bigint, addedBy);
+        await using NpgsqlDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+        await reader.ReadAsync(cancellationToken);
+        return new ContentReferenceRecord(
+            reader.GetInt64(0), reader.GetInt64(1), reader.GetString(2), reader.GetString(3),
+            reader.IsDBNull(4) ? null : reader.GetInt64(4), reader.GetDateTime(5));
+    }
+
+    public async Task<bool> DeleteReferenceAsync(long contentId, long referenceId, CancellationToken cancellationToken = default)
+    {
+        const string sql = "DELETE FROM content_attachments WHERE content_id = @content_id AND attachment_id = @reference_id AND attachment_type = 'LINK';";
+        await using NpgsqlConnection connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
+        await using var command = new NpgsqlCommand(sql, connection);
+        command.Parameters.AddWithValue("content_id", NpgsqlDbType.Bigint, contentId);
+        command.Parameters.AddWithValue("reference_id", NpgsqlDbType.Bigint, referenceId);
+        return await command.ExecuteNonQueryAsync(cancellationToken) > 0;
+    }
+
+    public async Task<bool> ApplyReferenceChangesAsync(long contentId, IReadOnlyList<NewContentReference> additions,
+        IReadOnlyList<long> deletedReferenceIds, long addedBy, CancellationToken cancellationToken = default)
+    {
+        await using NpgsqlConnection connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
+        await using NpgsqlTransaction transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        foreach (long referenceId in deletedReferenceIds)
+        {
+            await using var delete = new NpgsqlCommand(
+                "DELETE FROM content_attachments WHERE content_id = @content_id AND attachment_id = @reference_id AND attachment_type = 'LINK';",
+                connection, transaction);
+            delete.Parameters.AddWithValue("content_id", NpgsqlDbType.Bigint, contentId);
+            delete.Parameters.AddWithValue("reference_id", NpgsqlDbType.Bigint, referenceId);
+            if (await delete.ExecuteNonQueryAsync(cancellationToken) == 0)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                return false;
+            }
+        }
+
+        foreach (NewContentReference addition in additions)
+        {
+            await using var insert = new NpgsqlCommand("""
+                INSERT INTO content_attachments (content_id, display_name, attachment_type, resource_url, added_by)
+                VALUES (@content_id, @display_name, 'LINK', @resource_url, @added_by);
+                """, connection, transaction);
+            insert.Parameters.AddWithValue("content_id", NpgsqlDbType.Bigint, contentId);
+            insert.Parameters.AddWithValue("display_name", NpgsqlDbType.Varchar, addition.DisplayName);
+            insert.Parameters.AddWithValue("resource_url", NpgsqlDbType.Text, addition.ResourceUrl);
+            insert.Parameters.AddWithValue("added_by", NpgsqlDbType.Bigint, addedBy);
+            await insert.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+        return true;
+    }
+
     private static DateOnly ToDate(DateTime value) => DateOnly.FromDateTime(value.ToUniversalTime());
 
     /// <summary>Ngày thuần → 00:00 UTC (Npgsql chỉ nhận DateTime UTC cho timestamptz).</summary>
