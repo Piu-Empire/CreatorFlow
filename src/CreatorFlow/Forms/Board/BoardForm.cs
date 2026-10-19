@@ -49,6 +49,7 @@ public partial class BoardForm : Form, IMessageFilter
     private AdminUserManagementControl? _admin;
     private AdminReportsControl? _reports;
     private CalendarControl? _calendar;
+    private DashboardControl? _dashboard;
     private readonly CancellationTokenSource _authLifetime = new();
     private int _avatarGeneration;
 
@@ -123,6 +124,15 @@ public partial class BoardForm : Form, IMessageFilter
             _sidebarControl.AdminWorkspaceRequested += async (_, _) => await OpenAdminAsync();
             _sidebarControl.AdminReportsRequested += async (_, _) => await OpenReportsAsync();
             _sidebarControl.CalendarRequested += (_, _) => OpenCalendar();
+            _sidebarControl.SummaryRequested += (_, _) => OpenDashboard();
+        }
+
+        // TẠM-LOCAL: chế độ local không có auth nên menu Calendar/Summary chưa được gắn; gắn thêm để test.
+        // Xóa khối này trước khi push (xem docs/tasks/scrum-49-loc-calendar/local-test-cleanup.md).
+        if (auth is null)
+        {
+            _sidebarControl.CalendarRequested += (_, _) => OpenCalendar();
+            _sidebarControl.SummaryRequested += (_, _) => OpenDashboard();
         }
 
         _pnlDrawerHost.Paint += PnlDrawerHost_Paint;
@@ -150,6 +160,7 @@ public partial class BoardForm : Form, IMessageFilter
             CloseAdmin();
             CloseReports();
             CloseCalendar();
+            CloseDashboard();
             _sidebarControl.SetActiveMenu("Board");
             ReloadBoard();
         };
@@ -258,6 +269,7 @@ public partial class BoardForm : Form, IMessageFilter
                     BackColor = UITheme.Neutral50,
                     TextAlign = ContentAlignment.MiddleCenter
                 });
+            _dashboard?.RefreshData();
             return;
         }
         if (_pnlBoardArea.Controls["noProjectContext"] is Control emptyState)
@@ -276,6 +288,7 @@ public partial class BoardForm : Form, IMessageFilter
         _sidebarControl.BacklogCount = _ideaService.CountBacklog(CurrentSession.CurrentProjectId, CurrentSession.CurrentUserId);
         _sidebarControl.Invalidate();
         ApplyFilters();
+        _dashboard?.RefreshData();
 
         // Drawer đang mở: nạp lại dữ liệu mới (trạng thái/nút workflow) hoặc đóng nếu thẻ không còn.
         // Nếu đang có thay đổi chưa lưu thì KHÔNG ghi đè, để không mất dữ liệu người dùng đang nhập.
@@ -454,7 +467,7 @@ public partial class BoardForm : Form, IMessageFilter
     {
         // New Content is available over Project Settings; its modal opens above the settings page.
         // Other workspaces and Profile keep their existing navigation/unsaved-state behavior.
-        if (!HasProjectContext || _profile is not null || _admin is not null || _reports is not null || _calendar is not null) return;
+        if (!HasProjectContext || _profile is not null || _admin is not null || _reports is not null || _calendar is not null || _dashboard is not null) return;
         bool viaApi = _projects is not null;
         if (viaApi && (_detailBackend is null || _assignmentBackend is null)) { ShowUnavailableModule("Tạo Content"); return; }
 
@@ -693,6 +706,7 @@ public partial class BoardForm : Form, IMessageFilter
         CloseAdmin();
         CloseReports();
         CloseCalendar();
+        CloseDashboard();
         using var queueForm = new Review.ReviewQueueForm(_reviewQueueRepository, _workflowService);
         ShowWithActiveMenu("Review Queue", () => queueForm.ShowDialog(this));
         ReloadBoard();
@@ -705,6 +719,7 @@ public partial class BoardForm : Form, IMessageFilter
         CloseAdmin();
         CloseReports();
         CloseCalendar();
+        CloseDashboard();
         var profile = new ProfileControl(_auth) { Dock = DockStyle.Fill };
         _profile = profile;
         UpdateProjectContext();
@@ -743,6 +758,7 @@ public partial class BoardForm : Form, IMessageFilter
         CloseProfile();
         CloseReports();
         CloseCalendar();
+        CloseDashboard();
         var admin = new AdminUserManagementControl(_auth, _toast) { Dock = DockStyle.Fill };
         _admin = admin;
         _pnlDrawerHost.Visible = false;
@@ -775,6 +791,7 @@ public partial class BoardForm : Form, IMessageFilter
         CloseProfile();
         CloseAdmin();
         CloseCalendar();
+        CloseDashboard();
         var reports = new AdminReportsControl(_auth, _toast) { Dock = DockStyle.Fill };
         _reports = reports;
         _pnlDrawerHost.Visible = false;
@@ -806,9 +823,10 @@ public partial class BoardForm : Form, IMessageFilter
         CloseProfile();
         CloseAdmin();
         CloseReports();
+        CloseDashboard();
         var calendar = new CalendarControl { Dock = DockStyle.Fill };
-        calendar.CardProvider = () => HasProjectContext && _projects is null ? _allCards : null;
-        if (_projects is not null) calendar.UnavailableReason = "Lịch chưa có nguồn Content từ server cho Project này.";
+        calendar.CardProvider = () => HasProjectContext ? _allCards : null;
+        if (_projects is not null && _boardBackend is null) calendar.UnavailableReason = "Lịch chưa có nguồn Content từ server cho Project này.";
         calendar.ContentOpened += OpenContentById;
         _calendar = calendar;
         _pnlDrawerHost.Visible = false;
@@ -827,6 +845,52 @@ public partial class BoardForm : Form, IMessageFilter
         _calendar = null;
         _pnlMain.Controls.Remove(calendar);
         calendar.Dispose();
+        _sidebarControl.SetActiveMenu("Board");
+        _pnlBoardArea.Visible = true;
+        _topHeaderControl.SetAuthenticatedPage("Board");
+        UpdateProjectContext();
+    }
+
+    private void OpenDashboard()
+    {
+        if (_dashboard is not null || !CanLeaveProjectPage()) return;
+        CloseProjectPage();
+        CloseProfile();
+        CloseAdmin();
+        CloseReports();
+        CloseCalendar();
+        var dashboard = new DashboardControl { Dock = DockStyle.Fill };
+        dashboard.CardProvider = () => HasProjectContext ? _allCards : null;
+        if (_projects is not null && _boardBackend is null)
+            dashboard.UnavailableReason = "Tổng quan chưa có nguồn Content từ server cho Project này.";
+        _dashboard = dashboard;
+        _pnlDrawerHost.Visible = false;
+        _pnlBoardArea.Visible = false;
+        _pnlMain.Controls.Add(dashboard);
+        dashboard.BringToFront();
+        _sidebarControl.SetActiveMenu("Summary");
+        _topHeaderControl.SetAuthenticatedPage("Tổng quan Project");
+
+        // Server: nạp lại card của Project hiện hành cho chắc (số liệu khớp DB), hiện trạng thái đang tải.
+        // Local: _allCards đã có sẵn sau ReloadBoard nên chỉ việc vẽ.
+        if (_projects is not null && _boardBackend is not null)
+        {
+            dashboard.BeginLoading();
+            _ = LoadServerBoardAsync();
+        }
+        else
+        {
+            dashboard.RefreshData();
+        }
+    }
+
+    private void CloseDashboard()
+    {
+        if (_dashboard is null) return;
+        DashboardControl dashboard = _dashboard;
+        _dashboard = null;
+        _pnlMain.Controls.Remove(dashboard);
+        dashboard.Dispose();
         _sidebarControl.SetActiveMenu("Board");
         _pnlBoardArea.Visible = true;
         _topHeaderControl.SetAuthenticatedPage("Board");

@@ -490,3 +490,6 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# CodeGraph local index (per-machine, rebuilt via `codegraph init`)
+/.codegraph/

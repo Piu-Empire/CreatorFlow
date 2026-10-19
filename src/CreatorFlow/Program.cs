@@ -90,6 +90,20 @@ static class Program
         // SCRUM-33: AI chưa có cài đặt thật nên dùng NotConfiguredAiService; thay bằng AIService thật khi có.
         var scriptService = new ScriptService(scriptRepo, detailsRepo, platformRepo, memberRepo, myTaskRepo, uow, new NotConfiguredAiService());
 
+        // TẠM-LOCAL: đặt true để chạy thẳng Board bằng dữ liệu InMemory (test màn Lịch), bỏ qua login/API.
+        // Xóa cả khối này trước khi push (xem docs/tasks/scrum-49-loc-calendar/local-test-cleanup.md).
+        bool useLocalTest = true;
+        if (useLocalTest)
+        {
+            CurrentSession.CurrentUserId = 1;
+            CurrentSession.CurrentUserName = "Demo Owner";
+            CurrentSession.CurrentProjectId = 1;
+            CurrentSession.CurrentProjectName = "Creator Team";
+            Application.Run(new BoardForm(workflowService, boardRepo, reviewQueueRepo, activityRepo,
+                memberRepo, contentService, myTaskService, scriptService, ideaService));
+            return;
+        }
+
         // AuthenticationApplicationContext binds the authenticated user; project selection belongs to SCRUM-25.
         CurrentSession.CurrentUserId = 0;
         CurrentSession.CurrentUserName = string.Empty;

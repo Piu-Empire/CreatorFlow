@@ -75,6 +75,7 @@ public partial class BoardForm
             CloseAdmin();
             CloseReports();
             CloseCalendar();
+            CloseDashboard();
 
             _projectPage = page;
             _pnlBoardArea.Visible = false;
@@ -260,7 +261,7 @@ public partial class BoardForm
         if (_auth?.Session.IsAuthenticated != true) _recentProjects.Clear();
         _projectSwitch?.Cancel(); ResetProjectState();
         foreach (Form child in OwnedForms) child.Close();
-        CloseProjectPage(); CloseProfile();
+        CloseProjectPage(); CloseProfile(); CloseDashboard();
         if (_auth?.Session.IsAuthenticated == true) await ShowProjectSettingsAsync();
     }
     private async Task<bool> ValidateProjectAsync()
@@ -303,6 +304,22 @@ public partial class BoardForm
         foreach (var column in _columns.Values) column.SourceAvailable = false;
         ApplyFilters();
         if (_projectPage is not null || _profile is not null || _admin is not null || _reports is not null || _calendar is not null) return;
+
+        // Dashboard đang mở: giữ trang đứng yên, chỉ nạp lại card của Project mới rồi cập nhật số liệu (AC1).
+        if (_dashboard is not null)
+        {
+            if (current && _boardBackend is not null)
+            {
+                _dashboard.BeginLoading();
+                _ = LoadServerBoardAsync();
+            }
+            else
+            {
+                _dashboard.RefreshData();
+            }
+            return;
+        }
+
         _pnlBoardArea.Visible = true;
         if (_pnlBoardArea.Controls["serverProjectState"] is not Label state)
         {
@@ -357,6 +374,7 @@ public partial class BoardForm
         if (cards is null)
         {
             if (state is not null) state.Text = "Không tải được Board: " + error;
+            _dashboard?.ShowMessage("Không tải được dữ liệu. " + (error ?? "Kiểm tra kết nối và thử lại."));
             return;
         }
 
@@ -378,6 +396,9 @@ public partial class BoardForm
             _reopenContentId = null;
             if (_detailBackend is not null && FindCardControl(reopenId) is { } reopenCard) SelectCard(reopenCard);
         }
+
+        // Dashboard đang mở: cập nhật 6 chỉ số theo dữ liệu vừa tải.
+        _dashboard?.RefreshData();
     }
     private async void ShowUnavailableModule(string module)
     {

@@ -251,6 +251,32 @@ public static class UIIcons
         g.DrawPath(pen, path);
     }
 
+    /// <summary>Upload: mũi tên hướng lên trên đường nền (xuất bản nội dung).</summary>
+    public static void Upload(Graphics g, Rectangle r, Color c)
+    {
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        using var pen = NewPen(c, 1.8f);
+        var b = Inset(r, 2);
+        g.DrawLine(pen, Pt(b, 0.16f, 0.88f), Pt(b, 0.84f, 0.88f));
+        g.DrawLine(pen, Pt(b, 0.50f, 0.14f), Pt(b, 0.50f, 0.72f));
+        g.DrawLines(pen, new[] { Pt(b, 0.28f, 0.36f), Pt(b, 0.50f, 0.14f), Pt(b, 0.72f, 0.36f) });
+    }
+
+    /// <summary>Warning: tam giác cảnh báo có dấu chấm than (nội dung quá hạn).</summary>
+    public static void Warning(Graphics g, Rectangle r, Color c)
+    {
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        using var pen = NewPen(c, 1.8f);
+        var b = Inset(r, 1);
+        using var path = new GraphicsPath();
+        path.AddLines(new[] { Pt(b, 0.50f, 0.06f), Pt(b, 0.96f, 0.92f), Pt(b, 0.04f, 0.92f) });
+        path.CloseFigure();
+        g.DrawPath(pen, path);
+        g.DrawLine(pen, Pt(b, 0.50f, 0.40f), Pt(b, 0.50f, 0.64f));
+        using var brush = new SolidBrush(c);
+        g.FillEllipse(brush, b.X + b.Width * 0.50f - 1.1f, b.Y + b.Height * 0.78f - 1.1f, 2.2f, 2.2f);
+    }
+
     /// <summary>Logo: khung bo góc có tam giác play.</summary>
     public static void LogoMark(Graphics g, Rectangle r, Color bg, Color fg)
     {

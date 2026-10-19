@@ -14,6 +14,7 @@ public class SidebarControl : UserControl
     private int _navScrollOffset;
 
     public event EventHandler? ReviewQueueRequested;
+    public event EventHandler? SummaryRequested;
     public event EventHandler? BoardRequested;
     public event EventHandler? ContentLibraryRequested;
     public event EventHandler? MyTasksRequested;
@@ -210,7 +211,7 @@ public class SidebarControl : UserControl
 
         int y = 212;
         _groups.Add(("PROJECT", y)); y += 26;
-        _items.Add(new NavItem { Title = "Summary", Icon = NavIcon.Summary, Y = y }); y += ItemStep;
+        _items.Add(new NavItem { Title = "Summary", Icon = NavIcon.Summary, Y = y, AlwaysEnabled = true, Action = () => SummaryRequested?.Invoke(this, EventArgs.Empty) }); y += ItemStep;
         _items.Add(new NavItem { Title = "Board", Icon = NavIcon.Board, Y = y, IsActive = true, AlwaysEnabled = true, Action = () => BoardRequested?.Invoke(this, EventArgs.Empty) }); y += ItemStep;
         _items.Add(new NavItem { Title = "Kho Content", Icon = NavIcon.Library, Y = y, Action = () => ContentLibraryRequested?.Invoke(this, EventArgs.Empty) }); y += ItemStep;
         _items.Add(new NavItem { Title = "Backlog", Icon = NavIcon.List, Y = y, Badge = () => BacklogCount, Action = () => IdeaBankRequested?.Invoke(this, EventArgs.Empty) }); y += ItemStep;
