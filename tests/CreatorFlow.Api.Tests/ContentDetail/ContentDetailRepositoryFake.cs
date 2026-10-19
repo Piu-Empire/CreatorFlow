@@ -60,7 +60,7 @@ internal sealed class ContentDetailRepositoryFake : IContentDetailRepository
         Rows[id] = new Row
         {
             Detail = new ContentDetailRecord(id, content.ProjectId, d.Title, d.Description, d.ContentType, Pascal(content.StatusDb),
-                Pascal(d.PriorityDb), d.Deadline, d.PlannedPublishAt, content.CreatedBy, d.Platforms.OrderBy(p => p, StringComparer.Ordinal).ToArray()),
+                Pascal(d.PriorityDb), d.Deadline, d.PlannedPublishAt, content.CreatedBy, d.Platforms.OrderBy(p => p, StringComparer.Ordinal).ToArray(), d.Sprint),
         };
         return Task.FromResult(id);
     }
@@ -73,7 +73,7 @@ internal sealed class ContentDetailRepositoryFake : IContentDetailRepository
         row.Detail = row.Detail with
         {
             Title = update.Title, Description = update.Description, ContentType = update.ContentType, Priority = Pascal(update.PriorityDb),
-            Deadline = update.Deadline, PlannedPublishAt = update.PlannedPublishAt,
+            Deadline = update.Deadline, PlannedPublishAt = update.PlannedPublishAt, Sprint = update.Sprint,
             Platforms = update.Platforms.OrderBy(p => p, StringComparer.Ordinal).ToArray(),
         };
         return Task.CompletedTask;

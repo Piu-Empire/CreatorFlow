@@ -17,7 +17,8 @@ public sealed record ContentDetailResponse(
     DateOnly? PlannedPublishAt,
     long CreatedBy,
     IReadOnlyList<string> Platforms,
-    string Role);
+    string Role,
+    string Sprint = SprintCatalog.DefaultSprint);
 
 /// <summary>Sửa thông tin lập kế hoạch của Content (Status chỉ đổi qua Workflow). Người sửa lấy từ JWT.</summary>
 public sealed record UpdateContentRequest(
@@ -27,7 +28,8 @@ public sealed record UpdateContentRequest(
     string Priority,
     DateOnly? Deadline,
     DateOnly? PlannedPublishAt,
-    IReadOnlyList<string>? Platforms);
+    IReadOnlyList<string>? Platforms,
+    string? Sprint = null);
 
 /// <summary>
 /// Tạo Content mới trong Project. Status là giai đoạn ban đầu ("Idea", "Script"...; không tạo thẳng ở Review/Archived).
@@ -42,7 +44,8 @@ public sealed record CreateContentRequest(
     DateOnly? Deadline,
     DateOnly? PlannedPublishAt,
     IReadOnlyList<string>? Platforms,
-    long? AssigneeUserId);
+    long? AssigneeUserId,
+    string? Sprint = null);
 
 /// <summary>Tên các nền tảng đang bật — nguồn cho menu chọn platform.</summary>
 public sealed record PlatformOptionsResponse(IReadOnlyList<string> Platforms);

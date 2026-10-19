@@ -16,8 +16,8 @@ partial class AssignContentDialog
     private System.Windows.Forms.Panel pnlCreators;
     private System.Windows.Forms.Label _lblError;
     private System.Windows.Forms.Panel pnlDivider2;
-    private CreatorFlow.Controls.RoundedButton btnCancel;
-    private CreatorFlow.Controls.RoundedButton btnSubmit;
+    private CreatorFlow.Controls.ProjectActionButton btnCancel;
+    private CreatorFlow.Controls.ProjectActionButton btnSubmit;
 
     protected override void Dispose(bool disposing)
     {
@@ -38,8 +38,8 @@ partial class AssignContentDialog
         this.pnlCreators = new System.Windows.Forms.Panel();
         this._lblError = new System.Windows.Forms.Label();
         this.pnlDivider2 = new System.Windows.Forms.Panel();
-        this.btnCancel = new CreatorFlow.Controls.RoundedButton();
-        this.btnSubmit = new CreatorFlow.Controls.RoundedButton();
+        this.btnCancel = new CreatorFlow.Controls.ProjectActionButton();
+        this.btnSubmit = new CreatorFlow.Controls.ProjectActionButton();
         this.SuspendLayout();
         // 
         // lblHeader
@@ -126,10 +126,10 @@ partial class AssignContentDialog
         this.btnCancel.Location = new System.Drawing.Point(272, 418);
         this.btnCancel.Name = "btnCancel";
         this.btnCancel.Size = new System.Drawing.Size(90, 36);
-        this.btnCancel.Style = RoundButtonStyle.Secondary;
+        this.btnCancel.Style = RoundButtonStyle.Primary;
         this.btnCancel.TabIndex = 9;
         this.btnCancel.Text = "Huỷ";
-        this.btnCancel.UseVisualStyleBackColor = true;
+        this.btnCancel.UseVisualStyleBackColor = false;
         // 
         // btnSubmit
         // 
@@ -139,7 +139,7 @@ partial class AssignContentDialog
         this.btnSubmit.Style = RoundButtonStyle.Primary;
         this.btnSubmit.TabIndex = 8;
         this.btnSubmit.Text = "Giao việc";
-        this.btnSubmit.UseVisualStyleBackColor = true;
+        this.btnSubmit.UseVisualStyleBackColor = false;
         this.btnSubmit.Click += new System.EventHandler(this.btnSubmit_Click);
         // 
         // AssignContentDialog

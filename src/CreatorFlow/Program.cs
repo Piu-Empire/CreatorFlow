@@ -28,10 +28,8 @@ static class Program
     [STAThread]
     static void Main(string[] args)
     {
-        // To customize application configuration such as set high DPI settings or default font,
-        // see https://aka.ms/applicationconfiguration.
-        // Dùng PerMonitorV2 để Windows Forms vẽ ở DPI thật, tránh Windows phóng bitmap gây mờ.
-        // Phải gọi TRƯỚC ApplicationConfiguration.Initialize().
+        // Render directly at the monitor's DPI so Windows does not bitmap-scale the whole UI.
+        // Set this before ApplicationConfiguration.Initialize().
         Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
         ApplicationConfiguration.Initialize();
 

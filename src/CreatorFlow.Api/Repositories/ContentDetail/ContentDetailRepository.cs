@@ -8,9 +8,9 @@ using NpgsqlTypes;
 namespace CreatorFlow.Api.Repositories.ContentDetail;
 
 /// <summary>
-/// Cài đặt Npgsql cho IContentDetailRepository, viết theo database/01_schema.sql
+/// Cài đặt Npgsql cho IContentDetailRepository, viết theo database/01_schema.sql và các migration.
 /// (cột snake_case, enum UPPER_SNAKE_CASE). Deadline / ngày dự kiến đăng lưu 00:00 UTC để đọc lại không lệch ngày.
-/// Sprint / thời lượng dự kiến chưa có cột trong schema nên chưa được lưu.
+/// Thời lượng dự kiến chưa có cột trong schema nên chưa được lưu.
 /// </summary>
 public sealed class ContentDetailRepository(IDbConnectionFactory connectionFactory) : IContentDetailRepository
 {
@@ -20,7 +20,8 @@ public sealed class ContentDetailRepository(IDbConnectionFactory connectionFacto
             SELECT c.content_id, c.project_id, c.title, COALESCE(c.description, ''), COALESCE(c.content_type, ''),
                    c.status::text, c.priority::text, c.deadline, c.planned_publish_at, c.created_by,
                    ARRAY(SELECT p.name FROM content_platforms cp JOIN platforms p ON p.platform_id = cp.platform_id
-                         WHERE cp.content_id = c.content_id ORDER BY p.name)::text[] AS platforms
+                         WHERE cp.content_id = c.content_id ORDER BY p.name)::text[] AS platforms,
+                   COALESCE(to_jsonb(c)->>'sprint', 'Sprint 25') AS sprint
             FROM contents c
             WHERE c.content_id = @content_id;
             """;
@@ -42,7 +43,8 @@ public sealed class ContentDetailRepository(IDbConnectionFactory connectionFacto
             reader.IsDBNull(7) ? null : ToDate(reader.GetDateTime(7)),
             reader.IsDBNull(8) ? null : ToDate(reader.GetDateTime(8)),
             reader.GetInt64(9),
-            reader.GetFieldValue<string[]>(10));
+            reader.GetFieldValue<string[]>(10),
+            reader.GetString(11));
     }
 
     public async Task<IReadOnlyList<string>> GetActivePlatformNamesAsync(CancellationToken cancellationToken = default)
@@ -83,9 +85,9 @@ public sealed class ContentDetailRepository(IDbConnectionFactory connectionFacto
 
         long contentId;
         await using (var insert = new NpgsqlCommand("""
-            INSERT INTO contents (project_id, title, description, content_type, priority, status, deadline, planned_publish_at, created_by)
+            INSERT INTO contents (project_id, title, description, content_type, priority, status, deadline, planned_publish_at, created_by, sprint)
             VALUES (@project_id, @title, @description, @content_type, @priority::content_priority, @status::content_status,
-                    @deadline, @planned_publish_at, @created_by)
+                    @deadline, @planned_publish_at, @created_by, @sprint)
             RETURNING content_id;
             """, connection, transaction))
         {
@@ -98,6 +100,7 @@ public sealed class ContentDetailRepository(IDbConnectionFactory connectionFacto
             insert.Parameters.AddWithValue("deadline", NpgsqlDbType.TimestampTz, ToDb(d.Deadline));
             insert.Parameters.AddWithValue("planned_publish_at", NpgsqlDbType.TimestampTz, ToDb(d.PlannedPublishAt));
             insert.Parameters.AddWithValue("created_by", NpgsqlDbType.Bigint, content.CreatedBy);
+            insert.Parameters.AddWithValue("sprint", NpgsqlDbType.Varchar, d.Sprint);
             contentId = (long)(await insert.ExecuteScalarAsync(cancellationToken))!;
         }
 
@@ -138,7 +141,7 @@ public sealed class ContentDetailRepository(IDbConnectionFactory connectionFacto
             UPDATE contents
             SET title = @title, description = @description, content_type = @content_type,
                 priority = @priority::content_priority, deadline = @deadline,
-                planned_publish_at = @planned_publish_at, updated_at = CURRENT_TIMESTAMP
+                planned_publish_at = @planned_publish_at, sprint = @sprint, updated_at = CURRENT_TIMESTAMP
             WHERE content_id = @content_id;
             """, connection, transaction))
         {
@@ -148,6 +151,7 @@ public sealed class ContentDetailRepository(IDbConnectionFactory connectionFacto
             command.Parameters.AddWithValue("priority", NpgsqlDbType.Text, update.PriorityDb);
             command.Parameters.AddWithValue("deadline", NpgsqlDbType.TimestampTz, ToDb(update.Deadline));
             command.Parameters.AddWithValue("planned_publish_at", NpgsqlDbType.TimestampTz, ToDb(update.PlannedPublishAt));
+            command.Parameters.AddWithValue("sprint", NpgsqlDbType.Varchar, update.Sprint);
             command.Parameters.AddWithValue("content_id", NpgsqlDbType.Bigint, contentId);
             await command.ExecuteNonQueryAsync(cancellationToken);
         }

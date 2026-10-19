@@ -11,9 +11,9 @@ partial class ReviewDecisionDialog
     private System.Windows.Forms.Label lblFeedback;
     private System.Windows.Forms.TextBox txtFeedback;
     private System.Windows.Forms.Label lblError;
-    private CreatorFlow.Controls.RoundedButton btnApprove;
-    private CreatorFlow.Controls.RoundedButton btnReject;
-    private CreatorFlow.Controls.RoundedButton btnCancel;
+    private CreatorFlow.Controls.ProjectActionButton btnApprove;
+    private CreatorFlow.Controls.ProjectActionButton btnReject;
+    private CreatorFlow.Controls.ProjectActionButton btnCancel;
 
     protected override void Dispose(bool disposing)
     {
@@ -31,9 +31,9 @@ partial class ReviewDecisionDialog
         this.lblFeedback = new System.Windows.Forms.Label();
         this.txtFeedback = new System.Windows.Forms.TextBox();
         this.lblError = new System.Windows.Forms.Label();
-        this.btnApprove = new CreatorFlow.Controls.RoundedButton();
-        this.btnReject = new CreatorFlow.Controls.RoundedButton();
-        this.btnCancel = new CreatorFlow.Controls.RoundedButton();
+        this.btnApprove = new CreatorFlow.Controls.ProjectActionButton();
+        this.btnReject = new CreatorFlow.Controls.ProjectActionButton();
+        this.btnCancel = new CreatorFlow.Controls.ProjectActionButton();
         this.SuspendLayout();
         // 
         // lblContentTitle

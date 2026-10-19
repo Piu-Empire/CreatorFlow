@@ -27,7 +27,8 @@ public sealed class BoardCardRepository(IDbConnectionFactory connectionFactory) 
                   WHERE cp.content_id = c.content_id ORDER BY p.name)::text[] AS platforms,
             ARRAY(SELECT t.name FROM content_tags ct JOIN tags t ON t.tag_id = ct.tag_id
                   WHERE ct.content_id = c.content_id ORDER BY t.name)::text[] AS tags,
-            EXISTS (SELECT 1 FROM reviews r WHERE r.content_id = c.content_id AND r.status = 'PENDING') AS has_pending_review
+            EXISTS (SELECT 1 FROM reviews r WHERE r.content_id = c.content_id AND r.status = 'PENDING') AS has_pending_review,
+            COALESCE(to_jsonb(c)->>'sprint', 'Sprint 25') AS sprint
         FROM contents c
         WHERE c.project_id = @project_id
           AND (@include_archived OR c.status <> 'ARCHIVED')
@@ -64,7 +65,8 @@ public sealed class BoardCardRepository(IDbConnectionFactory connectionFactory) 
                 PlannedPublishAt: reader.IsDBNull(7) ? null : DateTime.SpecifyKind(reader.GetDateTime(7), DateTimeKind.Utc),
                 Platforms: reader.GetFieldValue<string[]>(8),
                 Tags: reader.GetFieldValue<string[]>(9),
-                HasPendingReview: reader.GetBoolean(10)));
+                HasPendingReview: reader.GetBoolean(10),
+                Sprint: reader.GetString(11)));
         }
         return rows;
     }

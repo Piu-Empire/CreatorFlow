@@ -13,7 +13,7 @@ partial class MyTasksControl
     private System.Windows.Forms.Panel panelHeaderGap;
     private CreatorFlow.Controls.SegmentedControl segStatus;
     private System.Windows.Forms.ComboBox cboDeadline;
-    private CreatorFlow.Controls.RoundedButton btnRefresh;
+    private CreatorFlow.Controls.ProjectActionButton btnRefresh;
     private System.Windows.Forms.Label lblSummary;
 
     // Bảng trong Card (mục 11, 12)
@@ -35,10 +35,10 @@ partial class MyTasksControl
     private CreatorFlow.Controls.RoundedPanel panelEdit;
     private System.Windows.Forms.Label lblProgressEdit;
     private System.Windows.Forms.NumericUpDown nudProgress;
-    private CreatorFlow.Controls.RoundedButton btnSaveProgress;
+    private CreatorFlow.Controls.ProjectActionButton btnSaveProgress;
     private System.Windows.Forms.Label lblDeadlineEdit;
     private System.Windows.Forms.DateTimePicker dtpDeadline;
-    private CreatorFlow.Controls.RoundedButton btnSaveDeadline;
+    private CreatorFlow.Controls.ProjectActionButton btnSaveDeadline;
     private CreatorFlow.Controls.RoundedButton btnOpenContent;
     private System.Windows.Forms.Label lblHint;
 
@@ -57,7 +57,7 @@ partial class MyTasksControl
         panelHeader = new Panel();
         panelHeaderGap = new Panel();
         lblSummary = new Label();
-        btnRefresh = new RoundedButton();
+        btnRefresh = new ProjectActionButton();
         cboDeadline = new ComboBox();
         segStatus = new SegmentedControl();
         cardList = new RoundedPanel();
@@ -76,10 +76,10 @@ partial class MyTasksControl
         panelEdit = new RoundedPanel();
         btnOpenContent = new RoundedButton();
         lblHint = new Label();
-        btnSaveDeadline = new RoundedButton();
+        btnSaveDeadline = new ProjectActionButton();
         dtpDeadline = new DateTimePicker();
         lblDeadlineEdit = new Label();
-        btnSaveProgress = new RoundedButton();
+        btnSaveProgress = new ProjectActionButton();
         nudProgress = new NumericUpDown();
         lblProgressEdit = new Label();
         panelHeader.SuspendLayout();

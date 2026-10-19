@@ -14,7 +14,8 @@ public sealed record ContentDetailRecord(
     DateOnly? Deadline,
     DateOnly? PlannedPublishAt,
     long CreatedBy,
-    IReadOnlyList<string> Platforms);
+    IReadOnlyList<string> Platforms,
+    string Sprint = CreatorFlow.Contracts.ContentDetail.SprintCatalog.DefaultSprint);
 
 /// <summary>Dữ liệu đã kiểm tra, sẵn sàng ghi. Priority là giá trị enum DB (UPPER).</summary>
 public sealed record ContentUpdate(
@@ -24,7 +25,8 @@ public sealed record ContentUpdate(
     string PriorityDb,
     DateOnly? Deadline,
     DateOnly? PlannedPublishAt,
-    IReadOnlyList<string> Platforms);
+    IReadOnlyList<string> Platforms,
+    string Sprint = CreatorFlow.Contracts.ContentDetail.SprintCatalog.DefaultSprint);
 
 /// <summary>Content mới đã kiểm tra, sẵn sàng ghi. Status/Priority là giá trị enum DB (UPPER).</summary>
 public sealed record NewContent(

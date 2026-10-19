@@ -30,7 +30,7 @@ public class ContentBoardCard
     public bool IsTeamCompleted => TaskRules.IsContentCompleted(Assignees.Select(a => a.Status));
 
     /// <summary>Sprint chứa nội dung này (VD "Sprint 25").</summary>
-    public string Sprint { get; set; } = "Sprint 25";
+    public string Sprint { get; set; } = CreatorFlow.Contracts.ContentDetail.SprintCatalog.DefaultSprint;
 
     /// <summary>Thời lượng dự kiến dạng chữ tự do (VD "24 min", "60 sec").</summary>
     public string EstimatedDuration { get; set; } = string.Empty;

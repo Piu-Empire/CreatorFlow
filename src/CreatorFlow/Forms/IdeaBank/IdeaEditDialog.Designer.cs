@@ -19,8 +19,8 @@ partial class IdeaEditDialog
     private System.Windows.Forms.Label lblNote;
     private System.Windows.Forms.TextBox txtNote;
     private System.Windows.Forms.Label lblError;
-    private CreatorFlow.Controls.RoundedButton btnSave;
-    private CreatorFlow.Controls.RoundedButton btnCancel;
+    private CreatorFlow.Controls.ProjectActionButton btnSave;
+    private CreatorFlow.Controls.ProjectActionButton btnCancel;
 
     protected override void Dispose(bool disposing)
     {
@@ -46,8 +46,8 @@ partial class IdeaEditDialog
         this.lblNote = new System.Windows.Forms.Label();
         this.txtNote = new System.Windows.Forms.TextBox();
         this.lblError = new System.Windows.Forms.Label();
-        this.btnSave = new CreatorFlow.Controls.RoundedButton();
-        this.btnCancel = new CreatorFlow.Controls.RoundedButton();
+        this.btnSave = new CreatorFlow.Controls.ProjectActionButton();
+        this.btnCancel = new CreatorFlow.Controls.ProjectActionButton();
         this.SuspendLayout();
         //
         // lblHeader
@@ -185,7 +185,7 @@ partial class IdeaEditDialog
         this.btnCancel.Location = new System.Drawing.Point(446, 534);
         this.btnCancel.Name = "btnCancel";
         this.btnCancel.Size = new System.Drawing.Size(90, 38);
-        this.btnCancel.Style = RoundButtonStyle.Secondary;
+        this.btnCancel.Style = RoundButtonStyle.Primary;
         this.btnCancel.TabIndex = 7;
         this.btnCancel.Text = "Hủy";
         //

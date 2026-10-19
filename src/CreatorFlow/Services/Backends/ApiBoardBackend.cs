@@ -22,6 +22,13 @@ public sealed class ApiBoardBackend(ApiClient api, UserSession session) : IBoard
         return response.Cards.Select(ToCard).ToList();
     }
 
+    public async Task<List<ContentBoardCard>> GetProjectContentsAsync(long projectId, ContentLibraryQuery query, CancellationToken token = default)
+    {
+        string bearer = ApiTaskCall.BearerOf(session);
+        var response = await ApiTaskCall.RunAsync(() => api.GetProjectContentLibraryAsync(projectId, bearer, query, token), session);
+        return response.Cards.Select(ToCard).ToList();
+    }
+
     internal static ContentBoardCard ToCard(BoardCardResponse r)
     {
         var assignees = r.Assignees.Select(ApiTaskMapper.ToCardAssignee).ToList();
@@ -38,6 +45,7 @@ public sealed class ApiBoardBackend(ApiClient api, UserSession session) : IBoard
             PlannedPublishAt = r.PlannedPublishAt,
             Platforms = r.Platforms.ToList(),
             Tags = r.Tags.ToList(),
+            Sprint = r.Sprint,
             HasPendingReview = r.HasPendingReview,
             Assignees = assignees,
             AssigneeName = assignees.FirstOrDefault()?.Name,
