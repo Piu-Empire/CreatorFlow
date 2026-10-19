@@ -57,3 +57,26 @@ Chỉ đổi truy vấn reference và kiểm thử repository cho `content_attac
 ### Phạm vi và trạng thái
 
 Phạm vi là `ContentReferencesControl`, `ContentDetailPanel`, luồng Board và backend/API test của task này. UI giữ additions/deletions ở draft, đưa chúng vào trạng thái chưa lưu và chỉ gửi batch khi bấm Lưu; Board hỏi trước khi tải lại Content đang có draft. Repository chạy additions/deletions trong transaction, chỉ đọc/xóa hàng `LINK`, và rollback nếu ID xóa không phải reference hợp lệ. Đã bổ sung route test cho nhánh thiếu ID/link lỗi, API-client test cho lỗi `reference_not_found` và database integration test cho rollback cùng loại attachment. Test/build chưa chạy trong lượt này; cần người dùng đồng ý theo cổng `post-change-test-workflow` trước khi kiểm chứng runtime.
+
+## Phát hiện bổ sung — Test mở archived Content thiếu response references
+
+### Tái hiện và bằng chứng
+
+- Test `ContentLibrary_LoadsProjectContentAndOpensArchivedContentDetailThroughApi` mở Content 901 có trạng thái Archived.
+- Test Explorer báo `ArgumentNullException` với parameter `source`; stack trace đi từ `ApiContentDetailBackend.GetReferences` qua `ContentReferencesControl.LoadReferences` khi mở Content Detail.
+- `ApiContentDetailBackend.GetReferences` gọi `response.References.Select(...)`.
+- `ProjectShellTests.UxHandler` có response cho detail, script và activity của Content 901 nhưng không có nhánh `/api/contents/901/references`. Request rơi xuống fallback trả response dạng Project, không có `references`, nên deserialize thành `References == null`.
+
+### Root cause
+
+Test fixture chưa được cập nhật để mô phỏng endpoint references mới. Lỗi nằm trong HTTP mock của test, không phải bằng chứng endpoint production trả danh sách null.
+
+### Hướng sửa đề xuất
+
+- Thêm nhánh `GET /api/contents/901/references` trong `UxHandler`, trả `ContentReferencesResponse` rỗng và `CanManage = false` cho Content Archived.
+- Bổ sung assertion rằng test đã gọi đúng route references khi mở Content Detail.
+- Không đổi backend production; contract API yêu cầu danh sách `References` không null và route thật trả danh sách đó.
+
+### Phạm vi, rủi ro và kiểm chứng
+
+Phạm vi là test fixture và assertion trong `ProjectShellTests`; không thay đổi API, service, repository hoặc dữ liệu. Screenshot ghi nhận 833 test pass, 1 fail, 64 skipped. Chưa chạy lại test trong lượt điều tra; cần người dùng đồng ý theo `post-change-test-workflow` trước khi sửa và xác minh.
