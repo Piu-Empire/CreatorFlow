@@ -862,7 +862,10 @@ public partial class BoardForm : Form, IMessageFilter
         }
         catch (Exception ex)
         {
-            _toast.ShowToast(this, ex.Message);
+            string message = ex.Message;
+            if (message.Contains("404") || message.Contains("Not Found", StringComparison.OrdinalIgnoreCase))
+                message = "API chua ho tro thong bao (can deploy phien ban moi cua CreatorFlow.Api).";
+            _toast.ShowToast(this, message);
         }
     }
 
@@ -878,7 +881,10 @@ public partial class BoardForm : Form, IMessageFilter
         }
         catch (Exception ex)
         {
-            _toast.ShowToast(this, ex.Message);
+            string message = ex.Message;
+            if (message.Contains("404") || message.Contains("Not Found", StringComparison.OrdinalIgnoreCase))
+                message = "API chua ho tro thong bao (can deploy phien ban moi cua CreatorFlow.Api).";
+            _toast.ShowToast(this, message);
         }
     }
 
@@ -894,7 +900,10 @@ public partial class BoardForm : Form, IMessageFilter
         }
         catch (Exception ex)
         {
-            _toast.ShowToast(this, ex.Message);
+            string message = ex.Message;
+            if (message.Contains("404") || message.Contains("Not Found", StringComparison.OrdinalIgnoreCase))
+                message = "API chua ho tro thong bao (can deploy phien ban moi cua CreatorFlow.Api).";
+            _toast.ShowToast(this, message);
         }
     }
 
