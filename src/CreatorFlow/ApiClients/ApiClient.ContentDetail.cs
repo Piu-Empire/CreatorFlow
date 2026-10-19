@@ -31,6 +31,22 @@ public sealed partial class ApiClient
     public Task<ActivityResponse> GetActivityAsync(long contentId, string bearer, CancellationToken token = default) =>
         SendTasksAsync<ActivityResponse>(HttpMethod.Get, $"api/contents/{contentId}/activity", null, bearer, token);
 
+    public Task<ContentReferencesResponse> GetContentReferencesAsync(long contentId, string bearer, CancellationToken token = default) =>
+        SendTasksAsync<ContentReferencesResponse>(HttpMethod.Get, $"api/contents/{contentId}/references", null, bearer, token);
+
+    public Task<ContentReferenceResponse> AddContentReferenceAsync(long contentId, CreateContentReferenceRequest request,
+        string bearer, CancellationToken token = default) =>
+        SendTasksAsync<ContentReferenceResponse>(HttpMethod.Post, $"api/contents/{contentId}/references", request, bearer, token);
+
+    public Task<DeleteContentReferenceResponse> DeleteContentReferenceAsync(long contentId, long referenceId,
+        string bearer, CancellationToken token = default) =>
+        SendTasksAsync<DeleteContentReferenceResponse>(HttpMethod.Delete,
+            $"api/contents/{contentId}/references/{referenceId}", null, bearer, token);
+
+    public Task<ContentReferencesResponse> SaveContentReferenceChangesAsync(long contentId,
+        SaveContentReferenceChangesRequest request, string bearer, CancellationToken token = default) =>
+        SendTasksAsync<ContentReferencesResponse>(HttpMethod.Put, $"api/contents/{contentId}/references", request, bearer, token);
+
     public Task<ContentStatusResponse> ChangeContentStatusAsync(long contentId, ChangeContentStatusRequest request, string bearer, CancellationToken token = default) =>
         SendTasksAsync<ContentStatusResponse>(HttpMethod.Put, $"api/contents/{contentId}/status", request, bearer, token);
 

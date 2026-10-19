@@ -40,7 +40,8 @@ public class KanbanCardControl : Control
     public event EventHandler<ContentBoardCard>? MovePrevRequested;
 
     private bool HasDescription => !string.IsNullOrWhiteSpace(_card.Description);
-    private bool HasPrev => _card.Status > ContentStatus.Idea;
+    // Chỉ cột Review mới có bước lùi hợp lệ (từ chối → Editing); các cột khác không hiện mũi tên ‹.
+    private bool HasPrev => _card.Status == ContentStatus.Review;
     private bool HasNext => _card.Status < ContentStatus.Published;
 
     public KanbanCardControl(ContentBoardCard card)

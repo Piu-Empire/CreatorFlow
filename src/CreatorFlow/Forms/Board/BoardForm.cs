@@ -1,4 +1,5 @@
 using CreatorFlow.Models.Enums;
+using CreatorFlow.Contracts.Search;
 using CreatorFlow.Controls;
 using CreatorFlow.Controls.IdeaBank;
 using CreatorFlow.Controls.MyTasks;
@@ -40,6 +41,9 @@ public partial class BoardForm : Form, IMessageFilter
     private readonly IBoardBackend? _boardBackend;
     private readonly IContentDetailBackend? _detailBackend;
     private readonly IAssignmentBackend? _assignmentBackend;
+    private readonly IReviewQueueBackend? _reviewQueueBackend;
+    private readonly INotificationBackend? _notificationBackend;
+    private NotificationPanelControl? _notificationPanel;
     private long? _reopenContentId; // chế độ API: mở lại drawer của thẻ này sau khi Board tải lại (sau khi lưu/đổi trạng thái/giao việc)
     private readonly IMyTaskBackend? _taskBackend;
     private readonly AuthApiFacade? _auth;
@@ -51,6 +55,8 @@ public partial class BoardForm : Form, IMessageFilter
     private CalendarControl? _calendar;
     private readonly CancellationTokenSource _authLifetime = new();
     private int _avatarGeneration;
+    private int _globalSearchGeneration;
+    private CancellationTokenSource? _globalSearchRequest;
 
     private readonly Dictionary<ContentStatus, KanbanColumnControl> _columns = new();
     private List<ContentBoardCard> _allCards = new();
@@ -93,7 +99,9 @@ public partial class BoardForm : Form, IMessageFilter
         IIdeaBackend? ideaBackend = null,
         IBoardBackend? boardBackend = null,
         IContentDetailBackend? detailBackend = null,
-        IAssignmentBackend? assignmentBackend = null)
+        IAssignmentBackend? assignmentBackend = null,
+        IReviewQueueBackend? reviewQueueBackend = null,
+        INotificationBackend? notificationBackend = null)
     {
         InitializeComponent();
         _workflowService = workflowService;
@@ -112,6 +120,10 @@ public partial class BoardForm : Form, IMessageFilter
         _boardBackend = boardBackend;
         _detailBackend = detailBackend;
         _assignmentBackend = assignmentBackend;
+        _reviewQueueBackend = reviewQueueBackend;
+        _notificationBackend = notificationBackend;
+        _topHeaderControl.BellClicked += async (_, _) => await OnBellClickedAsync();
+        _topHeaderControl.SetNotificationsEnabled(_notificationBackend is not null);
         InitializeProjects(projects);
         if (auth is not null)
         {
@@ -133,10 +145,14 @@ public partial class BoardForm : Form, IMessageFilter
         _contentDetailPanel.CloseRequested += (_, _) => CloseDrawer();
 
         _topHeaderControl.NewContentClicked += (_, _) => OpenCreateContentDialog();
+        _topHeaderControl.GlobalSearchRequested += async (_, args) => await SearchGloballyAsync(args.Query);
+        _topHeaderControl.GlobalSearchResultSelected += async (_, args) => await OpenGlobalSearchResultAsync(args.Result);
+        _topHeaderControl.SetGlobalSearchEnabled(auth is not null && projects is not null);
 
         _modulePageHeader.CreateContentClicked += (_, _) => OpenCreateContentDialog();
         _modulePageHeader.SearchTextChanged += (_, _) => ApplyFilters();
         _modulePageHeader.PlatformFilterChanged += (_, _) => ApplyFilters();
+        _modulePageHeader.SprintFilterChanged += (_, _) => ApplyFilters();
 
         _sidebarControl.ReviewQueueRequested += (_, _) => OpenReviewQueue();
         _sidebarControl.ContentLibraryRequested += async (_, _) => await OpenContentLibraryAsync();
@@ -177,6 +193,9 @@ public partial class BoardForm : Form, IMessageFilter
     protected override void OnFormClosed(FormClosedEventArgs e)
     {
         _authLifetime.Cancel();
+        _globalSearchRequest?.Cancel();
+        _globalSearchRequest?.Dispose();
+        _globalSearchRequest = null;
         _authLifetime.Dispose();
         Application.RemoveMessageFilter(this);
         base.OnFormClosed(e);
@@ -293,6 +312,7 @@ public partial class BoardForm : Form, IMessageFilter
     {
         string searchText = _modulePageHeader.SearchText;
         string platformFilter = _modulePageHeader.SelectedPlatform;
+        string sprintFilter = _modulePageHeader.SelectedSprint;
         var filtered = _allCards.AsEnumerable();
 
         if (!string.IsNullOrWhiteSpace(searchText))
@@ -301,6 +321,9 @@ public partial class BoardForm : Form, IMessageFilter
 
         if (!string.IsNullOrWhiteSpace(platformFilter) && platformFilter != "All")
             filtered = filtered.Where(c => c.Platforms.Any(p => p.Equals(platformFilter, StringComparison.OrdinalIgnoreCase)));
+
+        if (!string.IsNullOrWhiteSpace(sprintFilter) && sprintFilter != ModulePageHeaderControl.AllSprintsFilter)
+            filtered = filtered.Where(c => c.Sprint.Equals(sprintFilter, StringComparison.OrdinalIgnoreCase));
 
         var list = filtered.ToList();
         _selectedCardControl = null;
@@ -354,8 +377,8 @@ public partial class BoardForm : Form, IMessageFilter
     private void SelectCard(KanbanCardControl cardCtrl)
     {
         if (!HasProjectContext || (_projects is not null && _detailBackend is null)) return;
-        // Đang mở thẻ khác và có thay đổi chưa lưu → hỏi trước khi chuyển (Clear() tự hiện hộp thoại xác nhận).
-        if (_selectedContentId.HasValue && _selectedContentId != cardCtrl.Card.ContentId && _contentDetailPanel.HasUnsavedChanges)
+        // Đang có thay đổi chưa lưu; chuyển thẻ hoặc tải lại cùng thẻ đều phải xác nhận trước.
+        if (_selectedContentId.HasValue && _contentDetailPanel.HasUnsavedChanges)
         {
             if (!_contentDetailPanel.Clear()) return;
         }
@@ -404,19 +427,104 @@ public partial class BoardForm : Form, IMessageFilter
 
     private void OnMovePrevRequested(object? sender, ContentBoardCard card)
     {
-        _toast.ShowToast(this, "Workflow khong cho phep lui giai doan");
+        // Hoãn sang vòng lặp message kế tiếp: ReloadBoard sẽ dispose chính thẻ vừa bấm.
+        BeginInvoke(new Action(() => TryMovePrev(card)));
+    }
+
+    /// <summary>
+    /// Mũi tên ‹ trên thẻ: chỉ Review mới có bước lùi hợp lệ (từ chối → Editing).
+    /// Các giai đoạn khác workflow không cho lùi nên chỉ báo cho người dùng.
+    /// </summary>
+    private void TryMovePrev(ContentBoardCard card)
+    {
+        if (!HasProjectContext) return;
+
+        if (card.Status != ContentStatus.Review)
+        {
+            _toast.ShowToast(this, "Quy trình không cho phép lùi giai đoạn");
+            return;
+        }
+
+        if (_projects is not null && _detailBackend is null)
+        {
+            _toast.ShowToast(this, "Chuyển trạng thái chưa kết nối API");
+            return;
+        }
+
+        using var dialog = new ReviewDecisionDialog(
+            $"{card.Code} — {card.Title}",
+            "Từ chối sẽ chuyển Content về Editing để Creator sửa lại.");
+
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+        try
+        {
+            if (_projects is not null)
+                _detailBackend!.DecideReview(card.ContentId, dialog.Approved, dialog.Feedback);
+            else if (dialog.Approved)
+                _workflowService.ApproveReview(card.ContentId, CurrentSession.CurrentUserId, dialog.Feedback);
+            else
+                _workflowService.RejectReview(card.ContentId, CurrentSession.CurrentUserId, dialog.Feedback);
+
+            ReloadBoard();
+            _toast.ShowToast(this, "Cap nhat trang thai thanh cong!");
+        }
+        catch (InvalidWorkflowTransitionException ex)
+        {
+            MessageBox.Show(this, ex.Message, "Không thể chuyển trạng thái", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        catch (ContentValidationException ex) // chế độ API: lỗi nghiệp vụ/mạng từ Backend
+        {
+            MessageBox.Show(this, ex.Message, "Không thể chuyển trạng thái", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        catch (UnauthorizedWorkflowActionException ex)
+        {
+            MessageBox.Show(this, ex.Message, "Không đủ quyền", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        catch (InvalidOperationException ex) // chế độ API: 404 endpoint/dữ liệu
+        {
+            MessageBox.Show(this, ex.Message, "Không thể chuyển trạng thái", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
     }
 
     private void TryMoveNext(ContentBoardCard card)
     {
         if (!HasProjectContext) return;
-        if (_projects is not null)
-        {
-            if (_boardBackend is not null) _toast.ShowToast(this, "Chuyển trạng thái chưa kết nối API");
-            return;
-        }
         try
         {
+            // Chế độ API: quyền và luồng trạng thái do Backend kiểm tra, client chỉ gửi yêu cầu.
+            if (_projects is not null)
+            {
+                if (_detailBackend is null)
+                {
+                    _toast.ShowToast(this, "Chuyển trạng thái chưa kết nối API");
+                    return;
+                }
+
+                switch (card.Status)
+                {
+                    case ContentStatus.Editing:
+                        _detailBackend.SubmitForReview(card.ContentId);
+                        break;
+
+                    case ContentStatus.Review:
+                        // Approve/Reject cần quyết định + feedback → mở drawer để xử lý
+                        var reviewCtrl = FindCardControl(card.ContentId);
+                        if (reviewCtrl != null) SelectCard(reviewCtrl);
+                        return;
+
+                    default:
+                        var apiNext = _workflowService.GetNextSimpleStatus(card.Status);
+                        if (!apiNext.HasValue) return;
+                        _detailBackend.ChangeStatus(card.ContentId, apiNext.Value);
+                        break;
+                }
+
+                ReloadBoard();
+                _toast.ShowToast(this, "Cap nhat trang thai thanh cong!");
+                return;
+            }
+
             switch (card.Status)
             {
                 case ContentStatus.Editing:
@@ -443,9 +551,17 @@ public partial class BoardForm : Form, IMessageFilter
         {
             MessageBox.Show(this, ex.Message, "Không thể chuyển trạng thái", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
+        catch (ContentValidationException ex) // chế độ API: lỗi nghiệp vụ/mạng từ Backend
+        {
+            MessageBox.Show(this, ex.Message, "Không thể chuyển trạng thái", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
         catch (UnauthorizedWorkflowActionException ex)
         {
             MessageBox.Show(this, ex.Message, "Không đủ quyền", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        catch (InvalidOperationException ex) // chế độ API: 404 endpoint/dữ liệu
+        {
+            MessageBox.Show(this, ex.Message, "Không thể chuyển trạng thái", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
     }
 
@@ -555,17 +671,19 @@ public partial class BoardForm : Form, IMessageFilter
     }
 
     /// <summary>Mở trang Idea Bank của Project hiện hành ngay trong vùng nội dung chính.</summary>
-    private async void OpenIdeaBank()
+    private async void OpenIdeaBank() => await OpenIdeaBankPageAsync();
+
+    private async Task<IdeaBankControl?> OpenIdeaBankPageAsync(long? focusIdeaId = null)
     {
-        if (!HasProjectContext || !CanLeaveProjectPage()) return;
-        if (_projects is not null && !await ValidateProjectAsync()) return;
-        if (!HasProjectContext) return;
+        if (!HasProjectContext || !CanLeaveProjectPage()) return null;
+        if (_projects is not null && !await ValidateProjectAsync()) return null;
+        if (!HasProjectContext) return null;
 
         IIdeaBackend? backend = _projects is null ? _ideaService : _ideaBackend;
         if (backend is null)
         {
             ShowUnavailableModule("Idea Bank");
-            return;
+            return null;
         }
 
         long projectId = CurrentSession.CurrentProjectId;
@@ -577,6 +695,8 @@ public partial class BoardForm : Form, IMessageFilter
         page.CloseRequested += (_, _) => CloseIdeaBankPage(page);
         ShowProjectPage(page, "Backlog");
         _sidebarControl.SetActiveMenu("Backlog");
+        if (focusIdeaId is long ideaId && !page.FocusIdea(ideaId))
+            _toast.ShowToast(this, "Không còn tìm thấy ý tưởng này trong Project.");
         RefreshBacklogCount();
 
         void RefreshBacklogCount()
@@ -591,6 +711,7 @@ public partial class BoardForm : Form, IMessageFilter
             }
             _sidebarControl.Invalidate();
         }
+        return page;
     }
 
     private void CloseIdeaBankPage(IdeaBankControl page)
@@ -670,8 +791,8 @@ public partial class BoardForm : Form, IMessageFilter
             return;
         }
 
-        // Đang mở thẻ khác và có thay đổi chưa lưu → hỏi trước khi chuyển (Clear() tự hiện hộp thoại xác nhận).
-        if (_selectedContentId.HasValue && _selectedContentId != contentId && _contentDetailPanel.HasUnsavedChanges)
+        // Đang có thay đổi chưa lưu; chuyển thẻ hoặc tải lại cùng thẻ đều phải xác nhận trước.
+        if (_selectedContentId.HasValue && _contentDetailPanel.HasUnsavedChanges)
         {
             if (!_contentDetailPanel.Clear()) return;
         }
@@ -690,14 +811,103 @@ public partial class BoardForm : Form, IMessageFilter
     private void OpenReviewQueue()
     {
         if (!HasProjectContext || CurrentSession.CurrentUserRole is not (ProjectRole.Owner or ProjectRole.Manager)) return;
-        if (_projects is not null) { ShowUnavailableModule("Review Queue"); return; }
+        if (_projects is not null && _reviewQueueBackend is null) { ShowUnavailableModule("Review Queue"); return; }
         CloseProfile();
         CloseAdmin();
         CloseReports();
         CloseCalendar();
-        using var queueForm = new Review.ReviewQueueForm(_reviewQueueRepository, _workflowService);
+        using var queueForm = _reviewQueueBackend is not null
+            ? new Review.ReviewQueueForm(_reviewQueueBackend)
+            : new Review.ReviewQueueForm(_reviewQueueRepository, _workflowService);
         ShowWithActiveMenu("Review Queue", () => queueForm.ShowDialog(this));
         ReloadBoard();
+    }
+
+    private async Task OnBellClickedAsync()
+    {
+        if (_notificationBackend is null)
+        {
+            _toast.ShowToast(this, "Notifications need a CreatorFlow API connection.");
+            return;
+        }
+        try
+        {
+            var result = _notificationBackend.GetNotifications(unreadOnly: false);
+            _topHeaderControl.SetUnreadNotificationCount(result.UnreadCount);
+            if (!result.SchemaReady)
+                _toast.ShowToast(this, result.SchemaMessage ?? "Notifications require database migration 09_notifications.sql.");
+
+            _notificationPanel ??= new NotificationPanelControl();
+            _notificationPanel.SetItems(result.Items, result.SchemaReady, result.SchemaMessage);
+            _notificationPanel.ItemClicked -= NotificationPanel_ItemClicked;
+            _notificationPanel.ItemClicked += NotificationPanel_ItemClicked;
+            _notificationPanel.MarkAllRequested -= NotificationPanel_MarkAllRequested;
+            _notificationPanel.MarkAllRequested += NotificationPanel_MarkAllRequested;
+
+            // Neo panel dưới icon Bell.
+            Point bellScreen = _topHeaderControl.PointToScreen(_topHeaderControl.BellBounds.Location);
+            Point panelLocation = PointToClient(new Point(bellScreen.X - 40, bellScreen.Y + _topHeaderControl.BellBounds.Height + 4));
+            if (panelLocation.X + _notificationPanel.Width > ClientSize.Width)
+                panelLocation.X = ClientSize.Width - _notificationPanel.Width - 8;
+            if (panelLocation.X < 8) panelLocation.X = 8;
+            _notificationPanel.Location = panelLocation;
+
+            if (!_notificationPanel.Visible || _notificationPanel.Parent != this)
+            {
+                if (_notificationPanel.Parent != this) Controls.Add(_notificationPanel);
+                _notificationPanel.BringToFront();
+                _notificationPanel.Visible = true;
+            }
+            else
+            {
+                _notificationPanel.Visible = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            string message = ex.Message;
+            if (message.Contains("404") || message.Contains("Not Found", StringComparison.OrdinalIgnoreCase))
+                message = "API chua ho tro thong bao (can deploy phien ban moi cua CreatorFlow.Api).";
+            _toast.ShowToast(this, message);
+        }
+    }
+
+    private void NotificationPanel_ItemClicked(object? sender, long notificationId)
+    {
+        if (_notificationBackend is null) return;
+        try
+        {
+            _notificationBackend.MarkRead(notificationId);
+            var result = _notificationBackend.GetNotifications(unreadOnly: false);
+            _notificationPanel?.SetItems(result.Items);
+            _topHeaderControl.SetUnreadNotificationCount(result.UnreadCount);
+        }
+        catch (Exception ex)
+        {
+            string message = ex.Message;
+            if (message.Contains("404") || message.Contains("Not Found", StringComparison.OrdinalIgnoreCase))
+                message = "API chua ho tro thong bao (can deploy phien ban moi cua CreatorFlow.Api).";
+            _toast.ShowToast(this, message);
+        }
+    }
+
+    private void NotificationPanel_MarkAllRequested(object? sender, EventArgs e)
+    {
+        if (_notificationBackend is null) return;
+        try
+        {
+            _notificationBackend.MarkAllRead();
+            var result = _notificationBackend.GetNotifications(unreadOnly: false);
+            _notificationPanel?.SetItems(result.Items);
+            _topHeaderControl.SetUnreadNotificationCount(result.UnreadCount);
+        }
+        catch (Exception ex)
+        {
+            string message = ex.Message;
+            if (message.Contains("404") || message.Contains("Not Found", StringComparison.OrdinalIgnoreCase))
+                message = "API chua ho tro thong bao (can deploy phien ban moi cua CreatorFlow.Api).";
+            _toast.ShowToast(this, message);
+        }
     }
 
     private async Task OpenProfileAsync()
@@ -869,6 +1079,16 @@ public partial class BoardForm : Form, IMessageFilter
     // ==========================================================
     public bool PreFilterMessage(ref Message m)
     {
+        const int WM_LBUTTONDOWN = 0x0201;
+        if (m.Msg == WM_LBUTTONDOWN && _notificationPanel is { Visible: true })
+        {
+            var cursor = Cursor.Position;
+            var panelRect = new Rectangle(_notificationPanel.PointToScreen(Point.Empty), _notificationPanel.Size);
+            var bellRect = new Rectangle(_topHeaderControl.PointToScreen(_topHeaderControl.BellBounds.Location), _topHeaderControl.BellBounds.Size);
+            if (!panelRect.Contains(cursor) && !bellRect.Contains(cursor))
+                _notificationPanel.Visible = false;
+        }
+
         if (m.Msg != WM_MOUSEWHEEL || !Visible || !ReferenceEquals(ActiveForm, this))
             return false;
 

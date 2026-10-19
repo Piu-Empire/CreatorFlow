@@ -5,11 +5,13 @@ namespace CreatorFlow.Controls;
 
 /// <summary>
 /// Đầu trang "Production Board":
-/// Hàng 1: Tiêu đề + pill "Sprint 25 Pipeline" | ô Search | bộ lọc nền tảng | "All Sprints" | + Add Ticket
+/// Hàng 1: Tiêu đề + pill theo Sprint hiện tại | ô Search | bộ lọc nền tảng | "All Sprints" | + Add Ticket
 /// Hàng 2: Mô tả trang.
 /// </summary>
 public class ModulePageHeaderControl : UserControl
 {
+    public const string AllSprintsFilter = "All Sprints";
+
     private const int RightPad = 32;
     private const int ControlH = 38;
     private const int Gap = 12;
@@ -21,6 +23,8 @@ public class ModulePageHeaderControl : UserControl
     private readonly TextBox _txtSearch;
     private readonly SegmentedControl _segmentedFilter;
     private readonly RoundedButton _btnAddTicket;
+    private readonly ContextMenuStrip _mnuSprintFilter;
+    private string _selectedSprint = AllSprintsFilter;
 
     private Rectangle _searchRect;
     private Rectangle _sprintRect;
@@ -30,9 +34,11 @@ public class ModulePageHeaderControl : UserControl
     public event EventHandler? CreateContentClicked;
     public event EventHandler<string>? SearchTextChanged;
     public event EventHandler<string>? PlatformFilterChanged;
+    public event EventHandler<string>? SprintFilterChanged;
 
     public string SearchText => _txtSearch.Text.Trim();
     public string SelectedPlatform => _segmentedFilter.SelectedValue;
+    public string SelectedSprint => _selectedSprint;
 
     public void SetContentCreationEnabled(bool enabled) => _btnAddTicket.Enabled = enabled;
 
@@ -40,6 +46,7 @@ public class ModulePageHeaderControl : UserControl
     {
         _txtSearch.Clear();
         _segmentedFilter.SelectedIndex = 0;
+        SetSprintFilter(AllSprintsFilter);
     }
 
     public ModulePageHeaderControl()
@@ -61,6 +68,16 @@ public class ModulePageHeaderControl : UserControl
 
         _segmentedFilter = new SegmentedControl { Height = 34 };
         _segmentedFilter.SelectedIndexChanged += (_, _) => PlatformFilterChanged?.Invoke(this, _segmentedFilter.SelectedValue);
+
+        _mnuSprintFilter = new ContextMenuStrip
+        {
+            ShowImageMargin = false,
+            ShowCheckMargin = true,
+            Font = UITheme.FontBody,
+        };
+        AddSprintFilterOption(AllSprintsFilter);
+        foreach (string sprint in CreatorFlow.Contracts.ContentDetail.SprintCatalog.Available)
+            AddSprintFilterOption(sprint);
 
         _btnAddTicket = new ProjectActionButton
         {
@@ -155,6 +172,41 @@ public class ModulePageHeaderControl : UserControl
         // Không dùng trong thiết kế mới
     }
 
+    private void AddSprintFilterOption(string sprint)
+    {
+        var item = new ToolStripMenuItem(sprint)
+        {
+            Checked = string.Equals(sprint, _selectedSprint, StringComparison.OrdinalIgnoreCase),
+        };
+        item.Click += (_, _) => SetSprintFilter(sprint);
+        _mnuSprintFilter.Items.Add(item);
+    }
+
+    private void SetSprintFilter(string sprint)
+    {
+        if (string.Equals(_selectedSprint, sprint, StringComparison.OrdinalIgnoreCase)) return;
+
+        _selectedSprint = sprint;
+        foreach (ToolStripMenuItem item in _mnuSprintFilter.Items.OfType<ToolStripMenuItem>())
+            item.Checked = string.Equals(item.Text, sprint, StringComparison.OrdinalIgnoreCase);
+
+        Invalidate();
+        SprintFilterChanged?.Invoke(this, _selectedSprint);
+    }
+
+    protected override void OnMouseDown(MouseEventArgs e)
+    {
+        base.OnMouseDown(e);
+        if (e.Button == MouseButtons.Left && _sprintVisible && _sprintRect.Contains(e.Location))
+            _mnuSprintFilter.Show(this, new Point(_sprintRect.Left, _sprintRect.Bottom));
+    }
+
+    protected override void OnMouseMove(MouseEventArgs e)
+    {
+        base.OnMouseMove(e);
+        Cursor = _sprintVisible && _sprintRect.Contains(e.Location) ? Cursors.Hand : Cursors.Default;
+    }
+
     protected override void OnPaint(PaintEventArgs e)
     {
         base.OnPaint(e);
@@ -168,12 +220,12 @@ public class ModulePageHeaderControl : UserControl
         TextRenderer.DrawText(g, "Production Board", UITheme.FontPageTitle, new Rectangle(0, 0, titleSize.Width + 4, ControlH), UITheme.Ink,
             TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
 
-        // Pill "Sprint 25 Pipeline"
+        // Pill cho Sprint mặc định hiện tại
         var pill = new Rectangle(titleSize.Width + 14, (ControlH - 26) / 2 + 2, 132, 26);
         using (var pillBrush = new SolidBrush(UITheme.Neutral200))
         using (var pillPath = UITheme.CreateRoundedRectanglePath(pill, 13))
             g.FillPath(pillBrush, pillPath);
-        TextRenderer.DrawText(g, "Sprint 25 Pipeline", UITheme.FontLabelBold, pill, UITheme.Neutral700,
+        TextRenderer.DrawText(g, $"{CreatorFlow.Contracts.ContentDetail.SprintCatalog.DefaultSprint} Pipeline", UITheme.FontLabelBold, pill, UITheme.Neutral700,
             TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
 
         // Mô tả
@@ -195,7 +247,7 @@ public class ModulePageHeaderControl : UserControl
             UIIcons.Search(g, new Rectangle(_searchRect.X + 12, _searchRect.Y + (ControlH - 18) / 2, 18, 18), UITheme.Neutral400);
         }
 
-        // Dropdown "All Sprints" (chỉ hiển thị, chưa có dữ liệu Sprint để lọc)
+        // Sprint filter dropdown
         if (_sprintVisible)
         {
             using (var fill = new SolidBrush(UITheme.White))
@@ -205,7 +257,7 @@ public class ModulePageHeaderControl : UserControl
                 g.FillPath(fill, path);
                 g.DrawPath(pen, path);
             }
-            TextRenderer.DrawText(g, "All Sprints", UITheme.FontBody,
+            TextRenderer.DrawText(g, _selectedSprint, UITheme.FontBody,
                 new Rectangle(_sprintRect.X + 14, _sprintRect.Y, _sprintRect.Width - 44, _sprintRect.Height), UITheme.Neutral800,
                 TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
             UIIcons.Chevron(g, new Rectangle(_sprintRect.Right - 30, _sprintRect.Y + 7, 24, 24), ChevronDir.Down, UITheme.Neutral800, 1.8f);

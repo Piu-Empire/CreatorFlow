@@ -128,7 +128,7 @@ public sealed class ProjectAuthorizationTests
             builder.Services.AddSingleton<IWorkflowRepository>(workflow);
             builder.Services.AddScoped<ProjectService>();
             builder.Services.AddScoped<ProjectMembersService>();
-            builder.Services.AddScoped<WorkflowService>();
+            builder.Services.AddScoped(services => workflow.CreateService(services.GetRequiredService<CurrentAuthenticatedUser>()));
             builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow);
             var app = builder.Build();
             app.UseAuthentication(); app.UseAuthorization();

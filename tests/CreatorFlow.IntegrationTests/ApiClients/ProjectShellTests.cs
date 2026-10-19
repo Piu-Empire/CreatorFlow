@@ -439,6 +439,7 @@ public sealed class ProjectShellTests
             Assert.AreEqual("Archived video", loadedContent.Title);
             Assert.IsTrue(Field<bool>(detail, "_detailLoaded"));
             CollectionAssert.Contains(fixture.Paths, "/api/contents/901");
+            CollectionAssert.Contains(fixture.Paths, "/api/contents/901/references");
         });
     }
     [TestMethod]
@@ -666,6 +667,7 @@ public sealed class ProjectShellTests
                     return Reply(new BoardResponse([new BoardCardResponse(901, 81, "CNT-901", "Archived video", "Card description", "Archived", "Low", null, null, ["TikTok"], [], false,
                         [new BoardAssigneeResponse(901, 7, "Creator One", "InProgress", 45, null)])]));
                 if (path == "/api/contents/901") return Reply(new ContentDetailResponse(901, 81, "CNT-901", "Archived video detail", "Detail description", "Video", "Archived", "Low", null, null, 42, ["TikTok"], "Owner"));
+                if (path == "/api/contents/901/references") return Reply(new ContentReferencesResponse(901, false, []));
                 if (path == "/api/contents/901/script") return Reply(new ScriptResponse(901, 81, string.Empty, "v1", true, false, null));
                 if (path == "/api/contents/901/activity") return Reply(new ActivityResponse(901, []));
                 if (path == "/api/contents/101/progress") return Reply(TaskItem(81, 60));

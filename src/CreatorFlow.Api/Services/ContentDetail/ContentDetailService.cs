@@ -63,7 +63,7 @@ public sealed class ContentDetailService(
         return new(new ContentDetailResponse(
             content.ContentId, content.ProjectId, $"CNT-{content.ContentId:000}", content.Title, content.Description,
             content.ContentType, content.Status, content.Priority, content.Deadline, content.PlannedPublishAt,
-            content.CreatedBy, content.Platforms, role.Value.ToString()));
+            content.CreatedBy, content.Platforms, role.Value.ToString(), content.Sprint));
     }
 
     public async Task<AuthOperationResult<ContentDetailResponse>> UpdateAsync(
@@ -100,13 +100,17 @@ public sealed class ContentDetailService(
         (List<string> platforms, string? platformError) = await ResolvePlatformsAsync(request.Platforms, token);
         if (platformError is not null) return Validation<ContentDetailResponse>(platformError, "platforms");
 
+        string sprint = content.Sprint;
+        if (!string.IsNullOrWhiteSpace(request.Sprint) && !SprintCatalog.TryNormalize(request.Sprint, out sprint))
+            return Validation<ContentDetailResponse>("Sprint không hợp lệ.", "sprint");
+
         string[] removed = (await repository.GetPublishedPlatformNamesAsync(contentId, token))
             .Where(p => !platforms.Contains(p, StringComparer.OrdinalIgnoreCase)).ToArray();
         if (removed.Length > 0)
             return Validation<ContentDetailResponse>($"Không thể bỏ nền tảng đã đăng: {string.Join(", ", removed)}.", "platforms");
 
         await repository.UpdateAsync(contentId,
-            new ContentUpdate(check.Title, check.Description, check.ContentType, check.PriorityDb, request.Deadline, request.PlannedPublishAt, platforms), token);
+            new ContentUpdate(check.Title, check.Description, check.ContentType, check.PriorityDb, request.Deadline, request.PlannedPublishAt, platforms, sprint), token);
 
         return await GetDetailAsync(contentId, token);
     }
@@ -148,6 +152,10 @@ public sealed class ContentDetailService(
         (List<string> platforms, string? platformError) = await ResolvePlatformsAsync(request.Platforms, token);
         if (platformError is not null) return Validation<ContentDetailResponse>(platformError, "platforms");
 
+        string requestedSprint = string.IsNullOrWhiteSpace(request.Sprint) ? SprintCatalog.DefaultSprint : request.Sprint;
+        if (!SprintCatalog.TryNormalize(requestedSprint, out string sprint))
+            return Validation<ContentDetailResponse>("Sprint không hợp lệ.", "sprint");
+
         if (request.AssigneeUserId is long assigneeId)
         {
             if (!TaskRules.CanAssign(role) && assigneeId != user.UserId)
@@ -161,7 +169,7 @@ public sealed class ContentDetailService(
         }
 
         long contentId = await repository.CreateAsync(new NewContent(projectId, statusDb,
-            new ContentUpdate(check.Title, check.Description, check.ContentType, check.PriorityDb, request.Deadline, request.PlannedPublishAt, platforms),
+            new ContentUpdate(check.Title, check.Description, check.ContentType, check.PriorityDb, request.Deadline, request.PlannedPublishAt, platforms, sprint),
             user.UserId), token);
 
         if (request.AssigneeUserId is long assignee)
@@ -238,8 +246,133 @@ public sealed class ContentDetailService(
 
         IReadOnlyList<ActivityRecord> items = await repository.GetActivityAsync(contentId, token);
         return new(new ActivityResponse(contentId,
-            items.Select(i => new ActivityItemResponse(i.Timestamp, i.ActorName, i.Description, i.Feedback)).ToList()));
+            items.Select(i => new ActivityItemResponse(i.Timestamp, i.ActorName, i.Description, i.Feedback,
+                i.Kind, i.FromStatus, i.ToStatus, i.ReviewNo, i.ReviewStatus)).ToList()));
     }
+
+    // ------------------------------------------------------------------ references
+
+    public async Task<AuthOperationResult<ContentReferencesResponse>> GetReferencesAsync(long contentId, CancellationToken token = default)
+    {
+        if (current.User is not { } user) return Unauthorized<ContentReferencesResponse>();
+
+        ContentDetailRecord? content = await repository.GetDetailAsync(contentId, token);
+        if (content is null) return NotFound<ContentReferencesResponse>();
+        ProjectRole? role = await taskRepository.GetRoleAsync(content.ProjectId, user.UserId, token);
+        if (role is null) return NotMember<ContentReferencesResponse>();
+
+        IReadOnlyList<ContentReferenceRecord> references = await repository.GetReferencesAsync(contentId, token);
+        bool canManage = CanManageReferences(content, role.Value, user.UserId);
+        return new(new ContentReferencesResponse(contentId, canManage, references.Select(ToResponse).ToList()));
+    }
+
+    public async Task<AuthOperationResult<ContentReferenceResponse>> AddReferenceAsync(
+        long contentId, CreateContentReferenceRequest request, CancellationToken token = default)
+    {
+        if (current.User is not { } user) return Unauthorized<ContentReferenceResponse>();
+
+        ContentDetailRecord? content = await repository.GetDetailAsync(contentId, token);
+        if (content is null) return NotFound<ContentReferenceResponse>();
+        ProjectRole? role = await taskRepository.GetRoleAsync(content.ProjectId, user.UserId, token);
+        if (role is null) return NotMember<ContentReferenceResponse>();
+        if (!CanManageReferences(content, role.Value, user.UserId))
+            return Fail<ContentReferenceResponse>(content.Status is "Published" or "Archived" ? "content_locked" : "forbidden",
+                content.Status is "Published" or "Archived"
+                    ? "Content đã Published hoặc Archived nên không thể thay đổi reference."
+                    : "Bạn không có quyền thay đổi reference của Content này.",
+                content.Status is "Published" or "Archived" ? 409 : 403);
+
+        ReferenceValidation validation = ValidateReference(request);
+        if (validation.Error is not null)
+            return Validation<ContentReferenceResponse>(validation.Error, validation.Field!);
+
+        // Chỉ lưu URL; không gọi host bên ngoài để URL chết không ảnh hưởng dữ liệu Content.
+        ContentReferenceRecord saved = await repository.AddReferenceAsync(contentId,
+            validation.Value!.DisplayName, validation.Value.ResourceUrl, user.UserId, token);
+        return new(ToResponse(saved), Status: 201);
+    }
+
+    public async Task<AuthOperationResult<ContentReferencesResponse>> SaveReferenceChangesAsync(
+        long contentId, SaveContentReferenceChangesRequest request, CancellationToken token = default)
+    {
+        if (current.User is not { } user) return Unauthorized<ContentReferencesResponse>();
+
+        ContentDetailRecord? content = await repository.GetDetailAsync(contentId, token);
+        if (content is null) return NotFound<ContentReferencesResponse>();
+        ProjectRole? role = await taskRepository.GetRoleAsync(content.ProjectId, user.UserId, token);
+        if (role is null) return NotMember<ContentReferencesResponse>();
+        if (!CanManageReferences(content, role.Value, user.UserId))
+            return Fail<ContentReferencesResponse>(content.Status is "Published" or "Archived" ? "content_locked" : "forbidden",
+                content.Status is "Published" or "Archived"
+                    ? "Content đã Published hoặc Archived nên không thể thay đổi reference."
+                    : "Bạn không có quyền thay đổi reference của Content này.",
+                content.Status is "Published" or "Archived" ? 409 : 403);
+
+        IReadOnlyList<CreateContentReferenceRequest> additions = request.Additions ?? Array.Empty<CreateContentReferenceRequest>();
+        IReadOnlyList<long> deletedReferenceIds = request.DeletedReferenceIds ?? Array.Empty<long>();
+        if (deletedReferenceIds.Any(id => id <= 0) || deletedReferenceIds.Distinct().Count() != deletedReferenceIds.Count)
+            return Validation<ContentReferencesResponse>("Danh sách reference cần xóa không hợp lệ.", "deletedReferenceIds");
+
+        var normalizedAdditions = new List<NewContentReference>(additions.Count);
+        foreach (CreateContentReferenceRequest addition in additions)
+        {
+            ReferenceValidation validation = ValidateReference(addition);
+            if (validation.Error is not null)
+                return Validation<ContentReferencesResponse>(validation.Error, $"additions.{validation.Field}");
+            normalizedAdditions.Add(validation.Value!);
+        }
+
+        if (!await repository.ApplyReferenceChangesAsync(contentId, normalizedAdditions, deletedReferenceIds, user.UserId, token))
+            return Fail<ContentReferencesResponse>("reference_not_found", "Không tìm thấy một reference cần xóa của Content này.", 404);
+
+        IReadOnlyList<ContentReferenceRecord> references = await repository.GetReferencesAsync(contentId, token);
+        return new(new ContentReferencesResponse(contentId, true, references.Select(ToResponse).ToList()));
+    }
+
+    public async Task<AuthOperationResult<DeleteContentReferenceResponse>> DeleteReferenceAsync(
+        long contentId, long referenceId, CancellationToken token = default)
+    {
+        if (current.User is not { } user) return Unauthorized<DeleteContentReferenceResponse>();
+
+        ContentDetailRecord? content = await repository.GetDetailAsync(contentId, token);
+        if (content is null) return NotFound<DeleteContentReferenceResponse>();
+        ProjectRole? role = await taskRepository.GetRoleAsync(content.ProjectId, user.UserId, token);
+        if (role is null) return NotMember<DeleteContentReferenceResponse>();
+        if (!CanManageReferences(content, role.Value, user.UserId))
+            return Fail<DeleteContentReferenceResponse>(content.Status is "Published" or "Archived" ? "content_locked" : "forbidden",
+                content.Status is "Published" or "Archived"
+                    ? "Content đã Published hoặc Archived nên không thể thay đổi reference."
+                    : "Bạn không có quyền thay đổi reference của Content này.",
+                content.Status is "Published" or "Archived" ? 409 : 403);
+
+        if (!await repository.DeleteReferenceAsync(contentId, referenceId, token))
+            return Fail<DeleteContentReferenceResponse>("reference_not_found", "Không tìm thấy reference của Content này.", 404);
+
+        return new(new DeleteContentReferenceResponse(contentId, referenceId));
+    }
+
+    private static bool CanManageReferences(ContentDetailRecord content, ProjectRole role, long userId) =>
+        content.Status is not ("Published" or "Archived") &&
+        (role is ProjectRole.Owner or ProjectRole.Manager || role == ProjectRole.Creator && content.CreatedBy == userId);
+
+    private static ContentReferenceResponse ToResponse(ContentReferenceRecord reference) => new(
+        reference.ReferenceId, reference.ContentId, reference.DisplayName, reference.ResourceUrl, reference.AddedBy, reference.CreatedAt);
+
+    private static ReferenceValidation ValidateReference(CreateContentReferenceRequest? request)
+    {
+        string displayName = (request?.DisplayName ?? string.Empty).Trim();
+        if (displayName.Length is 0 or > 255)
+            return new(null, "Tên reference phải từ 1 đến 255 ký tự.", "displayName");
+
+        string rawUrl = (request?.ResourceUrl ?? string.Empty).Trim();
+        if (!Uri.TryCreate(rawUrl, UriKind.Absolute, out Uri? uri) ||
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+            return new(null, "URL phải là địa chỉ tuyệt đối bắt đầu bằng http:// hoặc https://.", "resourceUrl");
+
+        return new(new NewContentReference(displayName, uri.AbsoluteUri), null, null);
+    }
+
+    private sealed record ReferenceValidation(NewContentReference? Value, string? Error, string? Field);
 
     // ------------------------------------------------------------------ helpers
 

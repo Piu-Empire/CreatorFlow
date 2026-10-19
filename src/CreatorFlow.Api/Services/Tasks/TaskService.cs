@@ -3,6 +3,7 @@ using CreatorFlow.Api.Models.Auth;
 using CreatorFlow.Api.Models.Tasks;
 using CreatorFlow.Api.Repositories.Tasks;
 using CreatorFlow.Api.Services.Auth;
+using CreatorFlow.Api.Services.Notifications;
 using CreatorFlow.Contracts.Tasks;
 
 namespace CreatorFlow.Api.Services.Tasks;
@@ -14,7 +15,11 @@ namespace CreatorFlow.Api.Services.Tasks;
 ///   - deadline: chỉ Owner/Manager, đặt riêng từng Creator, không được đặt về quá khứ;
 ///   - giao việc: chỉ Owner/Manager (hoặc Creator tự nhận Content do chính mình tạo), người nhận phải là Creator của đúng Project.
 /// </summary>
-public sealed class TaskService(ITaskRepository repository, CurrentAuthenticatedUser current, TimeProvider timeProvider)
+public sealed class TaskService(
+    ITaskRepository repository,
+    CurrentAuthenticatedUser current,
+    TimeProvider timeProvider,
+    NotificationService notifications)
 {
     private DateOnly Today => DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
 
@@ -201,6 +206,16 @@ public sealed class TaskService(ITaskRepository repository, CurrentAuthenticated
             removed.Select(r => r.AssignmentId).ToList(), deadlineChanges, additions, token);
 
         var rows = await repository.GetAssignmentsAsync(contentId, token);
+
+        // Thông báo là hiệu ứng phụ sau khi giao việc đã ghi xong: chỉ Creator MỚI được thêm, không báo chính người giao.
+        foreach (NewAssignment addition in additions)
+        {
+            TaskAssignment? created = rows.FirstOrDefault(r => r.AssigneeUserId == addition.UserId);
+            if (created is null) continue;
+            await notifications.NotifyAssignmentAsync(contentId, content.ProjectId, created.ContentCode, created.ContentTitle,
+                created.AssignmentId, addition.UserId, user.UserId, token);
+        }
+
         return new(new AssignmentsResponse(rows.Select(ToResponse).ToList()));
     }
 

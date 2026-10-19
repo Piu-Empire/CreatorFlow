@@ -1,9 +1,14 @@
 using CreatorFlow.Api.Authentication;
 using CreatorFlow.Api.Models.Auth;
+using CreatorFlow.Api.Models.Notifications;
 using CreatorFlow.Api.Models.Tasks;
 using CreatorFlow.Api.Repositories.Tasks;
+using CreatorFlow.Api.Services.Notifications;
 using CreatorFlow.Api.Services.Tasks;
+using CreatorFlow.Api.Tests.Notifications;
+using CreatorFlow.Api.Tests.Services;
 using CreatorFlow.Contracts.Tasks;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace CreatorFlow.Api.Tests.Tasks;
@@ -422,6 +427,64 @@ public sealed class TaskServiceTests
         Assert.AreEqual(0, f.Repo.LastCancelled.Count);
     }
 
+    // ================================================================== thông báo (SCRUM-50)
+
+    [TestMethod]
+    public async Task AssignContent_NewCreator_GetsAssignmentNotification_AndEmail()
+    {
+        var f = new Fixture(OwnerId);
+        f.Users.Emails[CreatorId] = "creator@x.vn";
+
+        var result = await f.Service.AssignContentAsync(ContentId, new AssignContentRequest(new[] { Req(CreatorId) }));
+
+        Assert.IsTrue(result.Succeeded);
+        Assert.AreEqual(1, f.Notifications.Insets.Count);
+        NotificationInsert row = f.Notifications.Insets[0];
+        Assert.AreEqual(NotificationType.Assignment, row.Type);
+        Assert.AreEqual(CreatorId, row.RecipientUserId);
+        Assert.AreEqual(ContentId, row.ContentId);
+        Assert.AreEqual(ProjectId, row.ProjectId);
+        Assert.AreEqual($"ASSIGNMENT:{ContentId}:{CreatorId}:{f.Repo.Find(100).AssignmentId}", row.DedupeKey);
+        Assert.AreEqual(1, f.EmailSender.Notifications.Count);
+        Assert.AreEqual("creator@x.vn", f.EmailSender.Notifications[0].Email);
+        StringAssert.Contains(f.EmailSender.Notifications[0].Title, "CNT-010");
+    }
+
+    [TestMethod]
+    public async Task AssignContent_SelfAssign_DoesNotNotifyActor()
+    {
+        var f = new Fixture(CreatorId) { ContentCreatedBy = CreatorId };
+
+        var result = await f.Service.AssignContentAsync(ContentId, new AssignContentRequest(new[] { Req(CreatorId) }));
+
+        Assert.IsTrue(result.Succeeded);
+        Assert.AreEqual(0, f.Notifications.Insets.Count);
+        Assert.AreEqual(0, f.EmailSender.Notifications.Count);
+    }
+
+    [TestMethod]
+    public async Task AssignContent_SameCreatorTwice_CreatesOneNotificationOnly()
+    {
+        var f = new Fixture(OwnerId);
+
+        await f.Service.AssignContentAsync(ContentId, new AssignContentRequest(new[] { Req(CreatorId) }));
+        await f.Service.AssignContentAsync(ContentId, new AssignContentRequest(new[] { Req(CreatorId) }));
+
+        Assert.AreEqual(1, f.Notifications.Insets.Count, "dedupe theo assignment, không báo trùng khi giao lại");
+    }
+
+    [TestMethod]
+    public async Task AssignContent_NeverBreaksAssign_WhenNotificationWriteFails()
+    {
+        var f = new Fixture(OwnerId);
+        f.Notifications.ThrowOnInsert = true;
+
+        var result = await f.Service.AssignContentAsync(ContentId, new AssignContentRequest(new[] { Req(CreatorId) }));
+
+        Assert.IsTrue(result.Succeeded, "ghi thông báo lỗi không được làm hỏng giao việc");
+        Assert.AreEqual(1, f.Repo.ApplyCalls);
+    }
+
     // ================================================================== Board
 
     [TestMethod]
@@ -512,15 +575,23 @@ public sealed class TaskServiceTests
 
         public FakeTaskRepository Repo => _repo ??= new FakeTaskRepository(ContentCreatedBy, ContentStage);
 
+        public FakeNotificationRepository Notifications { get; } = new();
+        public NotificationUserRepository Users { get; } = new();
+        public TestEmailSender EmailSender { get; } = new();
+        public MemberRolesFake Roles { get; } = new();
+
+        public CurrentAuthenticatedUser Current => _current ??= new()
+        {
+            User = _actingUserId is long id
+                ? new User { UserId = id, Email = $"u{id}@x.vn", DisplayName = $"User {id}", PasswordHash = "x" }
+                : null,
+        };
+        private CurrentAuthenticatedUser? _current;
+
         public TaskService Service => _service ??= new TaskService(
-            Repo,
-            new CurrentAuthenticatedUser
-            {
-                User = _actingUserId is long id
-                    ? new User { UserId = id, Email = $"u{id}@x.vn", DisplayName = $"User {id}", PasswordHash = "x" }
-                    : null,
-            },
-            new FixedTimeProvider(Today));
+            Repo, Current, new FixedTimeProvider(Today), new NotificationService(
+                Notifications, Roles, Users, EmailSender, Current,
+                new FixedTimeProvider(Today), NullLogger<NotificationService>.Instance));
 
         public void Add(TaskAssignment assignment) => Repo.Assignments.Add(assignment);
     }

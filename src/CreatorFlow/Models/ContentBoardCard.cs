@@ -30,7 +30,7 @@ public class ContentBoardCard
     public bool IsTeamCompleted => TaskRules.IsContentCompleted(Assignees.Select(a => a.Status));
 
     /// <summary>Sprint chứa nội dung này (VD "Sprint 25").</summary>
-    public string Sprint { get; set; } = "Sprint 25";
+    public string Sprint { get; set; } = CreatorFlow.Contracts.ContentDetail.SprintCatalog.DefaultSprint;
 
     /// <summary>Thời lượng dự kiến dạng chữ tự do (VD "24 min", "60 sec").</summary>
     public string EstimatedDuration { get; set; } = string.Empty;
@@ -43,6 +43,7 @@ public class ContentBoardCard
     /// <summary>Có Review đang PENDING hay không (hiện icon Review trên card).</summary>
     public bool HasPendingReview { get; set; }
 
+    /// <summary>Quá hạn khi có Deadline đã qua ngày và Content chưa hoàn thành (Published/Archived).</summary>
     public bool IsOverdue =>
-        TaskRules.IsOverdue(Deadline, Status == ContentStatus.Published, DateTime.Today);
+        TaskRules.IsOverdue(Deadline, Status is ContentStatus.Published or ContentStatus.Archived, DateTime.Today);
 }

@@ -8,6 +8,12 @@ using CreatorFlow.Api.Models.Tasks;
 using CreatorFlow.Api.Repositories.Tasks;
 using CreatorFlow.Api.Services.Tasks;
 using CreatorFlow.Api.Tests.Api;
+using CreatorFlow.Api.Tests.Notifications;
+using CreatorFlow.Api.Tests.Services;
+using CreatorFlow.Api.Repositories.Auth;
+using CreatorFlow.Api.Repositories.Notifications;
+using CreatorFlow.Api.Services.Auth;
+using CreatorFlow.Api.Services.Notifications;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.TestHost;
@@ -96,14 +102,21 @@ public sealed class TaskRoutingTests
         builder.WebHost.UseTestServer();
         var repository = new TaskRepositoryFake();
         if (member) repository.Roles[(ProjectId, ActorId)] = ProjectRole.Creator;
+        var notifications = new FakeNotificationRepository();
+        var users = new NotificationUserRepository();
+        var emailSender = new TestEmailSender();
 
         builder.Services.AddSingleton<ITaskRepository>(repository);
+        builder.Services.AddSingleton<INotificationRepository>(notifications);
+        builder.Services.AddSingleton<IUserRepository>(users);
+        builder.Services.AddSingleton<IEmailSender>(emailSender);
         builder.Services.AddSingleton(TimeProvider.System);
         builder.Services.AddScoped(_ => new CurrentAuthenticatedUser
         {
             User = new User { UserId = ActorId, Email = "actor@example.test", DisplayName = "Actor", PasswordHash = "unused" },
         });
         builder.Services.AddScoped<TaskService>();
+        builder.Services.AddScoped<NotificationService>();
         builder.Services.AddAuthentication("fixture").AddScheme<AuthenticationSchemeOptions, ProjectRoutingTests.FixtureAuth>("fixture", _ => { });
         builder.Services.AddAuthorization();
 

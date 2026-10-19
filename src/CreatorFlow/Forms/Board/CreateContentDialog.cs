@@ -21,8 +21,21 @@ public partial class CreateContentDialog : Form
         InitializeComponent();
         _members = members;
 
-        foreach (string name in platforms)
-            _pnlPlatforms.Controls.Add(new CheckBox { Text = name, AutoSize = true, Margin = new Padding(0, 0, 24, 0) });
+        if (platforms.Count == 0)
+        {
+            _pnlPlatforms.Controls.Add(new Label
+            {
+                Text = "Chưa có nền tảng nào đang bật. Hãy kiểm tra catalog platform của API.",
+                AutoSize = true,
+                ForeColor = CreatorFlow.Theme.UITheme.Danger,
+                Margin = Padding.Empty,
+            });
+        }
+        else
+        {
+            foreach (string name in platforms)
+                _pnlPlatforms.Controls.Add(new CheckBox { Text = name, AutoSize = true, Margin = new Padding(0, 0, 24, 0) });
+        }
 
         // Label coi "&" là ký tự phím tắt và ẩn nó đi (VD "Ideas & Discovery" → "Ideas  Discovery") — tắt để hiện đúng.
         lblHeader.UseMnemonic = false;
@@ -32,7 +45,7 @@ public partial class CreateContentDialog : Form
         _cboPriority.SelectedIndex = 1; // Medium
 
         _cboSprint.Items.AddRange(ContentService.AvailableSprints);
-        _cboSprint.SelectedIndex = Array.IndexOf(ContentService.AvailableSprints, "Sprint 25");
+        _cboSprint.SelectedIndex = Array.IndexOf(ContentService.AvailableSprints, ContentService.DefaultSprint);
         if (_cboSprint.SelectedIndex < 0) _cboSprint.SelectedIndex = 0;
 
         _cboAssignee.DataSource = _members;

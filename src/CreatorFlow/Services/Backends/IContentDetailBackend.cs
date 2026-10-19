@@ -31,6 +31,15 @@ public interface IContentDetailBackend
 
     List<ActivityItem> GetActivity(long contentId);
 
+    ContentReferenceList GetReferences(long contentId);
+
+    ContentReference AddReference(long contentId, string displayName, string resourceUrl);
+
+    void DeleteReference(long contentId, long referenceId);
+
+    ContentReferenceList SaveReferenceChanges(long contentId, IReadOnlyList<ContentReferenceAddition> additions,
+        IReadOnlyList<long> deletedReferenceIds);
+
     void ChangeStatus(long contentId, ContentStatus next);
 
     void SubmitForReview(long contentId);

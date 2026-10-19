@@ -12,7 +12,7 @@ partial class IdeaBankControl
     private TableLayoutPanel titleLayout;
     private Label lblPageTitle;
     private Label lblSubtitle;
-    private RoundedButton btnNew;
+    private ProjectActionButton btnNew;
     private TableLayoutPanel filterLayout;
     private IdeaCardPanel searchSurface;
     private TableLayoutPanel searchLayout;
@@ -22,7 +22,7 @@ partial class IdeaBankControl
     private ComboBox cboStatus;
     private IdeaCardPanel tagSurface;
     private ComboBox cboTag;
-    private RoundedButton btnClearFilter;
+    private ProjectActionButton btnClearFilter;
     private IdeaCardPanel listSurface;
     private BufferedListView listViewIdeas;
     private ColumnHeader colCode;
@@ -41,10 +41,10 @@ partial class IdeaBankControl
     private Panel footerPanel;
     private Label lblCount;
     private FlowLayoutPanel footerActions;
-    private RoundedButton btnConvert;
-    private RoundedButton btnEdit;
-    private RoundedButton btnDelete;
-    private RoundedButton btnClose;
+    private ProjectActionButton btnConvert;
+    private ProjectActionButton btnEdit;
+    private ProjectActionButton btnDelete;
+    private ProjectActionButton btnClose;
 
     protected override void Dispose(bool disposing)
     {
@@ -61,7 +61,7 @@ partial class IdeaBankControl
         titleLayout = new TableLayoutPanel();
         lblPageTitle = new Label();
         lblSubtitle = new Label();
-        btnNew = new RoundedButton();
+        btnNew = new ProjectActionButton();
         filterLayout = new TableLayoutPanel();
         searchSurface = new IdeaCardPanel();
         searchLayout = new TableLayoutPanel();
@@ -71,7 +71,7 @@ partial class IdeaBankControl
         cboStatus = new ComboBox();
         tagSurface = new IdeaCardPanel();
         cboTag = new ComboBox();
-        btnClearFilter = new RoundedButton();
+        btnClearFilter = new ProjectActionButton();
         listSurface = new IdeaCardPanel();
         listViewIdeas = new BufferedListView();
         colCode = new ColumnHeader();
@@ -90,10 +90,10 @@ partial class IdeaBankControl
         footerPanel = new Panel();
         lblCount = new Label();
         footerActions = new FlowLayoutPanel();
-        btnConvert = new RoundedButton();
-        btnEdit = new RoundedButton();
-        btnDelete = new RoundedButton();
-        btnClose = new RoundedButton();
+        btnConvert = new ProjectActionButton();
+        btnEdit = new ProjectActionButton();
+        btnDelete = new ProjectActionButton();
+        btnClose = new ProjectActionButton();
         pageLayout.SuspendLayout();
         headerLayout.SuspendLayout();
         titleLayout.SuspendLayout();
@@ -243,9 +243,7 @@ partial class IdeaBankControl
         lblSearchIcon.Dock = DockStyle.Fill;
         lblSearchIcon.Margin = Padding.Empty;
         lblSearchIcon.Name = "lblSearchIcon";
-        lblSearchIcon.Paint += (_, e) => UIIcons.Search(e.Graphics,
-            new Rectangle((lblSearchIcon.Width - 17) / 2, (lblSearchIcon.Height - 17) / 2, 17, 17),
-            Color.FromArgb(148, 163, 184));
+        lblSearchIcon.Paint += lblSearchIcon_Paint;
         //
         // txtSearch
         //
@@ -353,7 +351,7 @@ partial class IdeaBankControl
         listViewIdeas.DrawSubItem += listViewIdeas_DrawSubItem;
         listViewIdeas.SelectedIndexChanged += listViewIdeas_SelectedIndexChanged;
         listViewIdeas.DoubleClick += listViewIdeas_DoubleClick;
-        listViewIdeas.SizeChanged += (_, _) => ResizeIdeaColumns();
+        listViewIdeas.SizeChanged += listViewIdeas_SizeChanged;
         //
         // columns
         //
@@ -445,11 +443,7 @@ partial class IdeaBankControl
         footerPanel.Padding = new Padding(16, 0, 16, 0);
         footerPanel.Name = "footerPanel";
         footerPanel.TabIndex = 4;
-        footerPanel.Paint += (_, e) =>
-        {
-            using var pen = new Pen(Color.FromArgb(238, 240, 243));
-            e.Graphics.DrawLine(pen, 0, 0, footerPanel.Width, 0);
-        };
+        footerPanel.Paint += footerPanel_Paint;
         //
         // lblCount
         //

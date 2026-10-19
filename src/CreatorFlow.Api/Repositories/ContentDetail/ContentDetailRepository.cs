@@ -1,5 +1,6 @@
 using CreatorFlow.Api.Models.ContentDetail;
 using CreatorFlow.Api.Repositories.Tasks;
+using CreatorFlow.Contracts.ContentDetail;
 using CreatorFlow.Data;
 using Npgsql;
 using NpgsqlTypes;
@@ -7,9 +8,9 @@ using NpgsqlTypes;
 namespace CreatorFlow.Api.Repositories.ContentDetail;
 
 /// <summary>
-/// Cài đặt Npgsql cho IContentDetailRepository, viết theo database/01_schema.sql
+/// Cài đặt Npgsql cho IContentDetailRepository, viết theo database/01_schema.sql và các migration.
 /// (cột snake_case, enum UPPER_SNAKE_CASE). Deadline / ngày dự kiến đăng lưu 00:00 UTC để đọc lại không lệch ngày.
-/// Sprint / thời lượng dự kiến chưa có cột trong schema nên chưa được lưu.
+/// Thời lượng dự kiến chưa có cột trong schema nên chưa được lưu.
 /// </summary>
 public sealed class ContentDetailRepository(IDbConnectionFactory connectionFactory) : IContentDetailRepository
 {
@@ -19,7 +20,8 @@ public sealed class ContentDetailRepository(IDbConnectionFactory connectionFacto
             SELECT c.content_id, c.project_id, c.title, COALESCE(c.description, ''), COALESCE(c.content_type, ''),
                    c.status::text, c.priority::text, c.deadline, c.planned_publish_at, c.created_by,
                    ARRAY(SELECT p.name FROM content_platforms cp JOIN platforms p ON p.platform_id = cp.platform_id
-                         WHERE cp.content_id = c.content_id ORDER BY p.name)::text[] AS platforms
+                         WHERE cp.content_id = c.content_id ORDER BY p.name)::text[] AS platforms,
+                   COALESCE(to_jsonb(c)->>'sprint', 'Sprint 25') AS sprint
             FROM contents c
             WHERE c.content_id = @content_id;
             """;
@@ -41,7 +43,8 @@ public sealed class ContentDetailRepository(IDbConnectionFactory connectionFacto
             reader.IsDBNull(7) ? null : ToDate(reader.GetDateTime(7)),
             reader.IsDBNull(8) ? null : ToDate(reader.GetDateTime(8)),
             reader.GetInt64(9),
-            reader.GetFieldValue<string[]>(10));
+            reader.GetFieldValue<string[]>(10),
+            reader.GetString(11));
     }
 
     public async Task<IReadOnlyList<string>> GetActivePlatformNamesAsync(CancellationToken cancellationToken = default)
@@ -82,9 +85,9 @@ public sealed class ContentDetailRepository(IDbConnectionFactory connectionFacto
 
         long contentId;
         await using (var insert = new NpgsqlCommand("""
-            INSERT INTO contents (project_id, title, description, content_type, priority, status, deadline, planned_publish_at, created_by)
+            INSERT INTO contents (project_id, title, description, content_type, priority, status, deadline, planned_publish_at, created_by, sprint)
             VALUES (@project_id, @title, @description, @content_type, @priority::content_priority, @status::content_status,
-                    @deadline, @planned_publish_at, @created_by)
+                    @deadline, @planned_publish_at, @created_by, @sprint)
             RETURNING content_id;
             """, connection, transaction))
         {
@@ -97,6 +100,7 @@ public sealed class ContentDetailRepository(IDbConnectionFactory connectionFacto
             insert.Parameters.AddWithValue("deadline", NpgsqlDbType.TimestampTz, ToDb(d.Deadline));
             insert.Parameters.AddWithValue("planned_publish_at", NpgsqlDbType.TimestampTz, ToDb(d.PlannedPublishAt));
             insert.Parameters.AddWithValue("created_by", NpgsqlDbType.Bigint, content.CreatedBy);
+            insert.Parameters.AddWithValue("sprint", NpgsqlDbType.Varchar, d.Sprint);
             contentId = (long)(await insert.ExecuteScalarAsync(cancellationToken))!;
         }
 
@@ -137,7 +141,7 @@ public sealed class ContentDetailRepository(IDbConnectionFactory connectionFacto
             UPDATE contents
             SET title = @title, description = @description, content_type = @content_type,
                 priority = @priority::content_priority, deadline = @deadline,
-                planned_publish_at = @planned_publish_at, updated_at = CURRENT_TIMESTAMP
+                planned_publish_at = @planned_publish_at, sprint = @sprint, updated_at = CURRENT_TIMESTAMP
             WHERE content_id = @content_id;
             """, connection, transaction))
         {
@@ -147,6 +151,7 @@ public sealed class ContentDetailRepository(IDbConnectionFactory connectionFacto
             command.Parameters.AddWithValue("priority", NpgsqlDbType.Text, update.PriorityDb);
             command.Parameters.AddWithValue("deadline", NpgsqlDbType.TimestampTz, ToDb(update.Deadline));
             command.Parameters.AddWithValue("planned_publish_at", NpgsqlDbType.TimestampTz, ToDb(update.PlannedPublishAt));
+            command.Parameters.AddWithValue("sprint", NpgsqlDbType.Varchar, update.Sprint);
             command.Parameters.AddWithValue("content_id", NpgsqlDbType.Bigint, contentId);
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
@@ -219,7 +224,7 @@ public sealed class ContentDetailRepository(IDbConnectionFactory connectionFacto
 
     public async Task<IReadOnlyList<ActivityRecord>> GetActivityAsync(long contentId, CancellationToken cancellationToken = default)
     {
-        var items = new List<ActivityRecord>();
+        var entries = new List<ActivityItemResponse>();
         await using NpgsqlConnection connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
 
         await using (var history = new NpgsqlCommand("""
@@ -233,12 +238,16 @@ public sealed class ContentDetailRepository(IDbConnectionFactory connectionFacto
             await using NpgsqlDataReader reader = await history.ExecuteReaderAsync(cancellationToken);
             while (await reader.ReadAsync(cancellationToken))
             {
-                string to = reader.GetString(3);
-                items.Add(new ActivityRecord(
+                string? from = reader.IsDBNull(2) ? null : TaskRepository.ToPascal(reader.GetString(2));
+                string to = TaskRepository.ToPascal(reader.GetString(3));
+                entries.Add(new ActivityItemResponse(
                     reader.GetDateTime(0),
                     reader.GetString(1),
-                    reader.IsDBNull(2) ? to : $"{reader.GetString(2)} → {to}",
-                    reader.IsDBNull(4) ? null : reader.GetString(4)));
+                    from is null ? to : $"{from} → {to}",
+                    reader.IsDBNull(4) ? null : reader.GetString(4),
+                    ActivityKinds.StatusChange,
+                    from,
+                    to));
             }
         }
 
@@ -256,21 +265,131 @@ public sealed class ContentDetailRepository(IDbConnectionFactory connectionFacto
             while (await reader.ReadAsync(cancellationToken))
             {
                 int reviewNo = reader.GetInt32(2);
-                string status = reader.GetString(3);
-                items.Add(new ActivityRecord(reader.GetDateTime(0), reader.GetString(1), $"submitted Review #{reviewNo}", null));
+                string status = TaskRepository.ToPascal(reader.GetString(3));
+                entries.Add(new ActivityItemResponse(
+                    reader.GetDateTime(0),
+                    reader.GetString(1),
+                    $"submitted Review #{reviewNo}",
+                    null,
+                    ActivityKinds.ReviewSubmitted,
+                    "Editing",
+                    "Review",
+                    reviewNo,
+                    "Pending"));
 
                 if (!reader.IsDBNull(4))
                 {
-                    items.Add(new ActivityRecord(
+                    bool approved = status == "Approved";
+                    entries.Add(new ActivityItemResponse(
                         reader.GetDateTime(4),
                         reader.GetString(5),
-                        status == "APPROVED" ? $"approved Review #{reviewNo}" : $"rejected Review #{reviewNo}",
-                        reader.IsDBNull(6) ? null : reader.GetString(6)));
+                        approved ? $"approved Review #{reviewNo}" : $"rejected Review #{reviewNo}",
+                        reader.IsDBNull(6) ? null : reader.GetString(6),
+                        ActivityKinds.ReviewDecided,
+                        "Review",
+                        approved ? "Ready" : "Editing",
+                        reviewNo,
+                        status));
                 }
             }
         }
 
-        return items.OrderBy(i => i.Timestamp).ToList();
+        return ActivityTimeline.Compose(entries)
+            .Select(i => new ActivityRecord(i.Timestamp, i.ActorName, i.Description, i.Feedback,
+                i.Kind, i.FromStatus, i.ToStatus, i.ReviewNo, i.ReviewStatus))
+            .ToList();
+    }
+
+    public async Task<IReadOnlyList<ContentReferenceRecord>> GetReferencesAsync(long contentId, CancellationToken cancellationToken = default)
+    {
+        const string sql = """
+            SELECT attachment_id, content_id, display_name, resource_url, added_by, created_at
+            FROM content_attachments
+            WHERE content_id = @content_id AND attachment_type = 'LINK'
+            ORDER BY created_at DESC, attachment_id DESC;
+            """;
+
+        await using NpgsqlConnection connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
+        await using var command = new NpgsqlCommand(sql, connection);
+        command.Parameters.AddWithValue("content_id", NpgsqlDbType.Bigint, contentId);
+        await using NpgsqlDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+        var references = new List<ContentReferenceRecord>();
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            references.Add(new ContentReferenceRecord(
+                reader.GetInt64(0), reader.GetInt64(1), reader.GetString(2), reader.GetString(3),
+                reader.IsDBNull(4) ? null : reader.GetInt64(4), reader.GetDateTime(5)));
+        }
+        return references;
+    }
+
+    public async Task<ContentReferenceRecord> AddReferenceAsync(long contentId, string displayName, string resourceUrl,
+        long addedBy, CancellationToken cancellationToken = default)
+    {
+        const string sql = """
+            INSERT INTO content_attachments (content_id, display_name, attachment_type, resource_url, added_by)
+            VALUES (@content_id, @display_name, 'LINK', @resource_url, @added_by)
+            RETURNING attachment_id, content_id, display_name, resource_url, added_by, created_at;
+            """;
+
+        await using NpgsqlConnection connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
+        await using var command = new NpgsqlCommand(sql, connection);
+        command.Parameters.AddWithValue("content_id", NpgsqlDbType.Bigint, contentId);
+        command.Parameters.AddWithValue("display_name", NpgsqlDbType.Varchar, displayName);
+        command.Parameters.AddWithValue("resource_url", NpgsqlDbType.Text, resourceUrl);
+        command.Parameters.AddWithValue("added_by", NpgsqlDbType.Bigint, addedBy);
+        await using NpgsqlDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+        await reader.ReadAsync(cancellationToken);
+        return new ContentReferenceRecord(
+            reader.GetInt64(0), reader.GetInt64(1), reader.GetString(2), reader.GetString(3),
+            reader.IsDBNull(4) ? null : reader.GetInt64(4), reader.GetDateTime(5));
+    }
+
+    public async Task<bool> DeleteReferenceAsync(long contentId, long referenceId, CancellationToken cancellationToken = default)
+    {
+        const string sql = "DELETE FROM content_attachments WHERE content_id = @content_id AND attachment_id = @reference_id AND attachment_type = 'LINK';";
+        await using NpgsqlConnection connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
+        await using var command = new NpgsqlCommand(sql, connection);
+        command.Parameters.AddWithValue("content_id", NpgsqlDbType.Bigint, contentId);
+        command.Parameters.AddWithValue("reference_id", NpgsqlDbType.Bigint, referenceId);
+        return await command.ExecuteNonQueryAsync(cancellationToken) > 0;
+    }
+
+    public async Task<bool> ApplyReferenceChangesAsync(long contentId, IReadOnlyList<NewContentReference> additions,
+        IReadOnlyList<long> deletedReferenceIds, long addedBy, CancellationToken cancellationToken = default)
+    {
+        await using NpgsqlConnection connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
+        await using NpgsqlTransaction transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        foreach (long referenceId in deletedReferenceIds)
+        {
+            await using var delete = new NpgsqlCommand(
+                "DELETE FROM content_attachments WHERE content_id = @content_id AND attachment_id = @reference_id AND attachment_type = 'LINK';",
+                connection, transaction);
+            delete.Parameters.AddWithValue("content_id", NpgsqlDbType.Bigint, contentId);
+            delete.Parameters.AddWithValue("reference_id", NpgsqlDbType.Bigint, referenceId);
+            if (await delete.ExecuteNonQueryAsync(cancellationToken) == 0)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                return false;
+            }
+        }
+
+        foreach (NewContentReference addition in additions)
+        {
+            await using var insert = new NpgsqlCommand("""
+                INSERT INTO content_attachments (content_id, display_name, attachment_type, resource_url, added_by)
+                VALUES (@content_id, @display_name, 'LINK', @resource_url, @added_by);
+                """, connection, transaction);
+            insert.Parameters.AddWithValue("content_id", NpgsqlDbType.Bigint, contentId);
+            insert.Parameters.AddWithValue("display_name", NpgsqlDbType.Varchar, addition.DisplayName);
+            insert.Parameters.AddWithValue("resource_url", NpgsqlDbType.Text, addition.ResourceUrl);
+            insert.Parameters.AddWithValue("added_by", NpgsqlDbType.Bigint, addedBy);
+            await insert.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+        return true;
     }
 
     private static DateOnly ToDate(DateTime value) => DateOnly.FromDateTime(value.ToUniversalTime());
