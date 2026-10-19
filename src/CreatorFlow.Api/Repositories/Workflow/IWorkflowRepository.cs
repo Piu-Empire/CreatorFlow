@@ -23,4 +23,7 @@ public interface IWorkflowRepository
         CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<StatusHistoryEntry>> GetStatusHistoryAsync(long contentId, CancellationToken cancellationToken = default);
+
+    /// <summary>Review PENDING mới nhất của Content kèm nhãn Content (để gửi thông báo); null nếu không có.</summary>
+    Task<PendingReviewInfo?> GetPendingReviewInfoAsync(long contentId, CancellationToken cancellationToken = default);
 }

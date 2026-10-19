@@ -25,6 +25,13 @@ public sealed class SmtpEmailSender(PasswordResetConfiguration configuration) : 
         return SendMessageAsync(message, cancellationToken);
     }
 
+    public Task SendNotificationAsync(string email, string title, string message,
+        CancellationToken cancellationToken = default)
+    {
+        var mail = CreateMessage(email, $"CreatorFlow · {title}", message);
+        return SendMessageAsync(mail, cancellationToken);
+    }
+
     private async Task SendCodeAsync(string email, string code, bool verification, CancellationToken cancellationToken)
     {
         var message = CreateMessage(email,

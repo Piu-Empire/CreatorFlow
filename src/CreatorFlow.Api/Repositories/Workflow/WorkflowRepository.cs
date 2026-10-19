@@ -213,6 +213,33 @@ public sealed class WorkflowRepository(IDbConnectionFactory connectionFactory) :
 
     // ------------------------------------------------------------------ helpers
 
+    public async Task<PendingReviewInfo?> GetPendingReviewInfoAsync(long contentId, CancellationToken cancellationToken = default)
+    {
+        const string sql = """
+            SELECT r.content_id, c.project_id, 'CNT-' || LPAD(c.content_id::text, 3, '0'), c.title,
+                   r.review_no, r.submitted_by
+            FROM reviews r
+            JOIN contents c ON c.content_id = r.content_id
+            WHERE r.content_id = @content_id AND r.status = 'PENDING'
+            ORDER BY r.review_no DESC
+            LIMIT 1;
+            """;
+
+        await using NpgsqlConnection connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
+        await using var command = new NpgsqlCommand(sql, connection);
+        command.Parameters.AddWithValue("content_id", NpgsqlDbType.Bigint, contentId);
+
+        await using NpgsqlDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken)) return null;
+        return new PendingReviewInfo(
+            reader.GetInt64(0),
+            reader.GetInt64(1),
+            reader.GetString(2),
+            reader.GetString(3),
+            reader.GetInt32(4),
+            reader.GetInt64(5));
+    }
+
     private static async Task InsertHistoryAsync(
         NpgsqlConnection connection, NpgsqlTransaction transaction,
         long contentId, WorkflowContentStatus? from, WorkflowContentStatus to,

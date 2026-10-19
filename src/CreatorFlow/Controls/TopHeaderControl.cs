@@ -28,12 +28,32 @@ public class TopHeaderControl : UserControl, IMessageFilter
     private string _statsText = "";
     private Rectangle _newContentRect;
     private bool _newContentHover;
+    private Rectangle _bellRect;
+    private bool _bellHover;
+    private int _unreadNotificationCount;
+    private bool _notificationsEnabled = true;
     private string _authenticatedPage = "Board";
     private string _projectName = "Chưa chọn dự án";
     private bool _projectActionsEnabled;
 
     public event EventHandler<GlobalSearchQueryEventArgs>? GlobalSearchRequested;
     public event EventHandler<GlobalSearchResultEventArgs>? GlobalSearchResultSelected;
+    public event EventHandler? BellClicked;
+
+    /// <summary>Vùng icon Bell (để neo panel thông báo bên dưới).</summary>
+    public Rectangle BellBounds => _bellRect;
+
+    public void SetUnreadNotificationCount(int count)
+    {
+        _unreadNotificationCount = Math.Max(0, count);
+        Invalidate();
+    }
+
+    public void SetNotificationsEnabled(bool enabled)
+    {
+        _notificationsEnabled = enabled;
+        if (!enabled) { _bellHover = false; Invalidate(); }
+    }
 
     public string GlobalSearchText => _globalSearchBox.Text;
 
@@ -502,11 +522,13 @@ public class TopHeaderControl : UserControl, IMessageFilter
     protected override void OnMouseMove(MouseEventArgs e)
     {
         base.OnMouseMove(e);
-        bool hover = _projectActionsEnabled && _newContentRect.Contains(e.Location);
-        if (hover != _newContentHover)
+        bool newContentHover = _projectActionsEnabled && _newContentRect.Contains(e.Location);
+        bool bellHover = _notificationsEnabled && _bellRect.Contains(e.Location);
+        if (newContentHover != _newContentHover || bellHover != _bellHover)
         {
-            _newContentHover = hover;
-            Cursor = hover ? Cursors.Hand : Cursors.Default;
+            _newContentHover = newContentHover;
+            _bellHover = bellHover;
+            Cursor = (newContentHover || bellHover) ? Cursors.Hand : Cursors.Default;
             Invalidate();
         }
     }
@@ -514,14 +536,19 @@ public class TopHeaderControl : UserControl, IMessageFilter
     protected override void OnMouseLeave(EventArgs e)
     {
         base.OnMouseLeave(e);
-        if (_newContentHover) { _newContentHover = false; Cursor = Cursors.Default; Invalidate(); }
+        if (_newContentHover || _bellHover) { _newContentHover = false; _bellHover = false; Cursor = Cursors.Default; Invalidate(); }
     }
 
     protected override void OnMouseClick(MouseEventArgs e)
     {
         base.OnMouseClick(e);
-        if (e.Button == MouseButtons.Left && _projectActionsEnabled && _newContentRect.Contains(e.Location))
-            NewContentClicked?.Invoke(this, EventArgs.Empty);
+        if (e.Button == MouseButtons.Left)
+        {
+            if (_projectActionsEnabled && _newContentRect.Contains(e.Location))
+                NewContentClicked?.Invoke(this, EventArgs.Empty);
+            else if (_bellRect.Contains(e.Location))
+                BellClicked?.Invoke(this, EventArgs.Empty);
+        }
     }
 
     protected override void OnPaint(PaintEventArgs e)
@@ -541,8 +568,22 @@ public class TopHeaderControl : UserControl, IMessageFilter
 
         // Account identity belongs to the sidebar. Keep the shared toolbar in both shell modes.
         int right = Width - PadX;
-        var bellRect = new Rectangle(right - 26, cy - 13, 26, 26);
-        UIIcons.Bell(g, bellRect, UITheme.Neutral600, 1.8f);
+        _bellRect = new Rectangle(right - 26, cy - 13, 26, 26);
+        UIIcons.Bell(g, _bellRect, _notificationsEnabled ? UITheme.Neutral600 : UITheme.Neutral400, 1.8f);
+        if (_unreadNotificationCount > 0)
+        {
+            int badgeD = 12;
+            var badgeRect = new Rectangle(_bellRect.Right - badgeD + 2, _bellRect.Top - 2, badgeD, badgeD);
+            using (var badgeBrush = new SolidBrush(UITheme.Danger))
+                g.FillEllipse(badgeBrush, badgeRect);
+            string txt = _unreadNotificationCount > 9 ? "9+" : _unreadNotificationCount.ToString();
+            using (var badgeFont = new Font("Segoe UI", 7F, FontStyle.Bold))
+            using (var badgeTextBrush = new SolidBrush(UITheme.White))
+            {
+                var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+                g.DrawString(txt, badgeFont, badgeTextBrush, badgeRect, sf);
+            }
+        }
         right -= 26 + 20;
         // Nút + New Content
         const int btnW = 156, btnH = 42;

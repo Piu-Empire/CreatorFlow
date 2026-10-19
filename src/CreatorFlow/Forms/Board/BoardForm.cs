@@ -42,6 +42,8 @@ public partial class BoardForm : Form, IMessageFilter
     private readonly IContentDetailBackend? _detailBackend;
     private readonly IAssignmentBackend? _assignmentBackend;
     private readonly IReviewQueueBackend? _reviewQueueBackend;
+    private readonly INotificationBackend? _notificationBackend;
+    private NotificationPanelControl? _notificationPanel;
     private long? _reopenContentId; // chế độ API: mở lại drawer của thẻ này sau khi Board tải lại (sau khi lưu/đổi trạng thái/giao việc)
     private readonly IMyTaskBackend? _taskBackend;
     private readonly AuthApiFacade? _auth;
@@ -98,7 +100,8 @@ public partial class BoardForm : Form, IMessageFilter
         IBoardBackend? boardBackend = null,
         IContentDetailBackend? detailBackend = null,
         IAssignmentBackend? assignmentBackend = null,
-        IReviewQueueBackend? reviewQueueBackend = null)
+        IReviewQueueBackend? reviewQueueBackend = null,
+        INotificationBackend? notificationBackend = null)
     {
         InitializeComponent();
         _workflowService = workflowService;
@@ -118,6 +121,9 @@ public partial class BoardForm : Form, IMessageFilter
         _detailBackend = detailBackend;
         _assignmentBackend = assignmentBackend;
         _reviewQueueBackend = reviewQueueBackend;
+        _notificationBackend = notificationBackend;
+        _topHeaderControl.BellClicked += async (_, _) => await OnBellClickedAsync();
+        _topHeaderControl.SetNotificationsEnabled(_notificationBackend is not null);
         InitializeProjects(projects);
         if (auth is not null)
         {
@@ -814,6 +820,93 @@ public partial class BoardForm : Form, IMessageFilter
         ReloadBoard();
     }
 
+    private async Task OnBellClickedAsync()
+    {
+        if (_notificationBackend is null)
+        {
+            _toast.ShowToast(this, "Notifications need a CreatorFlow API connection.");
+            return;
+        }
+        try
+        {
+            var result = _notificationBackend.GetNotifications(unreadOnly: false);
+            _topHeaderControl.SetUnreadNotificationCount(result.UnreadCount);
+            if (!result.SchemaReady)
+                _toast.ShowToast(this, result.SchemaMessage ?? "Notifications require database migration 09_notifications.sql.");
+
+            _notificationPanel ??= new NotificationPanelControl();
+            _notificationPanel.SetItems(result.Items, result.SchemaReady, result.SchemaMessage);
+            _notificationPanel.ItemClicked -= NotificationPanel_ItemClicked;
+            _notificationPanel.ItemClicked += NotificationPanel_ItemClicked;
+            _notificationPanel.MarkAllRequested -= NotificationPanel_MarkAllRequested;
+            _notificationPanel.MarkAllRequested += NotificationPanel_MarkAllRequested;
+
+            // Neo panel dưới icon Bell.
+            Point bellScreen = _topHeaderControl.PointToScreen(_topHeaderControl.BellBounds.Location);
+            Point panelLocation = PointToClient(new Point(bellScreen.X - 40, bellScreen.Y + _topHeaderControl.BellBounds.Height + 4));
+            if (panelLocation.X + _notificationPanel.Width > ClientSize.Width)
+                panelLocation.X = ClientSize.Width - _notificationPanel.Width - 8;
+            if (panelLocation.X < 8) panelLocation.X = 8;
+            _notificationPanel.Location = panelLocation;
+
+            if (!_notificationPanel.Visible || _notificationPanel.Parent != this)
+            {
+                if (_notificationPanel.Parent != this) Controls.Add(_notificationPanel);
+                _notificationPanel.BringToFront();
+                _notificationPanel.Visible = true;
+            }
+            else
+            {
+                _notificationPanel.Visible = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            string message = ex.Message;
+            if (message.Contains("404") || message.Contains("Not Found", StringComparison.OrdinalIgnoreCase))
+                message = "API chua ho tro thong bao (can deploy phien ban moi cua CreatorFlow.Api).";
+            _toast.ShowToast(this, message);
+        }
+    }
+
+    private void NotificationPanel_ItemClicked(object? sender, long notificationId)
+    {
+        if (_notificationBackend is null) return;
+        try
+        {
+            _notificationBackend.MarkRead(notificationId);
+            var result = _notificationBackend.GetNotifications(unreadOnly: false);
+            _notificationPanel?.SetItems(result.Items);
+            _topHeaderControl.SetUnreadNotificationCount(result.UnreadCount);
+        }
+        catch (Exception ex)
+        {
+            string message = ex.Message;
+            if (message.Contains("404") || message.Contains("Not Found", StringComparison.OrdinalIgnoreCase))
+                message = "API chua ho tro thong bao (can deploy phien ban moi cua CreatorFlow.Api).";
+            _toast.ShowToast(this, message);
+        }
+    }
+
+    private void NotificationPanel_MarkAllRequested(object? sender, EventArgs e)
+    {
+        if (_notificationBackend is null) return;
+        try
+        {
+            _notificationBackend.MarkAllRead();
+            var result = _notificationBackend.GetNotifications(unreadOnly: false);
+            _notificationPanel?.SetItems(result.Items);
+            _topHeaderControl.SetUnreadNotificationCount(result.UnreadCount);
+        }
+        catch (Exception ex)
+        {
+            string message = ex.Message;
+            if (message.Contains("404") || message.Contains("Not Found", StringComparison.OrdinalIgnoreCase))
+                message = "API chua ho tro thong bao (can deploy phien ban moi cua CreatorFlow.Api).";
+            _toast.ShowToast(this, message);
+        }
+    }
+
     private async Task OpenProfileAsync()
     {
         if (_auth is null || !_auth.Session.IsAuthenticated || _profile is not null || !CanLeaveProjectPage()) return;
@@ -983,6 +1076,16 @@ public partial class BoardForm : Form, IMessageFilter
     // ==========================================================
     public bool PreFilterMessage(ref Message m)
     {
+        const int WM_LBUTTONDOWN = 0x0201;
+        if (m.Msg == WM_LBUTTONDOWN && _notificationPanel is { Visible: true })
+        {
+            var cursor = Cursor.Position;
+            var panelRect = new Rectangle(_notificationPanel.PointToScreen(Point.Empty), _notificationPanel.Size);
+            var bellRect = new Rectangle(_topHeaderControl.PointToScreen(_topHeaderControl.BellBounds.Location), _topHeaderControl.BellBounds.Size);
+            if (!panelRect.Contains(cursor) && !bellRect.Contains(cursor))
+                _notificationPanel.Visible = false;
+        }
+
         if (m.Msg != WM_MOUSEWHEEL || !Visible || !ReferenceEquals(ActiveForm, this))
             return false;
 
