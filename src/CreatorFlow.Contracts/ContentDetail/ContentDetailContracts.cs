@@ -88,3 +88,25 @@ public sealed record ActivityItemResponse(
     string? ReviewStatus = null);
 
 public sealed record ActivityResponse(long ContentId, IReadOnlyList<ActivityItemResponse> Items);
+
+/// <summary>Một liên kết tham khảo gắn với Content. URL không được server truy cập để kiểm tra.</summary>
+public sealed record ContentReferenceResponse(
+    long ReferenceId,
+    long ContentId,
+    string DisplayName,
+    string ResourceUrl,
+    long? AddedBy,
+    DateTime CreatedAt);
+
+public sealed record ContentReferencesResponse(
+    long ContentId,
+    bool CanManage,
+    IReadOnlyList<ContentReferenceResponse> References);
+
+public sealed record CreateContentReferenceRequest(string DisplayName, string ResourceUrl);
+
+public sealed record DeleteContentReferenceResponse(long ContentId, long ReferenceId);
+
+public sealed record SaveContentReferenceChangesRequest(
+    IReadOnlyList<CreateContentReferenceRequest>? Additions,
+    IReadOnlyList<long>? DeletedReferenceIds);
