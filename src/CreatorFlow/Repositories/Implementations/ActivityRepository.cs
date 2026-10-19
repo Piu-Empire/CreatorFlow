@@ -1,5 +1,7 @@
-﻿using CreatorFlow.Data;
+﻿using CreatorFlow.Contracts.ContentDetail;
+using CreatorFlow.Data;
 using CreatorFlow.Models;
+using CreatorFlow.Models.Enums;
 using CreatorFlow.Repositories.Interfaces;
 
 namespace CreatorFlow.Repositories.Implementations;
@@ -7,8 +9,7 @@ namespace CreatorFlow.Repositories.Implementations;
 /// <summary>
 /// Cài đặt Npgsql cho IActivityRepository (mục 6 UX spec).
 /// Gộp 2 nguồn: ContentStatusHistory (đổi trạng thái) và Reviews (submit/approve/reject/feedback),
-/// mỗi Review PENDING/APPROVED/REJECTED sinh ra 1-2 dòng Activity (lúc submit, và lúc quyết định
-/// nếu đã có DecidedAt), rồi sắp chung theo Timestamp tăng dần.
+/// rồi dùng chung <see cref="ActivityTimeline.Compose"/> với API để không lệch cách hiển thị.
 /// </summary>
 public class ActivityRepository : IActivityRepository
 {
@@ -18,13 +19,27 @@ public class ActivityRepository : IActivityRepository
 
     public List<ActivityItem> GetActivity(long contentId)
     {
-        var items = new List<ActivityItem>();
-        items.AddRange(GetStatusHistoryItems(contentId));
-        items.AddRange(GetReviewItems(contentId));
-        return items.OrderBy(i => i.Timestamp).ToList();
+        var entries = new List<ActivityItemResponse>();
+        entries.AddRange(GetStatusHistoryEntries(contentId));
+        entries.AddRange(GetReviewEntries(contentId));
+
+        return ActivityTimeline.Compose(entries)
+            .Select(i => new ActivityItem
+            {
+                Timestamp = i.Timestamp,
+                ActorName = i.ActorName,
+                Description = i.Description,
+                Feedback = i.Feedback,
+                Kind = i.Kind,
+                FromStatus = i.FromStatus,
+                ToStatus = i.ToStatus,
+                ReviewNo = i.ReviewNo,
+                ReviewStatus = i.ReviewStatus,
+            })
+            .ToList();
     }
 
-    private List<ActivityItem> GetStatusHistoryItems(long contentId)
+    private List<ActivityItemResponse> GetStatusHistoryEntries(long contentId)
     {
         const string sql = @"
 SELECT h.changedat, u.displayname, h.fromstatus, h.tostatus, h.note
@@ -35,23 +50,26 @@ WHERE h.contentid = @id";
         using var cmd = _session.CreateCommand(sql);
         cmd.Parameters.AddWithValue("id", contentId);
 
-        var items = new List<ActivityItem>();
+        var entries = new List<ActivityItemResponse>();
         using var reader = cmd.ExecuteReader();
         while (reader.Read())
         {
-            items.Add(new ActivityItem
-            {
-                Timestamp = reader.GetDateTime(0),
-                ActorName = reader.GetString(1),
-                Description = $"{reader.GetString(2)} → {reader.GetString(3)}",
-                Feedback = reader.IsDBNull(4) ? null : reader.GetString(4),
-            });
+            string? from = reader.IsDBNull(2) ? null : ToStatusName(reader.GetString(2));
+            string to = ToStatusName(reader.GetString(3));
+            entries.Add(new ActivityItemResponse(
+                reader.GetDateTime(0),
+                reader.GetString(1),
+                from is null ? to : $"{from} → {to}",
+                reader.IsDBNull(4) ? null : reader.GetString(4),
+                ActivityKinds.StatusChange,
+                from,
+                to));
         }
 
-        return items;
+        return entries;
     }
 
-    private List<ActivityItem> GetReviewItems(long contentId)
+    private List<ActivityItemResponse> GetReviewEntries(long contentId)
     {
         const string sql = @"
 SELECT r.submittedat, su.displayname, r.reviewno, r.status, r.decidedat, ru.displayname, r.feedback
@@ -63,32 +81,52 @@ WHERE r.contentid = @id";
         using var cmd = _session.CreateCommand(sql);
         cmd.Parameters.AddWithValue("id", contentId);
 
-        var items = new List<ActivityItem>();
+        var entries = new List<ActivityItemResponse>();
         using var reader = cmd.ExecuteReader();
         while (reader.Read())
         {
-            var reviewNo = reader.GetInt32(2);
-            var status = reader.GetString(3);
+            int reviewNo = reader.GetInt32(2);
+            string status = ToReviewStatusName(reader.GetString(3));
 
-            items.Add(new ActivityItem
-            {
-                Timestamp = reader.GetDateTime(0),
-                ActorName = reader.GetString(1),
-                Description = $"submitted Review #{reviewNo}",
-            });
+            entries.Add(new ActivityItemResponse(
+                reader.GetDateTime(0),
+                reader.GetString(1),
+                $"submitted Review #{reviewNo}",
+                null,
+                ActivityKinds.ReviewSubmitted,
+                ContentStatus.Editing.ToString(),
+                ContentStatus.Review.ToString(),
+                reviewNo,
+                ReviewStatus.Pending.ToString()));
 
             if (!reader.IsDBNull(4))
             {
-                items.Add(new ActivityItem
-                {
-                    Timestamp = reader.GetDateTime(4),
-                    ActorName = reader.IsDBNull(5) ? "" : reader.GetString(5),
-                    Description = status == "Approved" ? $"approved Review #{reviewNo}" : $"rejected Review #{reviewNo}",
-                    Feedback = reader.IsDBNull(6) ? null : reader.GetString(6),
-                });
+                bool approved = status == ReviewStatus.Approved.ToString();
+                entries.Add(new ActivityItemResponse(
+                    reader.GetDateTime(4),
+                    reader.IsDBNull(5) ? "" : reader.GetString(5),
+                    approved ? $"approved Review #{reviewNo}" : $"rejected Review #{reviewNo}",
+                    reader.IsDBNull(6) ? null : reader.GetString(6),
+                    ActivityKinds.ReviewDecided,
+                    ContentStatus.Review.ToString(),
+                    (approved ? ContentStatus.Ready : ContentStatus.Editing).ToString(),
+                    reviewNo,
+                    status));
             }
         }
 
-        return items;
+        return entries;
     }
+
+    /// <summary>"EDITING" → "Editing"; giá trị đã đúng PascalCase thì giữ nguyên.</summary>
+    private static string ToStatusName(string databaseValue) =>
+        Enum.TryParse<ContentStatus>(databaseValue, ignoreCase: true, out var status)
+            ? status.ToString()
+            : databaseValue;
+
+    /// <summary>"APPROVED" → "Approved".</summary>
+    private static string ToReviewStatusName(string databaseValue) =>
+        Enum.TryParse<ReviewStatus>(databaseValue, ignoreCase: true, out var status)
+            ? status.ToString()
+            : databaseValue;
 }

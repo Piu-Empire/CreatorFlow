@@ -41,6 +41,7 @@ public partial class BoardForm : Form, IMessageFilter
     private readonly IBoardBackend? _boardBackend;
     private readonly IContentDetailBackend? _detailBackend;
     private readonly IAssignmentBackend? _assignmentBackend;
+    private readonly IReviewQueueBackend? _reviewQueueBackend;
     private long? _reopenContentId; // chế độ API: mở lại drawer của thẻ này sau khi Board tải lại (sau khi lưu/đổi trạng thái/giao việc)
     private readonly IMyTaskBackend? _taskBackend;
     private readonly AuthApiFacade? _auth;
@@ -96,7 +97,8 @@ public partial class BoardForm : Form, IMessageFilter
         IIdeaBackend? ideaBackend = null,
         IBoardBackend? boardBackend = null,
         IContentDetailBackend? detailBackend = null,
-        IAssignmentBackend? assignmentBackend = null)
+        IAssignmentBackend? assignmentBackend = null,
+        IReviewQueueBackend? reviewQueueBackend = null)
     {
         InitializeComponent();
         _workflowService = workflowService;
@@ -115,6 +117,7 @@ public partial class BoardForm : Form, IMessageFilter
         _boardBackend = boardBackend;
         _detailBackend = detailBackend;
         _assignmentBackend = assignmentBackend;
+        _reviewQueueBackend = reviewQueueBackend;
         InitializeProjects(projects);
         if (auth is not null)
         {
@@ -416,19 +419,104 @@ public partial class BoardForm : Form, IMessageFilter
 
     private void OnMovePrevRequested(object? sender, ContentBoardCard card)
     {
-        _toast.ShowToast(this, "Workflow khong cho phep lui giai doan");
+        // Hoãn sang vòng lặp message kế tiếp: ReloadBoard sẽ dispose chính thẻ vừa bấm.
+        BeginInvoke(new Action(() => TryMovePrev(card)));
+    }
+
+    /// <summary>
+    /// Mũi tên ‹ trên thẻ: chỉ Review mới có bước lùi hợp lệ (từ chối → Editing).
+    /// Các giai đoạn khác workflow không cho lùi nên chỉ báo cho người dùng.
+    /// </summary>
+    private void TryMovePrev(ContentBoardCard card)
+    {
+        if (!HasProjectContext) return;
+
+        if (card.Status != ContentStatus.Review)
+        {
+            _toast.ShowToast(this, "Quy trình không cho phép lùi giai đoạn");
+            return;
+        }
+
+        if (_projects is not null && _detailBackend is null)
+        {
+            _toast.ShowToast(this, "Chuyển trạng thái chưa kết nối API");
+            return;
+        }
+
+        using var dialog = new ReviewDecisionDialog(
+            $"{card.Code} — {card.Title}",
+            "Từ chối sẽ chuyển Content về Editing để Creator sửa lại.");
+
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+        try
+        {
+            if (_projects is not null)
+                _detailBackend!.DecideReview(card.ContentId, dialog.Approved, dialog.Feedback);
+            else if (dialog.Approved)
+                _workflowService.ApproveReview(card.ContentId, CurrentSession.CurrentUserId, dialog.Feedback);
+            else
+                _workflowService.RejectReview(card.ContentId, CurrentSession.CurrentUserId, dialog.Feedback);
+
+            ReloadBoard();
+            _toast.ShowToast(this, "Cap nhat trang thai thanh cong!");
+        }
+        catch (InvalidWorkflowTransitionException ex)
+        {
+            MessageBox.Show(this, ex.Message, "Không thể chuyển trạng thái", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        catch (ContentValidationException ex) // chế độ API: lỗi nghiệp vụ/mạng từ Backend
+        {
+            MessageBox.Show(this, ex.Message, "Không thể chuyển trạng thái", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        catch (UnauthorizedWorkflowActionException ex)
+        {
+            MessageBox.Show(this, ex.Message, "Không đủ quyền", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        catch (InvalidOperationException ex) // chế độ API: 404 endpoint/dữ liệu
+        {
+            MessageBox.Show(this, ex.Message, "Không thể chuyển trạng thái", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
     }
 
     private void TryMoveNext(ContentBoardCard card)
     {
         if (!HasProjectContext) return;
-        if (_projects is not null)
-        {
-            if (_boardBackend is not null) _toast.ShowToast(this, "Chuyển trạng thái chưa kết nối API");
-            return;
-        }
         try
         {
+            // Chế độ API: quyền và luồng trạng thái do Backend kiểm tra, client chỉ gửi yêu cầu.
+            if (_projects is not null)
+            {
+                if (_detailBackend is null)
+                {
+                    _toast.ShowToast(this, "Chuyển trạng thái chưa kết nối API");
+                    return;
+                }
+
+                switch (card.Status)
+                {
+                    case ContentStatus.Editing:
+                        _detailBackend.SubmitForReview(card.ContentId);
+                        break;
+
+                    case ContentStatus.Review:
+                        // Approve/Reject cần quyết định + feedback → mở drawer để xử lý
+                        var reviewCtrl = FindCardControl(card.ContentId);
+                        if (reviewCtrl != null) SelectCard(reviewCtrl);
+                        return;
+
+                    default:
+                        var apiNext = _workflowService.GetNextSimpleStatus(card.Status);
+                        if (!apiNext.HasValue) return;
+                        _detailBackend.ChangeStatus(card.ContentId, apiNext.Value);
+                        break;
+                }
+
+                ReloadBoard();
+                _toast.ShowToast(this, "Cap nhat trang thai thanh cong!");
+                return;
+            }
+
             switch (card.Status)
             {
                 case ContentStatus.Editing:
@@ -455,9 +543,17 @@ public partial class BoardForm : Form, IMessageFilter
         {
             MessageBox.Show(this, ex.Message, "Không thể chuyển trạng thái", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
+        catch (ContentValidationException ex) // chế độ API: lỗi nghiệp vụ/mạng từ Backend
+        {
+            MessageBox.Show(this, ex.Message, "Không thể chuyển trạng thái", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
         catch (UnauthorizedWorkflowActionException ex)
         {
             MessageBox.Show(this, ex.Message, "Không đủ quyền", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        catch (InvalidOperationException ex) // chế độ API: 404 endpoint/dữ liệu
+        {
+            MessageBox.Show(this, ex.Message, "Không thể chuyển trạng thái", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
     }
 
@@ -707,12 +803,13 @@ public partial class BoardForm : Form, IMessageFilter
     private void OpenReviewQueue()
     {
         if (!HasProjectContext) return;
-        if (_projects is not null) { ShowUnavailableModule("Review Queue"); return; }
         CloseProfile();
         CloseAdmin();
         CloseReports();
         CloseCalendar();
-        using var queueForm = new Review.ReviewQueueForm(_reviewQueueRepository, _workflowService);
+        using var queueForm = _reviewQueueBackend is not null
+            ? new Review.ReviewQueueForm(_reviewQueueBackend)
+            : new Review.ReviewQueueForm(_reviewQueueRepository, _workflowService);
         ShowWithActiveMenu("Review Queue", () => queueForm.ShowDialog(this));
         ReloadBoard();
     }

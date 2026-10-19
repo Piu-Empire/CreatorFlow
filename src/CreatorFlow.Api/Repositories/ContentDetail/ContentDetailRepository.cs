@@ -1,5 +1,6 @@
 using CreatorFlow.Api.Models.ContentDetail;
 using CreatorFlow.Api.Repositories.Tasks;
+using CreatorFlow.Contracts.ContentDetail;
 using CreatorFlow.Data;
 using Npgsql;
 using NpgsqlTypes;
@@ -223,7 +224,7 @@ public sealed class ContentDetailRepository(IDbConnectionFactory connectionFacto
 
     public async Task<IReadOnlyList<ActivityRecord>> GetActivityAsync(long contentId, CancellationToken cancellationToken = default)
     {
-        var items = new List<ActivityRecord>();
+        var entries = new List<ActivityItemResponse>();
         await using NpgsqlConnection connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
 
         await using (var history = new NpgsqlCommand("""
@@ -237,12 +238,16 @@ public sealed class ContentDetailRepository(IDbConnectionFactory connectionFacto
             await using NpgsqlDataReader reader = await history.ExecuteReaderAsync(cancellationToken);
             while (await reader.ReadAsync(cancellationToken))
             {
-                string to = reader.GetString(3);
-                items.Add(new ActivityRecord(
+                string? from = reader.IsDBNull(2) ? null : TaskRepository.ToPascal(reader.GetString(2));
+                string to = TaskRepository.ToPascal(reader.GetString(3));
+                entries.Add(new ActivityItemResponse(
                     reader.GetDateTime(0),
                     reader.GetString(1),
-                    reader.IsDBNull(2) ? to : $"{reader.GetString(2)} → {to}",
-                    reader.IsDBNull(4) ? null : reader.GetString(4)));
+                    from is null ? to : $"{from} → {to}",
+                    reader.IsDBNull(4) ? null : reader.GetString(4),
+                    ActivityKinds.StatusChange,
+                    from,
+                    to));
             }
         }
 
@@ -260,21 +265,39 @@ public sealed class ContentDetailRepository(IDbConnectionFactory connectionFacto
             while (await reader.ReadAsync(cancellationToken))
             {
                 int reviewNo = reader.GetInt32(2);
-                string status = reader.GetString(3);
-                items.Add(new ActivityRecord(reader.GetDateTime(0), reader.GetString(1), $"submitted Review #{reviewNo}", null));
+                string status = TaskRepository.ToPascal(reader.GetString(3));
+                entries.Add(new ActivityItemResponse(
+                    reader.GetDateTime(0),
+                    reader.GetString(1),
+                    $"submitted Review #{reviewNo}",
+                    null,
+                    ActivityKinds.ReviewSubmitted,
+                    "Editing",
+                    "Review",
+                    reviewNo,
+                    "Pending"));
 
                 if (!reader.IsDBNull(4))
                 {
-                    items.Add(new ActivityRecord(
+                    bool approved = status == "Approved";
+                    entries.Add(new ActivityItemResponse(
                         reader.GetDateTime(4),
                         reader.GetString(5),
-                        status == "APPROVED" ? $"approved Review #{reviewNo}" : $"rejected Review #{reviewNo}",
-                        reader.IsDBNull(6) ? null : reader.GetString(6)));
+                        approved ? $"approved Review #{reviewNo}" : $"rejected Review #{reviewNo}",
+                        reader.IsDBNull(6) ? null : reader.GetString(6),
+                        ActivityKinds.ReviewDecided,
+                        "Review",
+                        approved ? "Ready" : "Editing",
+                        reviewNo,
+                        status));
                 }
             }
         }
 
-        return items.OrderBy(i => i.Timestamp).ToList();
+        return ActivityTimeline.Compose(entries)
+            .Select(i => new ActivityRecord(i.Timestamp, i.ActorName, i.Description, i.Feedback,
+                i.Kind, i.FromStatus, i.ToStatus, i.ReviewNo, i.ReviewStatus))
+            .ToList();
     }
 
     private static DateOnly ToDate(DateTime value) => DateOnly.FromDateTime(value.ToUniversalTime());
