@@ -182,6 +182,42 @@ public sealed class ContentDetailServiceTests
     }
 
     [TestMethod]
+    public async Task Create_WithSourceContent_StoresSourceForRepurpose()
+    {
+        var f = new Fixture(OwnerId);
+
+        var result = await f.Service.CreateAsync(ProjectId, New() with { SourceContentId = OwnContent });
+
+        Assert.IsTrue(result.Succeeded);
+        Assert.AreEqual(OwnContent, f.Repo.LastCreated!.SourceContentId);
+        Assert.AreEqual(OwnContent, result.Value!.SourceContentId);
+    }
+
+    [TestMethod]
+    public async Task Create_SourceNotFound_Returns400OnSourceField()
+    {
+        var f = new Fixture(OwnerId);
+
+        var result = await f.Service.CreateAsync(ProjectId, New() with { SourceContentId = 9999 });
+
+        Assert.AreEqual(400, result.Status);
+        Assert.AreEqual("sourceContentId", result.ErrorField);
+        Assert.IsNull(f.Repo.LastCreated);
+    }
+
+    [TestMethod]
+    public async Task Create_SourceFromAnotherProject_Returns400OnSourceField()
+    {
+        var f = new Fixture(OwnerId);
+
+        var result = await f.Service.CreateAsync(ProjectId, New() with { SourceContentId = ForeignContent });
+
+        Assert.AreEqual(400, result.Status);
+        Assert.AreEqual("sourceContentId", result.ErrorField);
+        Assert.IsNull(f.Repo.LastCreated);
+    }
+
+    [TestMethod]
     public async Task Create_InvalidPlanningFields_Returns400WithTheOffendingField()
     {
         var f = new Fixture(OwnerId);

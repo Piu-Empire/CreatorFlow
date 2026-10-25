@@ -5,6 +5,7 @@ using CreatorFlow.Forms.Board;
 using CreatorFlow.Models;
 using CreatorFlow.Repositories.Interfaces;
 using CreatorFlow.Services;
+using CreatorFlow.Services.AI;
 using CreatorFlow.Services.Backends;
 using CreatorFlow.Services.Exceptions;
 using CreatorFlow.Theme;
@@ -25,12 +26,15 @@ public partial class ContentDetailPanel : UserControl
     private IActivityRepository? _activityRepo;
     private IProjectMemberRepository? _memberRepo;
     private ContentService? _contentService;
+    private ScriptService? _scriptService;
+    private IRepurposeAiService? _repurposeAi;           // SCRUM-59: AI đề xuất bản repurpose
     private IContentDetailBackend? _detailBackend;       // chế độ API: chi tiết/sửa/script/activity/workflow chạy qua CreatorFlow.Api
     private IAssignmentBackend? _assignmentBackend;      // chế độ API: giao việc
     private bool _apiPlatformsLoaded;
     private readonly Dictionary<long, ProjectRole?> _roleCache = new(); // chế độ API: 1 lần gọi vai trò cho mỗi lần mở Content (xoá ở đầu LoadContent)
 
     private ContentBoardCard? _current;
+    private Content? _currentDetail; // chi tiết đọc từ DB/API của Content đang mở (có ContentType, SourceContentId...)
     private List<ProjectMemberInfo> _members = new();
     private int _selectedTabIndex = 0; // 0: Overview, 1: Script, 2: Checklist, 3: Activity, 4: References, 5: Metrics
     private bool _isDirty;
@@ -40,6 +44,7 @@ public partial class ContentDetailPanel : UserControl
 
     public event EventHandler? ContentChanged;
     public event EventHandler? CloseRequested;
+    public event EventHandler<ContentRepurposedEventArgs>? ContentRepurposed;
 
     // Khung chính
 
@@ -53,6 +58,10 @@ public partial class ContentDetailPanel : UserControl
 
     // Tab 2: Script
     private string _persistedScript = string.Empty; // script đang lưu trong DB; "Lưu thay đổi" ghi lại đúng bản này để không đụng tới script (script lưu riêng ở tab Script)
+
+    // SCRUM-59: Content gốc nếu Content đang mở là bản repurpose.
+    private long? _sourceContentId;
+    private Label? _lblSourceInfo;
 
     // Tab 3: Checklist
 
@@ -93,6 +102,20 @@ public partial class ContentDetailPanel : UserControl
         _overviewRows.Clear();
         AddOverviewRow(_lblSecTitle, 6);
         AddOverviewRow(_boxTitle, 20);
+
+        _lblSourceInfo = new Label
+        {
+            Font = UITheme.FontLabelBold,
+            ForeColor = UITheme.Neutral600,
+            AutoSize = false,
+            Height = 20,
+            BackColor = UITheme.White,
+            UseMnemonic = false,
+            Visible = false,
+            TextAlign = ContentAlignment.MiddleLeft,
+        };
+        AddOverviewRow(_lblSourceInfo, 4);
+
         AddOverviewRow(_lblSecHook, 6);
         AddOverviewRow(_boxHook, 20);
         AddOverviewRow(_boxMeta, 20);
@@ -342,17 +365,19 @@ public partial class ContentDetailPanel : UserControl
 
     // ---------- API công khai ----------
 
-    public void Initialize(WorkflowService workflowService, IActivityRepository activityRepo, IProjectMemberRepository memberRepo, ContentService contentService, ScriptService scriptService, IMetricBackend? metricBackend = null, bool loadLocalPlatforms = true, IContentDetailBackend? detailBackend = null, IAssignmentBackend? assignmentBackend = null)
+    public void Initialize(WorkflowService workflowService, IActivityRepository activityRepo, IProjectMemberRepository memberRepo, ContentService contentService, ScriptService scriptService, IMetricBackend? metricBackend = null, bool loadLocalPlatforms = true, IContentDetailBackend? detailBackend = null, IAssignmentBackend? assignmentBackend = null, IRepurposeAiService? repurposeAi = null)
     {
         _scriptEditor.Initialize(scriptService, detailBackend);
         _detailBackend = detailBackend;
         _contentReferences.Initialize(detailBackend);
         _assignmentBackend = assignmentBackend;
+        _repurposeAi = repurposeAi;
         _apiPlatformsLoaded = false;
         _workflowService = workflowService;
         _activityRepo = activityRepo;
         _memberRepo = memberRepo;
         _contentService = contentService;
+        _scriptService = scriptService;
         _metricBackend = metricBackend;
 
         _mnuPlatforms.Items.Clear();
@@ -414,6 +439,14 @@ public partial class ContentDetailPanel : UserControl
         _btnPlatforms.Text = (names.Count == 0 ? "Chọn nền tảng" : string.Join(" • ", names)) + "  ▾";
     }
 
+    /// <summary>Hiện/ẩn dòng "Tái sử dụng từ CNT-xxx" ở Overview (SCRUM-59).</summary>
+    private void UpdateSourceInfo()
+    {
+        if (_lblSourceInfo is null) return;
+        _lblSourceInfo.Visible = _sourceContentId.HasValue;
+        _lblSourceInfo.Text = _sourceContentId is long sourceId ? $"Tái sử dụng từ CNT-{sourceId:000}" : string.Empty;
+    }
+
     public void LoadContent(ContentBoardCard card)
     {
         if (_workflowService == null || _activityRepo == null || _memberRepo == null || _contentService == null)
@@ -460,7 +493,10 @@ public partial class ContentDetailPanel : UserControl
         // Script, loại nội dung và ngày dự kiến đăng không nằm trong thẻ Board nên đọc riêng từ DB khi mở Content Detail.
         var detail = TryLoadDetail(card.ContentId);
         _detailLoaded = detail != null;
+        _currentDetail = detail;
         _persistedScript = detail?.Script ?? string.Empty;
+        _sourceContentId = detail?.SourceContentId;
+        UpdateSourceInfo();
         _contentReferences.LoadReferences(card.ContentId);
         _scriptEditor.LoadScript(card.ContentId, CurrentSession.CurrentUserId);
         SelectContentType(detail?.ContentType);
@@ -561,6 +597,9 @@ public partial class ContentDetailPanel : UserControl
 
         _current = null;
         _isDirty = false;
+        _currentDetail = null;
+        _sourceContentId = null;
+        UpdateSourceInfo();
         _scriptEditor.Reset();
         ShowEmptyState();
         return true;
@@ -575,6 +614,9 @@ public partial class ContentDetailPanel : UserControl
         _current = null;
         _isDirty = false;
         _detailLoaded = false;
+        _currentDetail = null;
+        _sourceContentId = null;
+        UpdateSourceInfo();
         _scriptEditor.Reset();
         _metricsLoadedFor = null;
         _metricsHost.Controls.Clear();
@@ -887,6 +929,10 @@ public partial class ContentDetailPanel : UserControl
         if (role is null) return;
         var canReview = role == ProjectRole.Owner || role == ProjectRole.Manager;
 
+        // SCRUM-59: cho phép tạo bản repurpose từ Content đang mở (trừ Archived).
+        if (_repurposeAi is not null && _current.Status != ContentStatus.Archived)
+            AddActionButton("Tái sử dụng (AI)", RoundButtonStyle.Secondary, OnRepurposeClicked);
+
         if (TaskRules.CanAssign(role) && _current.Status is not (ContentStatus.Published or ContentStatus.Archived))
             AddActionButton("Giao việc cho Creator", RoundButtonStyle.Primary, OnAssignClicked);
 
@@ -942,6 +988,45 @@ public partial class ContentDetailPanel : UserControl
             AutoSize = true,
             Padding = new Padding(0, 8, 0, 0),
         });
+    }
+
+    private void OnRepurposeClicked(object? sender, EventArgs e)
+    {
+        if (_current == null || _repurposeAi == null) return;
+        if (_current.Status == ContentStatus.Archived) return;
+
+        bool scriptLoadFailed = false;
+        string sourceScript = string.Empty;
+        try
+        {
+            sourceScript = _detailBackend != null
+                ? _detailBackend.OpenScript(_current.ContentId).Text
+                : _scriptService!.Open(_current.ContentId, CurrentSession.CurrentUserId).Text;
+        }
+        catch (Exception ex) when (ex is ContentValidationException or UnauthorizedWorkflowActionException
+                                       or InvalidOperationException or Npgsql.NpgsqlException or TimeoutException)
+        {
+            scriptLoadFailed = true;
+        }
+
+        List<string> platforms;
+        try
+        {
+            platforms = _detailBackend != null
+                ? _detailBackend.GetAvailablePlatforms()
+                : _contentService!.GetAvailablePlatforms();
+        }
+        catch (Exception ex) when (ex is ContentValidationException or UnauthorizedWorkflowActionException
+                                       or InvalidOperationException or Npgsql.NpgsqlException or TimeoutException)
+        {
+            platforms = new List<string>();
+        }
+
+        using var dialog = new RepurposeDialog(_current, _currentDetail, sourceScript, scriptLoadFailed,
+            platforms, _repurposeAi, _contentService, _detailBackend, CurrentSession.CurrentUserId);
+        Form? owner = FindForm();
+        if (dialog.ShowDialog(owner ?? (IWin32Window)this) == DialogResult.OK)
+            ContentRepurposed?.Invoke(this, new ContentRepurposedEventArgs(dialog.CreatedContentId, _current.ContentId));
     }
 
     private void OnAssignClicked(object? sender, EventArgs e)
@@ -1285,4 +1370,12 @@ public sealed class ContentDetailTabBar : Panel
             }
         }
     }
+}
+
+/// <summary>Thông tin Content vừa được tạo từ AI Repurpose (SCRUM-59).</summary>
+public sealed class ContentRepurposedEventArgs(long derivedContentId, long sourceContentId) : EventArgs
+{
+    public long DerivedContentId { get; } = derivedContentId;
+
+    public long SourceContentId { get; } = sourceContentId;
 }

@@ -21,7 +21,9 @@ public sealed class ContentDetailRepository(IDbConnectionFactory connectionFacto
                    c.status::text, c.priority::text, c.deadline, c.planned_publish_at, c.created_by,
                    ARRAY(SELECT p.name FROM content_platforms cp JOIN platforms p ON p.platform_id = cp.platform_id
                          WHERE cp.content_id = c.content_id ORDER BY p.name)::text[] AS platforms,
-                   COALESCE(to_jsonb(c)->>'sprint', 'Sprint 25') AS sprint
+                   COALESCE(to_jsonb(c)->>'sprint', 'Sprint 25') AS sprint,
+                   (SELECT cr.source_content_id FROM content_relations cr
+                    WHERE cr.derived_content_id = c.content_id LIMIT 1) AS source_content_id
             FROM contents c
             WHERE c.content_id = @content_id;
             """;
@@ -44,7 +46,8 @@ public sealed class ContentDetailRepository(IDbConnectionFactory connectionFacto
             reader.IsDBNull(8) ? null : ToDate(reader.GetDateTime(8)),
             reader.GetInt64(9),
             reader.GetFieldValue<string[]>(10),
-            reader.GetString(11));
+            reader.GetString(11),
+            reader.IsDBNull(12) ? null : reader.GetInt64(12));
     }
 
     public async Task<IReadOnlyList<string>> GetActivePlatformNamesAsync(CancellationToken cancellationToken = default)
@@ -126,6 +129,19 @@ public sealed class ContentDetailRepository(IDbConnectionFactory connectionFacto
             history.Parameters.AddWithValue("created_by", NpgsqlDbType.Bigint, content.CreatedBy);
             history.Parameters.AddWithValue("note", NpgsqlDbType.Text, "Tạo nội dung mới trên Production Board");
             await history.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        // Repurpose (SCRUM-59): liên kết nguồn → phái sinh trong cùng transaction với Content.
+        if (content.SourceContentId is long sourceContentId)
+        {
+            await using var relation = new NpgsqlCommand("""
+                INSERT INTO content_relations (source_content_id, derived_content_id, relation_type, created_by)
+                VALUES (@source_content_id, @derived_content_id, 'REPURPOSED'::relation_type, @created_by);
+                """, connection, transaction);
+            relation.Parameters.AddWithValue("source_content_id", NpgsqlDbType.Bigint, sourceContentId);
+            relation.Parameters.AddWithValue("derived_content_id", NpgsqlDbType.Bigint, contentId);
+            relation.Parameters.AddWithValue("created_by", NpgsqlDbType.Bigint, content.CreatedBy);
+            await relation.ExecuteNonQueryAsync(cancellationToken);
         }
 
         await transaction.CommitAsync(cancellationToken);

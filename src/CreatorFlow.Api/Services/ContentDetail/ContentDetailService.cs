@@ -63,7 +63,7 @@ public sealed class ContentDetailService(
         return new(new ContentDetailResponse(
             content.ContentId, content.ProjectId, $"CNT-{content.ContentId:000}", content.Title, content.Description,
             content.ContentType, content.Status, content.Priority, content.Deadline, content.PlannedPublishAt,
-            content.CreatedBy, content.Platforms, role.Value.ToString(), content.Sprint));
+            content.CreatedBy, content.Platforms, role.Value.ToString(), content.Sprint, content.SourceContentId));
     }
 
     public async Task<AuthOperationResult<ContentDetailResponse>> UpdateAsync(
@@ -168,9 +168,19 @@ public sealed class ContentDetailService(
                 return Validation<ContentDetailResponse>("Chỉ có thể giao Content cho thành viên có vai trò Creator.", "assigneeUserId");
         }
 
+        // Repurpose (SCRUM-59): Content gốc phải tồn tại và thuộc đúng Project.
+        if (request.SourceContentId is long sourceContentId)
+        {
+            ContentDetailRecord? source = await repository.GetDetailAsync(sourceContentId, token);
+            if (source is null)
+                return Validation<ContentDetailResponse>("Không tìm thấy Content gốc.", "sourceContentId");
+            if (source.ProjectId != projectId)
+                return Validation<ContentDetailResponse>("Content gốc không thuộc Project này.", "sourceContentId");
+        }
+
         long contentId = await repository.CreateAsync(new NewContent(projectId, statusDb,
             new ContentUpdate(check.Title, check.Description, check.ContentType, check.PriorityDb, request.Deadline, request.PlannedPublishAt, platforms, sprint),
-            user.UserId), token);
+            user.UserId, request.SourceContentId), token);
 
         if (request.AssigneeUserId is long assignee)
             await taskRepository.ApplyAssignmentsAsync(contentId, user.UserId, Array.Empty<long>(),

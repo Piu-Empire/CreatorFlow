@@ -88,6 +88,8 @@ static class Program
         var ideaService = new IdeaService(ideaRepo, memberRepo, historyRepo, uow);
         // SCRUM-57/58: lõi AI client đọc cấu hình từ .env ở client — POC, sẽ chuyển sang Backend sau.
         var aiService = AIFactory.Create();
+        // SCRUM-59: AI đề xuất bản repurpose theo platform đích (dùng chung lõi AI client).
+        var repurposeAi = new RepurposeAiService(aiService);
         // SCRUM-33 + SCRUM-58: cổng AI cho script dùng ScriptAiService (adapter sang lõi AI client).
         var scriptService = new ScriptService(scriptRepo, detailsRepo, platformRepo, memberRepo, myTaskRepo, uow, new ScriptAiService(aiService));
 
@@ -116,7 +118,7 @@ static class Program
             {
                 // Diagnostic layout only: no authentication, project queries, or message loop.
                 using var testForm = new BoardForm(workflowService, boardRepo, reviewQueueRepo,
-                    activityRepo, memberRepo, contentService, myTaskService, scriptService, ideaService, auth, metricBackend, invitations, invitationInbox, reviewQueueBackend: reviewQueueBackend, notificationBackend: notificationBackend);
+                    activityRepo, memberRepo, contentService, myTaskService, scriptService, ideaService, auth, metricBackend, invitations, invitationInbox, reviewQueueBackend: reviewQueueBackend, notificationBackend: notificationBackend, repurposeAi: repurposeAi);
                 var handle = testForm.Handle;
                 testForm.Size = new Size(1440, 900);
                 testForm.PerformLayout();
@@ -124,7 +126,7 @@ static class Program
                 return;
             }
             using var context = new AuthenticationApplicationContext(auth, () =>
-                new BoardForm(workflowService, boardRepo, reviewQueueRepo, activityRepo, memberRepo, contentService, myTaskService, scriptService, ideaService, auth, metricBackend, invitations, invitationInbox, projects: projects, taskBackend: taskBackend, ideaBackend: ideaBackend, boardBackend: boardBackend, detailBackend: detailBackend, assignmentBackend: assignmentBackend, reviewQueueBackend: reviewQueueBackend, notificationBackend: notificationBackend, aiService: aiService), projects, invitationInbox);
+                new BoardForm(workflowService, boardRepo, reviewQueueRepo, activityRepo, memberRepo, contentService, myTaskService, scriptService, ideaService, auth, metricBackend, invitations, invitationInbox, projects: projects, taskBackend: taskBackend, ideaBackend: ideaBackend, boardBackend: boardBackend, detailBackend: detailBackend, assignmentBackend: assignmentBackend, reviewQueueBackend: reviewQueueBackend, notificationBackend: notificationBackend, aiService: aiService, repurposeAi: repurposeAi), projects, invitationInbox);
             Application.Run(context);
         }
         catch (InvalidOperationException)

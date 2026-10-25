@@ -33,6 +33,19 @@ RETURNING content_id");
 
         long contentId = (long)cmd.ExecuteScalar()!;
         SyncPlatforms(contentId, draft.Platforms);
+
+        // Repurpose (SCRUM-59): ghi liên kết nguồn → phái sinh trong cùng transaction của ContentService.
+        if (draft.SourceContentId is long sourceContentId)
+        {
+            using var relation = _session.CreateCommand(@"
+INSERT INTO content_relations (source_content_id, derived_content_id, relation_type, created_by)
+VALUES (@sourceContentId, @derivedContentId, 'REPURPOSED'::relation_type, @createdBy)");
+            relation.Parameters.AddWithValue("sourceContentId", sourceContentId);
+            relation.Parameters.AddWithValue("derivedContentId", contentId);
+            relation.Parameters.AddWithValue("createdBy", createdByUserId);
+            relation.ExecuteNonQuery();
+        }
+
         return contentId;
     }
 
@@ -56,7 +69,8 @@ WHERE content_id = @id"))
     {
         using var cmd = _session.CreateCommand(@"
 SELECT content_id, project_id, source_idea_id, title, description, script, content_type,
-       priority::text, status::text, deadline, planned_publish_at, created_by, created_at, updated_at
+       priority::text, status::text, deadline, planned_publish_at, created_by, created_at, updated_at,
+       (SELECT cr.source_content_id FROM content_relations cr WHERE cr.derived_content_id = contents.content_id LIMIT 1)
 FROM contents
 WHERE content_id = @id");
         cmd.Parameters.AddWithValue("id", contentId);
@@ -81,6 +95,7 @@ WHERE content_id = @id");
             CreatedBy = reader.GetInt64(11),
             CreatedAt = reader.GetDateTime(12),
             UpdatedAt = reader.GetDateTime(13),
+            SourceContentId = reader.IsDBNull(14) ? null : reader.GetInt64(14),
         };
     }
 

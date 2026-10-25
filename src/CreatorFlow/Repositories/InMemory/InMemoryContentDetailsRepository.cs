@@ -20,6 +20,22 @@ public class InMemoryContentDetailsRepository : IContentDetailsRepository
         Apply(record, draft);
         record.AssignedByUserId = createdByUserId; // người tạo = người giao việc (hiện ở cột "Giao bởi" của My Tasks)
         InMemoryDataStore.Contents.Add(record);
+
+        // Repurpose (SCRUM-59): lưu liên kết nguồn → phái sinh ngay khi tạo Content.
+        if (draft.SourceContentId is long sourceContentId)
+        {
+            InMemoryDataStore.ContentRelations.Add(new InMemoryContentRelationRecord
+            {
+                Id = InMemoryDataStore.ContentRelations.Count == 0
+                    ? 1
+                    : InMemoryDataStore.ContentRelations.Max(r => r.Id) + 1,
+                SourceContentId = sourceContentId,
+                DerivedContentId = newId,
+                RelationType = "REPURPOSED",
+                CreatedBy = createdByUserId,
+            });
+        }
+
         if (record.AssigneeUserId is long assignee)
         {
             // Content tạo kèm người phụ trách → sinh assignment đầu tiên (Assigned, 0%).
@@ -58,6 +74,8 @@ public class InMemoryContentDetailsRepository : IContentDetailsRepository
             ContentId = r.Id,
             ProjectId = r.ProjectId,
             SourceIdeaId = r.IdeaId,
+            SourceContentId = InMemoryDataStore.ContentRelations
+                .FirstOrDefault(rel => rel.DerivedContentId == r.Id)?.SourceContentId,
             Title = r.Title,
             Description = r.Description,
             Script = string.IsNullOrEmpty(r.Script) ? null : r.Script,

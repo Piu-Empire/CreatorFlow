@@ -26,4 +26,7 @@ public class ContentDraft
     public DateTime? PlannedPublishAt { get; set; }
     public string EstimatedDuration { get; set; } = string.Empty;
     public long? AssigneeUserId { get; set; }
+
+    /// <summary>Content gốc khi tạo bản phái sinh (Repurpose). null = Content độc lập.</summary>
+    public long? SourceContentId { get; set; }
 }
