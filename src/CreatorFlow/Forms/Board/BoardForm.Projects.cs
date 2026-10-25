@@ -24,6 +24,7 @@ public partial class BoardForm
         if (projects is null) return;
         if (projects.Context.Current is { } opened) _recentProjects.Add(opened.ProjectId);
         projects.Context.Changed += ProjectChanged;
+        if (_auth is not null) _auth.Session.AuthorizationRejected += AuthorizationRejected;
         _sidebarControl.ProjectManagementEnabled = true;
         _sidebarControl.ProjectSelectionRequested += async (_, _) => await ShowProjectMenuAsync();
         _sidebarControl.ProjectSettingsRequested += async (_, _) =>
@@ -37,6 +38,7 @@ public partial class BoardForm
         FormClosed += (_, _) =>
         {
             projects.Context.Changed -= ProjectChanged;
+            if (_auth is not null) _auth.Session.AuthorizationRejected -= AuthorizationRejected;
             CloseProjectMenu(); _recentProjects.Clear();
             _projectTimer.Stop(); _projectTimer.Dispose();
             _projectSwitch?.Cancel(); _projectSwitch?.Dispose();
@@ -173,7 +175,7 @@ public partial class BoardForm
 
     private void OpenProjectMembers()
     {
-        if (_projects?.Context.Current is not { } project || !CanLeaveProjectPage()) return;
+        if (_projects?.Context.Current is not { Role: CreatorFlow.Models.Enums.ProjectRole.Owner } project || !CanLeaveProjectPage()) return;
         using var dialog = new ProjectMembersDialog(_projects, project.ProjectId, project.Name);
         ShowWithActiveMenu("Project Settings", () => dialog.ShowDialog(this));
     }
@@ -251,6 +253,7 @@ public partial class BoardForm
     private async void ProjectChanged(object? sender, EventArgs e)
     {
         if (IsDisposed || _projects is null) return;
+        _contentDetailPanel.InvalidateProjectPermissions();
         CloseProjectMenu();
         UpdateProjectContext();
         if (_projects.Context.Current is not null)
@@ -263,6 +266,31 @@ public partial class BoardForm
         foreach (Form child in OwnedForms) child.Close();
         CloseProjectPage(); CloseProfile(); CloseDashboard();
         if (_auth?.Session.IsAuthenticated == true) await ShowProjectSettingsAsync();
+    }
+
+    private bool _authorizationRefreshQueued;
+
+    // Chờ handler hiện tại kết thúc rồi chỉ tải lại quyền, không thử lại thao tác ghi bị từ chối.
+    private void AuthorizationRejected(object? sender, EventArgs e)
+    {
+        if (_authorizationRefreshQueued || IsDisposed || !IsHandleCreated || _projects is null) return;
+        _authorizationRefreshQueued = true;
+        long generation = _projects.Context.Generation;
+        long? authGeneration = _auth?.Session.Generation;
+        BeginInvoke(new Action(async () =>
+        {
+            try
+            {
+                if (IsDisposed || generation != _projects.Context.Generation || authGeneration != _auth?.Session.Generation) return;
+                _contentDetailPanel.InvalidateProjectPermissions();
+                if (!await ValidateProjectAsync() || IsDisposed) return;
+                UpdateProjectContext();
+                _contentDetailPanel.RefreshProjectPermissions();
+                if (_projectPage is ProjectSettingsControl settings) await settings.LoadProjectAsync();
+                if (_projectPage is CreatorFlow.Controls.IdeaBank.IdeaBankControl ideas) ideas.RefreshProjectPermissions();
+            }
+            finally { _authorizationRefreshQueued = false; }
+        }));
     }
     private async Task<bool> ValidateProjectAsync()
     {

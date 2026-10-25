@@ -41,6 +41,7 @@ public class SidebarControl : UserControl
     public void ShowProjectMenu(ToolStripDropDown menu) => menu.Show(_projectButton, new Point(0, _projectButton.Height + 4));
 
     public bool ProjectActionsEnabled { get; set; }
+    public bool ReviewActionsEnabled { get; set; }
     public int BacklogCount = 0;
     public int MyWorkCount = 0;
     private bool _isSystemAdmin;
@@ -408,7 +409,9 @@ public class SidebarControl : UserControl
     }
 
     /// <summary>Mục AlwaysEnabled thao tác được cả khi chưa có project, các mục khác cần project.</summary>
-    private bool IsItemEnabled(NavItem item) => ProjectActionsEnabled || item.AlwaysEnabled || ProjectManagementEnabled && item.Icon == NavIcon.Gear;
+    private bool IsItemEnabled(NavItem item) => item.Icon == NavIcon.Review
+        ? ProjectActionsEnabled && ReviewActionsEnabled
+        : ProjectActionsEnabled || item.AlwaysEnabled || ProjectManagementEnabled && item.Icon == NavIcon.Gear;
 
     /// <summary>Tên mục đang được đánh dấu (null nếu chưa có).</summary>
     public string? ActiveMenu => _items.FirstOrDefault(item => item.IsActive)?.Title;

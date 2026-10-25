@@ -551,6 +551,49 @@ public sealed class ProjectShellTests
             foreach (var descendant in Descendants(child)) yield return descendant;
         }
     }
+    [TestMethod]
+    public void ReviewMenu_ChangesWithProjectRoleAndLogout()
+    {
+        RunSta(() =>
+        {
+            using var fixture = new UxFixture();
+            var sidebar = Field<SidebarControl>(fixture.Shell, "_sidebarControl");
+            fixture.Projects.Context.Apply(new(81, "A", "OWNER", "ACTIVE"));
+            Assert.IsTrue(sidebar.ReviewActionsEnabled);
+            var detail = Field<ContentDetailPanel>(fixture.Shell, "_contentDetailPanel");
+            var roles = Field<Dictionary<long, ProjectRole?>>(detail, "_roleCache");
+            roles[81] = ProjectRole.Owner;
+            fixture.Projects.Context.Apply(new(83, "C", "CREATOR", "ACTIVE"));
+            Assert.IsFalse(sidebar.ReviewActionsEnabled);
+            Assert.AreEqual(0, roles.Count);
+            fixture.Projects.Context.Apply(new(83, "C", "MANAGER", "ACTIVE"));
+            Assert.IsTrue(sidebar.ReviewActionsEnabled);
+            fixture.Session.Clear();
+            Assert.IsFalse(sidebar.ReviewActionsEnabled);
+            Assert.IsNull(CurrentSession.CurrentUserRole);
+        });
+    }
+
+    [TestMethod]
+    public void BackendRejection_RefreshesCurrentRoleWithoutRetryingWrite()
+    {
+        RunSta(() =>
+        {
+            using var fixture = new UxFixture();
+            _ = fixture.Shell.Handle;
+            fixture.Projects.Context.Apply(new(81, "Project 81", "OWNER", "ACTIVE"));
+            fixture.CurrentRole = "CREATOR";
+            fixture.Session.NotifyAuthorizationRejected(fixture.Session.Generation);
+            var deadline = DateTime.UtcNow.AddSeconds(5);
+            while (Field<bool>(fixture.Shell, "_authorizationRefreshQueued") && DateTime.UtcNow < deadline) Application.DoEvents();
+            Assert.IsFalse(Field<bool>(fixture.Shell, "_authorizationRefreshQueued"));
+            Assert.AreEqual(ProjectRole.Creator, fixture.Projects.Context.Current!.Role);
+            Assert.IsFalse(Field<SidebarControl>(fixture.Shell, "_sidebarControl").ReviewActionsEnabled);
+            Assert.IsTrue(fixture.Paths.Contains("/api/projects/81/access"));
+            Assert.IsTrue(fixture.Methods.All(method => method == HttpMethod.Get));
+        });
+    }
+
     private static T Field<T>(object target, string name) => (T)target.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(target)!;
     private static Task InvokeTask(object target, string name, params object[] args) => (Task)target.GetType().GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(target, args)!;
     private static void Complete(Task task)

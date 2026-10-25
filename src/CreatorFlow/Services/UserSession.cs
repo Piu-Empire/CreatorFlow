@@ -11,6 +11,14 @@ public sealed class UserSession
     public long Generation { get; private set; }
     public bool IsAuthenticated => CurrentUser is not null && AccessToken is not null && ExpiresAtUtc > DateTimeOffset.UtcNow;
     public event EventHandler? Cleared;
+    public event EventHandler? AuthorizationRejected;
+
+    // Chỉ báo cho UI làm mới quyền; Backend vẫn quyết định từng request.
+    public void NotifyAuthorizationRejected(long expectedGeneration)
+    {
+        if (Generation == expectedGeneration && IsAuthenticated)
+            AuthorizationRejected?.Invoke(this, EventArgs.Empty);
+    }
 
     public bool TrySetLogin(LoginResponse response, long expectedGeneration)
     {
