@@ -3,6 +3,8 @@ using CreatorFlow.Models.Enums;
 using CreatorFlow.Repositories.Interfaces;
 using CreatorFlow.Services.AI;
 using CreatorFlow.Services.Exceptions;
+using CreatorFlow.ApiClients;
+using CreatorFlow.Services.Backends;
 
 namespace CreatorFlow.Services;
 
@@ -33,6 +35,18 @@ public class ScriptService
     private readonly IMyTaskRepository _taskRepo;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IAiService _aiService;
+    private readonly ApiClient? _api;
+    private readonly UserSession? _session;
+    private readonly IContentDetailBackend? _backend;
+
+    /// <summary>Ứng dụng đọc/lưu Script qua API, không cần repository hay kết nối DB tại client.</summary>
+    public ScriptService(ApiClient api, UserSession session, IAiService aiService)
+        : this(null!, null!, null!, null!, null!, null!, aiService)
+    {
+        _api = api;
+        _session = session;
+        _backend = new ApiContentDetailBackend(api, session);
+    }
 
     public ScriptService(
         IContentScriptRepository scriptRepo,
@@ -62,6 +76,7 @@ public class ScriptService
     /// <summary>Mở script để xem/sửa. Ném UnauthorizedWorkflowActionException nếu không phải thành viên Project.</summary>
     public ScriptDocument Open(long contentId, long userId)
     {
+        if (_backend is not null) return _backend.OpenScript(contentId);
         var (script, role) = LoadForMember(contentId, userId);
         return ToDocument(script, role, userId);
     }
@@ -77,6 +92,7 @@ public class ScriptService
     /// </summary>
     public ScriptDocument Save(long contentId, string? text, string expectedVersion, long userId)
     {
+        if (_backend is not null) return _backend.SaveScript(contentId, text, expectedVersion);
         ArgumentNullException.ThrowIfNull(expectedVersion);
 
         string normalized = ScriptTextAnalyzer.Normalize(text);
@@ -143,6 +159,18 @@ public class ScriptService
         string note = (instruction ?? string.Empty).Trim();
         if (note.Length > MaxAiInstructionLength)
             throw new ContentValidationException($"Yêu cầu thêm cho AI tối đa {MaxAiInstructionLength} ký tự.");
+
+        if (_api is not null && _session is not null)
+        {
+            var apiDetail = ApiTaskCall.Run(() => _api.GetContentDetailAsync(contentId, ApiTaskCall.BearerOf(_session)), _session);
+            var saved = _backend!.OpenScript(contentId);
+            return ScriptAiRequestBuilder.Build(new Content
+            {
+                ContentId = apiDetail.ContentId, ProjectId = apiDetail.ProjectId, Title = apiDetail.Title,
+                Description = apiDetail.Description, ContentType = apiDetail.ContentType,
+                Priority = Enum.Parse<Priority>(apiDetail.Priority, true)
+            }, apiDetail.Platforms, saved.Text, requestType, note, _session.CurrentUser!.UserId);
+        }
 
         var (script, _) = LoadForMember(contentId, userId);
 

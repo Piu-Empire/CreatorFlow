@@ -112,6 +112,7 @@ public sealed class AuthApiFacade(ApiClient api, UserSession session)
     private void HandleUnauthorized(ApiBusinessException exception, long generation)
     {
         if (exception.StatusCode == HttpStatusCode.Unauthorized && generation == session.Generation) session.Clear();
+        if (exception.StatusCode == HttpStatusCode.Forbidden) session.NotifyAuthorizationRejected(generation);
     }
 
     public async Task<UserOperationResult> GetCurrentProfileAsync(CancellationToken token = default)

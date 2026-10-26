@@ -86,6 +86,26 @@ public partial class BoardForm : Form, IMessageFilter
         _ideaService = null!;
     }
 
+    /// <summary>Composition root của ứng dụng: các nguồn dữ liệu đều là API backend.</summary>
+    public BoardForm(AuthApiFacade auth, ProjectApiFacade projects, ScriptService script,
+        IMyTaskBackend tasks, IIdeaBackend ideas, IBoardBackend board, IContentDetailBackend detail,
+        IAssignmentBackend assignments, IReviewQueueBackend reviews, INotificationBackend notifications,
+        IMetricBackend metrics, ProjectInvitationService invitations, InvitationInboxService inbox,
+        IAIService? aiService = null)
+        : this(null!, null!, null!, null!, null!, null!, null!, script, null!, auth, metrics,
+            invitations, inbox, projects, tasks, ideas, board, detail, assignments, reviews, notifications, aiService)
+    {
+        ArgumentNullException.ThrowIfNull(auth);
+        ArgumentNullException.ThrowIfNull(projects);
+        ArgumentNullException.ThrowIfNull(board);
+        ArgumentNullException.ThrowIfNull(detail);
+        ArgumentNullException.ThrowIfNull(assignments);
+        ArgumentNullException.ThrowIfNull(tasks);
+        ArgumentNullException.ThrowIfNull(ideas);
+        ArgumentNullException.ThrowIfNull(reviews);
+        ArgumentNullException.ThrowIfNull(notifications);
+    }
+
     public BoardForm(
         WorkflowService workflowService,
         IBoardRepository boardRepository,
@@ -529,7 +549,7 @@ public partial class BoardForm : Form, IMessageFilter
                         return;
 
                     default:
-                        var apiNext = _workflowService.GetNextSimpleStatus(card.Status);
+                        var apiNext = ContentWorkflowPolicy.GetNextSimpleStatus(card.Status);
                         if (!apiNext.HasValue) return;
                         _detailBackend.ChangeStatus(card.ContentId, apiNext.Value);
                         break;
@@ -553,7 +573,7 @@ public partial class BoardForm : Form, IMessageFilter
                     return;
 
                 default:
-                    var next = _workflowService.GetNextSimpleStatus(card.Status);
+                    var next = ContentWorkflowPolicy.GetNextSimpleStatus(card.Status);
                     if (!next.HasValue) return;
                     _workflowService.ChangeStatus(card.ContentId, next.Value, CurrentSession.CurrentUserId);
                     break;
@@ -722,7 +742,7 @@ public partial class BoardForm : Form, IMessageFilter
             }
             catch (Exception error) when (error is IdeaValidationException or UnauthorizedWorkflowActionException)
             {
-                _sidebarControl.BacklogCount = 0;
+                _toast.ShowToast(this, "Không làm mới được số ý tưởng: " + error.Message);
             }
             _sidebarControl.Invalidate();
         }
@@ -780,7 +800,7 @@ public partial class BoardForm : Form, IMessageFilter
             }
             catch (Exception error) when (error is IdeaValidationException or UnauthorizedWorkflowActionException)
             {
-                _sidebarControl.BacklogCount = 0;
+                _toast.ShowToast(this, "Không làm mới được số ý tưởng: " + error.Message);
             }
             _sidebarControl.Invalidate();
         }
@@ -852,10 +872,15 @@ public partial class BoardForm : Form, IMessageFilter
     }
 
     /// <summary>Mở drawer chi tiết cho Content theo Id (kể cả khi thẻ đang bị ẩn bởi bộ lọc tìm kiếm/platform).</summary>
-    private void OpenContentById(long contentId)
+    private async void OpenContentById(long contentId)
     {
         if (!HasProjectContext) return;
-        if (_projects is not null) { ShowUnavailableModule("Chi tiết Content"); return; }
+        if (_projects is not null)
+        {
+            if (!CanLeaveProjectPage()) return;
+            await OpenGlobalContentAsync(contentId, CurrentSession.CurrentProjectId, _auth?.Session.Generation ?? 0);
+            return;
+        }
         var card = _allCards.FirstOrDefault(c => c.ContentId == contentId);
         if (card is null)
         {
@@ -1108,6 +1133,7 @@ public partial class BoardForm : Form, IMessageFilter
         _sidebarControl.SetActiveMenu("Calendar");
         _topHeaderControl.SetAuthenticatedPage("Lịch Content");
         calendar.RefreshData();
+        if (_projects is not null && _boardBackend is not null) _ = LoadServerBoardAsync();
     }
 
     private void CloseCalendar()

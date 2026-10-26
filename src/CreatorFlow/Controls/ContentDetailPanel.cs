@@ -416,7 +416,7 @@ public partial class ContentDetailPanel : UserControl
 
     public void LoadContent(ContentBoardCard card)
     {
-        if (_workflowService == null || _activityRepo == null || _memberRepo == null || _contentService == null)
+        if (_detailBackend == null && (_workflowService == null || _activityRepo == null || _memberRepo == null || _contentService == null))
             throw new InvalidOperationException("Phải gọi Initialize() trước khi LoadContent().");
 
         _isLoading = true;
@@ -598,7 +598,7 @@ public partial class ContentDetailPanel : UserControl
 
     private void SaveChanges()
     {
-        if (_current == null || _contentService == null) return;
+        if (_current == null || (_contentService == null && _detailBackend == null)) return;
 
         if (_isDirty && !_detailLoaded)
         {
@@ -909,7 +909,7 @@ public partial class ContentDetailPanel : UserControl
                 break;
 
             default:
-                var next = _workflowService!.GetNextSimpleStatus(_current.Status);
+                var next = ContentWorkflowPolicy.GetNextSimpleStatus(_current.Status);
                 if (next.HasValue)
                 {
                     string targetName = UITheme.GetStageDisplayName(next.Value);
@@ -946,7 +946,7 @@ public partial class ContentDetailPanel : UserControl
 
     private void OnAssignClicked(object? sender, EventArgs e)
     {
-        if (_current == null || _contentService == null) return;
+        if (_current == null || (_contentService == null && _detailBackend == null)) return;
         if (!TaskRules.CanAssign(GetMyRole(_current.ProjectId))) return;
         if (_detailBackend != null && _assignmentBackend == null) return;
 
@@ -1017,7 +1017,7 @@ public partial class ContentDetailPanel : UserControl
     private void OnMoveNextClicked(object? sender, EventArgs e)
     {
         if (_current == null) return;
-        var next = _workflowService!.GetNextSimpleStatus(_current.Status);
+        var next = ContentWorkflowPolicy.GetNextSimpleStatus(_current.Status);
         if (!next.HasValue) return;
 
         var contentId = _current.ContentId;

@@ -44,6 +44,7 @@ public class ScriptEditorControl : UserControl
     private bool _aiBusy;
     private bool _aiContentApplied; // kịch bản có nội dung do AI đưa vào (để xác nhận khi lưu)
     private CancellationTokenSource? _aiCancellation;
+    private int _documentGeneration;
 
     /// <summary>Phát sinh sau khi lưu thành công, kèm nội dung script đã chuẩn hóa vừa lưu.</summary>
     public event EventHandler<string>? ScriptSaved;
@@ -303,12 +304,12 @@ public class ScriptEditorControl : UserControl
         }
         catch (Exception ex) when (ex is UnauthorizedWorkflowActionException or InvalidOperationException
                                        or ContentValidationException
-                                       or Npgsql.NpgsqlException or TimeoutException)
+                                       or TimeoutException)
         {
             _document = null;
             SetText(string.Empty);
             _dirty = false;
-            SetNotice(ex is Npgsql.NpgsqlException or TimeoutException
+            SetNotice(ex is TimeoutException
                 ? "Không tải được kịch bản. Vui lòng kiểm tra kết nối và thử lại."
                 : ex.Message, UITheme.Danger);
             UpdateState();
@@ -318,6 +319,8 @@ public class ScriptEditorControl : UserControl
     /// <summary>Xóa nội dung và bỏ trạng thái "chưa lưu" (gọi khi drawer đóng).</summary>
     public void Reset()
     {
+        _documentGeneration++;
+        _aiCancellation?.Cancel();
         _document = null;
         SetText(string.Empty);
         _dirty = false;
@@ -333,6 +336,10 @@ public class ScriptEditorControl : UserControl
 
     private void ApplyDocument(ScriptDocument document)
     {
+        _documentGeneration++;
+        _aiCancellation?.Cancel();
+        _txtAiPreview.Clear();
+        SetAiStatus(string.Empty, UITheme.Neutral600);
         _document = document;
         SetText(document.Text);
         _dirty = false;
@@ -412,7 +419,7 @@ public class ScriptEditorControl : UserControl
         {
             MessageBox.Show(this, ex.Message, "Không thể lưu kịch bản", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
-        catch (Exception ex) when (ex is Npgsql.NpgsqlException or TimeoutException)
+        catch (Exception ex) when (ex is TimeoutException)
         {
             MessageBox.Show(this, "Không lưu được kịch bản. Vui lòng kiểm tra kết nối và thử lại.",
                 "Lỗi kết nối", MessageBoxButtons.OK, MessageBoxIcon.Error);
@@ -453,17 +460,17 @@ public class ScriptEditorControl : UserControl
 
         _aiCancellation?.Dispose();
         _aiCancellation = new CancellationTokenSource();
+        int generation = _documentGeneration;
         _aiBusy = true;
         UpdateState();
         SetAiStatus("Đang tạo gợi ý từ AI…", UITheme.Neutral600);
 
         try
         {
-            // PrepareAiRequest đọc DB đồng bộ trên luồng UI (đúng như các service khác dùng chung 1 connection);
-            // chỉ lời gọi AI mới thực sự await.
+            // Bản Script đã lưu và ngữ cảnh Content được đọc qua API trước khi gọi AI.
             var response = await _service.SendToAiAsync(_document.ContentId, _userId,
                 SelectedAiType, _txtAiInstruction.Text, _aiCancellation.Token);
-            if (IsDisposed)
+            if (IsDisposed || generation != _documentGeneration)
                 return;
 
             if (response.Succeeded)
@@ -484,7 +491,7 @@ public class ScriptEditorControl : UserControl
         }
         catch (ContentValidationException ex)
         {
-            if (!IsDisposed)
+            if (!IsDisposed && generation == _documentGeneration)
             {
                 _btnAiGenerate.Text = "Thử lại";
                 SetAiStatus(ex.Message, UITheme.Danger);
@@ -492,7 +499,7 @@ public class ScriptEditorControl : UserControl
         }
         catch (UnauthorizedWorkflowActionException ex)
         {
-            if (!IsDisposed)
+            if (!IsDisposed && generation == _documentGeneration)
             {
                 _btnAiGenerate.Text = "Thử lại";
                 SetAiStatus(ex.Message, UITheme.Danger);

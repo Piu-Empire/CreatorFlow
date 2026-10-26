@@ -388,7 +388,7 @@ public partial class BoardForm
         long generation = _projects.Context.Generation;
         long? authGeneration = _auth?.Session.Generation;
         bool Valid() => !IsDisposed && version == _boardLoadSequence && generation == _projects.Context.Generation &&
-            authGeneration == _auth?.Session.Generation && _projectPage is null && _profile is null && _admin is null && _reports is null && _calendar is null;
+            authGeneration == _auth?.Session.Generation && _projectPage is null && _profile is null && _admin is null && _reports is null;
 
         List<CreatorFlow.Models.ContentBoardCard>? cards = null;
         string? error = null;
@@ -403,6 +403,11 @@ public partial class BoardForm
         {
             if (state is not null) state.Text = "Không tải được Board: " + error;
             _dashboard?.ShowMessage("Không tải được dữ liệu. " + (error ?? "Kiểm tra kết nối và thử lại."));
+            if (_calendar is not null)
+            {
+                _calendar.UnavailableReason = "Không tải được dữ liệu. " + error;
+                _calendar.RefreshData();
+            }
             return;
         }
 
@@ -415,7 +420,16 @@ public partial class BoardForm
         _sidebarControl.MyWorkCount = _allCards.Count(c => c.Assignees.Any(a => a.UserId == me && a.Status != CreatorFlow.Models.Enums.AssignmentStatus.Completed));
         if (state is not null) state.Visible = false;
         ApplyFilters();
-        if (_ideaBackend is not null) _sidebarControl.BacklogCount = _ideaBackend.CountBacklog(project.ProjectId, me);
+        if (_ideaBackend is not null)
+        {
+            try { _sidebarControl.BacklogCount = _ideaBackend.CountBacklog(project.ProjectId, me); }
+            catch (Exception backlogError) when (backlogError is CreatorFlow.Services.Exceptions.IdeaValidationException or
+                CreatorFlow.Services.Exceptions.ContentValidationException or CreatorFlow.Services.Exceptions.UnauthorizedWorkflowActionException or InvalidOperationException)
+            {
+                if (Valid()) _toast.ShowToast(this, "Không làm mới được số ý tưởng: " + backlogError.Message);
+            }
+        }
+        if (!Valid()) return;
         _sidebarControl.Invalidate();
 
         // Sau khi lưu/đổi trạng thái/giao việc: mở lại drawer của thẻ vừa thao tác (nạp lại dữ liệu mới nhất từ API).
@@ -427,6 +441,11 @@ public partial class BoardForm
 
         // Dashboard đang mở: cập nhật 6 chỉ số theo dữ liệu vừa tải.
         _dashboard?.RefreshData();
+        if (_calendar is not null)
+        {
+            _calendar.UnavailableReason = null;
+            _calendar.RefreshData();
+        }
     }
     private async void ShowUnavailableModule(string module)
     {

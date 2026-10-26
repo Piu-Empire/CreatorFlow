@@ -16,7 +16,7 @@ public sealed class ApiAssigneeBoardRepository(IBoardRepository inner, ApiClient
     {
         var cards = inner.GetBoardCards(projectId);
 
-        var response = ApiTaskCall.Run(() => api.GetBoardAssigneesAsync(projectId, ApiTaskCall.BearerOf(session)));
+        var response = ApiTaskCall.Run(() => api.GetBoardAssigneesAsync(projectId, ApiTaskCall.BearerOf(session)), session);
         var byContent = response.Assignees.ToLookup(a => a.ContentId);
 
         foreach (var card in cards)
