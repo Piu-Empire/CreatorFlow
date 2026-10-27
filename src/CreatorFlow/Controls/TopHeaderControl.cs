@@ -5,11 +5,16 @@ using CreatorFlow.Theme;
 namespace CreatorFlow.Controls;
 
 /// <summary>
-/// Thanh trên cùng: breadcrumb và toolbar chung; account nằm trong sidebar.
+/// Thanh trên cùng: breadcrumb và toolbar chung; avatar mở Account ở góc phải.
 /// </summary>
 public class TopHeaderControl : UserControl, IMessageFilter
 {
     private const int PadX = 32;
+    private readonly Button _accountButton;
+    private string _accountName = string.Empty;
+    private Image? _accountAvatar;
+    private bool _accountHovered;
+    public event EventHandler? ProfileRequested;
     private const int WmLeftButtonDown = 0x0201;
     private const int WmRightButtonDown = 0x0204;
     private const int WmMiddleButtonDown = 0x0207;
@@ -128,7 +133,108 @@ public class TopHeaderControl : UserControl, IMessageFilter
             RequestGlobalSearch(_globalSearchBox.Text.Trim());
         };
         Controls.Add(_globalSearchBox);
+        _accountButton = new Button { Name = "authenticatedAccount", Text = string.Empty,
+            Bounds = new Rectangle(Math.Max(0, Width - PadX - 40), 14, 40, 40),
+            Anchor = AnchorStyles.Top | AnchorStyles.Right, FlatStyle = FlatStyle.Flat,
+            BackColor = UITheme.White, UseVisualStyleBackColor = false, Cursor = Cursors.Hand,
+            Visible = false, TabIndex = 0, AccessibleRole = AccessibleRole.PushButton };
+        _accountButton.FlatAppearance.BorderSize = 0;
+        _accountButton.Paint += PaintAccount;
+        _accountButton.MouseEnter += (_, _) => { _accountHovered = true; _accountButton.Invalidate(); };
+        _accountButton.MouseLeave += (_, _) => { _accountHovered = false; _accountButton.Invalidate(); };
+        _accountButton.GotFocus += (_, _) => _accountButton.Invalidate();
+        _accountButton.LostFocus += (_, _) => _accountButton.Invalidate();
+        _accountButton.Click += (_, _) => ProfileRequested?.Invoke(this, EventArgs.Empty);
+        Controls.Add(_accountButton);
+        LayoutToolbar();
+    }
+
+    // The shell transfers ownership of its decoded avatar to this control.
+    public void SetAuthenticatedAccount(string name, Image? avatar)
+    {
+        _accountName = name;
+        Image? previous = _accountAvatar;
+        _accountAvatar = avatar;
+        if (!ReferenceEquals(previous, avatar)) previous?.Dispose();
+        _accountButton.AccessibleName = $"Mở hồ sơ cá nhân của {name}";
+        _accountButton.Visible = true;
+        _accountButton.Invalidate();
+        LayoutToolbar();
+        Invalidate();
+    }
+
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        LayoutToolbar();
+    }
+
+    protected override void OnSizeChanged(EventArgs e)
+    {
+        base.OnSizeChanged(e);
+        LayoutToolbar();
+    }
+
+    protected override void OnVisibleChanged(EventArgs e)
+    {
+        base.OnVisibleChanged(e);
+        LayoutToolbar();
+    }
+
+    private void LayoutToolbar()
+    {
+        // Các sự kiện kích thước/handle có thể đến trước khi khởi tạo xong control con.
+        if (IsDisposed || _accountButton is null || _globalSearchBox is null) return;
+        int size = Math.Min(LogicalToDeviceUnits(40), Math.Max(1, ClientSize.Height));
+        var bounds = new Rectangle(
+            Math.Max(0, ClientSize.Width - LogicalToDeviceUnits(PadX) - size),
+            (ClientSize.Height - size) / 2, size, size);
+        if (_accountButton.Bounds != bounds) _accountButton.Bounds = bounds;
         LayoutGlobalSearchBox();
+        Invalidate();
+    }
+
+    protected override void OnDpiChangedAfterParent(EventArgs e)
+    {
+        base.OnDpiChangedAfterParent(e);
+        LayoutToolbar();
+        _accountButton?.Invalidate();
+    }
+
+    private int ToolbarRightEdge => _accountButton is { Visible: true }
+        ? _accountButton.Left - LogicalToDeviceUnits(20)
+        : ClientSize.Width - LogicalToDeviceUnits(PadX);
+
+    private void PaintAccount(object? sender, PaintEventArgs e)
+    {
+        var g = e.Graphics;
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        g.Clear(_accountHovered ? UITheme.Neutral50 : UITheme.White);
+        int diameter = Math.Max(1, Math.Min(_accountButton.ClientSize.Width, _accountButton.ClientSize.Height) - LogicalToDeviceUnits(8));
+        var bounds = new Rectangle((_accountButton.ClientSize.Width - diameter) / 2,
+            (_accountButton.ClientSize.Height - diameter) / 2, diameter, diameter);
+        if (_accountAvatar is null)
+        {
+            string[] words = _accountName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            string initials = words.Length == 0 ? "?" :
+                (System.Globalization.StringInfo.GetNextTextElement(words[0]) +
+                 (words.Length > 1 ? System.Globalization.StringInfo.GetNextTextElement(words[^1]) : string.Empty)).ToUpperInvariant();
+            UITheme.DrawAvatar(g, initials, bounds, UITheme.Black, UITheme.White, UITheme.FontLabelBold);
+        }
+        else
+        {
+            var state = g.Save();
+            using var circle = new GraphicsPath();
+            circle.AddEllipse(bounds);
+            g.SetClip(circle);
+            g.DrawImage(_accountAvatar, bounds);
+            g.Restore(state);
+        }
+        using var border = new Pen(UITheme.Neutral200);
+        g.DrawEllipse(border, bounds);
+        if (_accountButton.Focused)
+            ControlPaint.DrawFocusRectangle(g, Rectangle.Inflate(_accountButton.ClientRectangle,
+                -LogicalToDeviceUnits(1), -LogicalToDeviceUnits(1)), UITheme.Black, UITheme.White);
     }
 
     private void GlobalSearchBox_TextChanged(object? sender, EventArgs e)
@@ -439,15 +545,16 @@ public class TopHeaderControl : UserControl, IMessageFilter
         if (!visible) CloseGlobalSearchPopup();
         if (visible)
         {
-            _globalSearchBox.Bounds = new Rectangle(_globalSearchRect.X + 40, _globalSearchRect.Y + 9,
+            var bounds = new Rectangle(_globalSearchRect.X + 40, _globalSearchRect.Y + 9,
                 Math.Max(0, _globalSearchRect.Width - 52), 22);
+            if (_globalSearchBox.Bounds != bounds) _globalSearchBox.Bounds = bounds;
             PositionGlobalSearchPopup();
         }
     }
 
     private Rectangle CalculateGlobalSearchRectangle()
     {
-        int right = Width - PadX;
+        int right = ToolbarRightEdge;
         right -= 26 + 20;
         const int btnW = 156;
         int newContentX = right - btnW;
@@ -475,6 +582,8 @@ public class TopHeaderControl : UserControl, IMessageFilter
     {
         if (disposing)
         {
+            _accountAvatar?.Dispose();
+            _accountAvatar = null;
             _globalSearchTimer.Stop();
             _globalSearchTimer.Dispose();
             CloseGlobalSearchPopup();
@@ -566,8 +675,8 @@ public class TopHeaderControl : UserControl, IMessageFilter
         using var bodyBold = new Font("Segoe UI", 10F, FontStyle.Bold);
         const TextFormatFlags tf = TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix;
 
-        // Account identity belongs to the sidebar. Keep the shared toolbar in both shell modes.
-        int right = Width - PadX;
+        // Avatar ở mép phải; chuông và New Content nằm bên trái avatar.
+        int right = ToolbarRightEdge;
         _bellRect = new Rectangle(right - 26, cy - 13, 26, 26);
         UIIcons.Bell(g, _bellRect, _notificationsEnabled ? UITheme.Neutral600 : UITheme.Neutral400, 1.8f);
         if (_unreadNotificationCount > 0)
@@ -621,8 +730,6 @@ public class TopHeaderControl : UserControl, IMessageFilter
         }
 
         // Ô tìm kiếm toàn cục dùng TextBox thật; phần nền và icon vẫn theo visual header.
-        _globalSearchRect = CalculateGlobalSearchRectangle();
-        LayoutGlobalSearchBox();
         if (!_globalSearchRect.IsEmpty)
         {
             var sr = _globalSearchRect;

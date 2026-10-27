@@ -277,7 +277,7 @@ public sealed class ProjectSettingsControl : UserControl
         if (busy || uncertainTarget is not null || IsDisposed || lifetime.IsCancellationRequested || item.CurrentUserRole != "OWNER") return;
         using (var confirm = new RestoreProjectDialog(item.Name))
         {
-            if (confirm.ShowDialog(this) != DialogResult.OK || IsDisposed || lifetime.IsCancellationRequested) return;
+            if (confirm.ShowProjectDialog(this) != DialogResult.OK || IsDisposed || lifetime.IsCancellationRequested) return;
         }
 
         var current = projects.Context.Current;

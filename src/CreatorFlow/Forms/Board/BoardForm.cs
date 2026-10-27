@@ -156,11 +156,10 @@ public partial class BoardForm : Form, IMessageFilter
         InitializeProjects(projects);
         if (auth is not null)
         {
-            _sidebarControl.SetAuthenticatedAccount(auth.Session.CurrentUser?.DisplayName ?? string.Empty,
-                auth.Session.CurrentUser?.Email ?? string.Empty, null);
+            _topHeaderControl.SetAuthenticatedAccount(auth.Session.CurrentUser?.DisplayName ?? string.Empty, null);
             _sidebarControl.SetSystemAdmin(auth.Session.CurrentUser?.IsSystemAdmin == true);
             Shown += async (_, _) => await RefreshAuthenticatedAvatarAsync();
-            _sidebarControl.ProfileRequested += async (_, _) => await OpenProfileAsync();
+            _topHeaderControl.ProfileRequested += async (_, _) => await OpenProfileAsync();
             _sidebarControl.AdminWorkspaceRequested += async (_, _) => await OpenAdminAsync();
             _sidebarControl.AdminReportsRequested += async (_, _) => await OpenReportsAsync();
             _sidebarControl.CalendarRequested += (_, _) => OpenCalendar();
@@ -1159,9 +1158,13 @@ public partial class BoardForm : Form, IMessageFilter
             return;
         }
 
-        var page = new ProjectReportsControl(_metricBackend, CurrentSession.CurrentProjectId) { Dock = DockStyle.Fill };
+        long authGeneration = _auth?.Session.Generation ?? 0;
+        long? projectGeneration = _projects?.Context.Generation;
+        var page = new ProjectReportsControl(_metricBackend, CurrentSession.CurrentProjectId,
+            () => !IsDisposed && (_auth is null || _auth.Session.IsAuthenticated && _auth.Session.Generation == authGeneration) &&
+                (_projects is null || _projects.Context.Generation == projectGeneration)) { Dock = DockStyle.Fill };
         ShowProjectPage(page, "Báo cáo Metrics");
-        _sidebarControl.SetActiveMenu("Reports");
+        if (!IsDisposed) _sidebarControl.SetActiveMenu("Reports");
     }
 
     private void OpenDashboard()
@@ -1230,8 +1233,8 @@ public partial class BoardForm : Form, IMessageFilter
                 !_auth.Session.IsAuthenticated || _auth.Session.Generation != sessionGeneration)
             { return; }
             var currentUser = _auth.Session.CurrentUser!;
-            _sidebarControl.SetAuthenticatedAccount(currentUser.DisplayName, currentUser.Email, avatar);
-            avatar = null; // Sidebar now owns the image.
+            _topHeaderControl.SetAuthenticatedAccount(currentUser.DisplayName, avatar);
+            avatar = null; // Header now owns the image.
         }
         catch (OperationCanceledException) when (_authLifetime.IsCancellationRequested) { }
         finally { avatar?.Dispose(); }

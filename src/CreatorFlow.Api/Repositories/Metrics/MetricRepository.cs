@@ -93,13 +93,13 @@ public sealed class MetricRepository(IDbConnectionFactory connectionFactory) : I
         string body = groupBy switch
         {
             MetricGroupBy.Project => """
-                SELECT p.project_id, p.name,
+                SELECT p.project_id, p.project_name,
                        COALESCE(SUM(l.views), 0)::bigint, COALESCE(SUM(l.likes), 0)::bigint,
                        COALESCE(SUM(l.comments), 0)::bigint, COALESCE(SUM(l.shares), 0)::bigint
                 FROM projects p
                 LEFT JOIN latest l ON l.project_id = p.project_id
                 WHERE p.project_id = @pid
-                GROUP BY p.project_id, p.name;
+                GROUP BY p.project_id, p.project_name;
                 """,
             MetricGroupBy.Creator => """
                 SELECT u.user_id, COALESCE(NULLIF(u.display_name, ''), u.email),

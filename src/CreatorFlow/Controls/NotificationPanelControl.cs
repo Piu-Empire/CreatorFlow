@@ -32,8 +32,7 @@ public partial class NotificationPanelControl : UserControl
             Text = "Notifications",
             Font = UITheme.FontBodyBold,
             ForeColor = UITheme.Ink,
-            AutoSize = false,
-            Height = 24,
+            AutoSize = true,
             Dock = DockStyle.Top,
             Padding = new Padding(16, 12, 16, 4),
         };
@@ -191,6 +190,7 @@ public partial class NotificationPanelControl : UserControl
     protected override void OnResize(EventArgs e)
     {
         base.OnResize(e);
+        if (_itemsHost is null) return;
         foreach (Control row in _itemsHost.Controls)
             row.Width = _itemsHost.Width > 0 ? _itemsHost.Width : Width;
     }

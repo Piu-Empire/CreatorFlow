@@ -62,6 +62,7 @@ public partial class BoardForm
     }
     private void ShowProjectPage(Control page, string title)
     {
+        if (IsDisposed || Disposing || page.IsDisposed) { page.Dispose(); return; }
         _projectSwitch?.Cancel();
         ++_switchSequence;
 
@@ -96,8 +97,9 @@ public partial class BoardForm
             _pnlMain.ResumeLayout(true);
         }
 
+        if (IsDisposed || Disposing || page.IsDisposed || !ReferenceEquals(_projectPage, page)) return;
         page.Visible = true;
-        page.Refresh();
+        if (!IsDisposed && !page.IsDisposed && ReferenceEquals(_projectPage, page)) page.Refresh();
     }
     private void CloseProjectMenu()
     {
@@ -150,7 +152,7 @@ public partial class BoardForm
         string profileDraft = DraftSnapshot(_profile), contentDraft = DraftSnapshot(_contentDetailPanel);
         bool dirty = _profile?.HasUnsavedChanges == true || _contentDetailPanel.HasUnsavedChanges;
         using var dialog = new CreatorFlow.Forms.Projects.CreateProjectDialog(_projects, dirty);
-        if (dialog.ShowDialog(this) == DialogResult.OK && dialog.CreatedProject is { } created && !IsDisposed &&
+        if (dialog.ShowProjectDialog(this) == DialogResult.OK && dialog.CreatedProject is { } created && !IsDisposed &&
             generation == _projects.Context.Generation && authGeneration == _auth.Session.Generation &&
             profileDraft == DraftSnapshot(_profile) && contentDraft == DraftSnapshot(_contentDetailPanel))
             await SelectProjectCoreAsync(created.ProjectId, false);
@@ -254,8 +256,21 @@ public partial class BoardForm
     {
         if (IsDisposed || _projects is null) return;
         _contentDetailPanel.InvalidateProjectPermissions();
-        CloseProjectMenu();
         UpdateProjectContext();
+        if (_auth is not null && !_auth.Session.IsAuthenticated)
+        {
+            long generation = _auth.Session.Generation;
+            if (IsHandleCreated) BeginInvoke(new Action(() =>
+            {
+                if (IsDisposed || generation != _auth.Session.Generation || _auth.Session.IsAuthenticated) return;
+                _recentProjects.Clear();
+                _projectSwitch?.Cancel(); ResetProjectState();
+                foreach (Form child in OwnedForms) child.Close();
+                CloseProjectMenu(); CloseProjectPage(); CloseProfile(); CloseDashboard();
+            }));
+            return;
+        }
+        CloseProjectMenu();
         if (_projects.Context.Current is not null)
         {
             if (_projectPage is null && _profile is null && _admin is null && _reports is null && _calendar is null) RenderServerWorkspace();
