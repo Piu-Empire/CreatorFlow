@@ -5,6 +5,16 @@ namespace CreatorFlow.Services;
 
 public static class ContentWorkflowPolicy
 {
+    // Dùng đặt nhãn/nút UI; Backend vẫn quyết định quyền chuyển trạng thái.
+    public static ContentStatus? GetNextSimpleStatus(ContentStatus current) => current switch
+    {
+        ContentStatus.Idea => ContentStatus.Script,
+        ContentStatus.Script => ContentStatus.Production,
+        ContentStatus.Production => ContentStatus.Editing,
+        ContentStatus.Ready => ContentStatus.Published,
+        _ => null
+    };
+
     public static bool CanTransition(ContentStatus from, ContentStatus to)
     {
         return (from, to) switch

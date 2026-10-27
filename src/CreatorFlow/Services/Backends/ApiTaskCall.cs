@@ -13,10 +13,13 @@ internal static class ApiTaskCall
 {
     public static T Run<T>(Func<Task<T>> call, UserSession? session = null)
     {
+        if (session is not null) _ = BearerOf(session);
         long generation = session?.Generation ?? 0;
         try
         {
-            return Task.Run(call).GetAwaiter().GetResult();
+            T result = Task.Run(call).GetAwaiter().GetResult();
+            EnsureCurrentSession(session, generation);
+            return result;
         }
         catch (ApiBusinessException ex)
         {
@@ -36,10 +39,13 @@ internal static class ApiTaskCall
     /// <summary>Bản bất đồng bộ của <see cref="Run{T}"/>: chạy tiếp trên thread giao diện nên không treo form khi chờ API.</summary>
     public static async Task<T> RunAsync<T>(Func<Task<T>> call, UserSession? session = null)
     {
+        if (session is not null) _ = BearerOf(session);
         long generation = session?.Generation ?? 0;
         try
         {
-            return await call();
+            T result = await call();
+            EnsureCurrentSession(session, generation);
+            return result;
         }
         catch (ApiBusinessException ex)
         {
@@ -56,10 +62,18 @@ internal static class ApiTaskCall
         }
     }
 
-    public static string BearerOf(UserSession session) =>
-        session.IsAuthenticated && !string.IsNullOrEmpty(session.AccessToken)
-            ? session.AccessToken
-            : throw new UnauthorizedWorkflowActionException("Vui lòng đăng nhập lại.");
+    public static string BearerOf(UserSession session)
+    {
+        if (session.IsAuthenticated && !string.IsNullOrEmpty(session.AccessToken)) return session.AccessToken;
+        if (session.AccessToken is not null || session.CurrentUser is not null) session.Clear();
+        throw new UnauthorizedWorkflowActionException("Vui lòng đăng nhập lại.");
+    }
+
+    private static void EnsureCurrentSession(UserSession? session, long generation)
+    {
+        if (session is not null && generation != session.Generation)
+            throw new UnauthorizedWorkflowActionException("Phiên đã thay đổi. Vui lòng thử lại trong phiên hiện tại.");
+    }
 
     private static Exception Translate(ApiBusinessException ex) => ex.Code == "script_conflict" ? new ScriptConflictException() : ex.StatusCode switch
     {

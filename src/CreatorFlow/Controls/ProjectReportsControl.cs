@@ -20,16 +20,18 @@ public sealed class ProjectReportsControl : UserControl
 
     private readonly IMetricBackend _backend;
     private readonly long _projectId;
+    private readonly Func<bool>? _isCurrent;
     private readonly DataGridView _grid;
     private readonly Label _status;
     private readonly Dictionary<string, RoundedButton> _buttons = new();
 
     private string _current = "content";
 
-    public ProjectReportsControl(IMetricBackend backend, long projectId)
+    public ProjectReportsControl(IMetricBackend backend, long projectId, Func<bool>? isCurrent = null)
     {
         _backend = backend;
         _projectId = projectId;
+        _isCurrent = isCurrent;
         BackColor = UITheme.Neutral50;
         Padding = new Padding(32, 24, 32, 24);
 
@@ -141,6 +143,7 @@ public sealed class ProjectReportsControl : UserControl
     /// <summary>Tải và hiển thị tổng hợp theo chiều <paramref name="groupBy"/> (content/creator/platform/project).</summary>
     public void LoadSummary(string groupBy)
     {
+        if (!CanUpdate) return;
         _current = groupBy;
         UpdateButtons();
 
@@ -151,12 +154,14 @@ public sealed class ProjectReportsControl : UserControl
         }
         catch (Exception ex)
         {
-            ShowStatus("Không tải được số liệu: " + ex.Message);
+            if (CanUpdate) ShowStatus("Không tải được số liệu: " + ex.Message);
             return;
         }
 
-        Render(response);
+        if (CanUpdate) Render(response);
     }
+
+    private bool CanUpdate => !IsDisposed && !Disposing && (_isCurrent?.Invoke() ?? true);
 
     private void Render(MetricsSummaryResponse response)
     {

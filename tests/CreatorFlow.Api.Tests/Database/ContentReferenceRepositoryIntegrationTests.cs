@@ -86,7 +86,7 @@ public sealed class ContentReferenceRepositoryIntegrationTests
         Assert.AreEqual(1L, remainingFileAttachments);
     }
 
-    private sealed class Fixture : IAsyncDisposable
+    internal sealed class Fixture : IAsyncDisposable
     {
         private readonly string connectionString;
         public NpgsqlConnectionFactory Factory { get; }

@@ -2,34 +2,18 @@ using CreatorFlow.Theme;
 
 namespace CreatorFlow.Forms.Projects;
 
-public sealed partial class RestoreProjectDialog : Form
+public sealed class RestoreProjectDialog : ProjectModalForm
 {
     public RestoreProjectDialog(string projectName)
+        : base("Khôi phục Project", "Đưa Project đã lưu trữ trở lại hoạt động.", "Khôi phục", 112)
     {
-        InitializeComponent();
-
-        Font = UITheme.FontBody;
-        BackColor = UITheme.White;
-        headerPanel.BackColor = UITheme.White;
-        bodyPanel.BackColor = UITheme.White;
-        footerPanel.BackColor = UITheme.Neutral50;
-        titleLabel.Font = UITheme.FontH2;
-        titleLabel.ForeColor = UITheme.Ink;
-        subtitleLabel.ForeColor = UITheme.Neutral600;
-        messageLabel.ForeColor = UITheme.Ink;
-        messageLabel.Text = $"Khôi phục Project “{projectName}”?\nCác thành viên có thể tiếp tục làm việc trong Project sau khi khôi phục.";
-    }
-
-    private void HeaderPanel_Paint(object? sender, PaintEventArgs e)
-    {
-        using var pen = new Pen(UITheme.Neutral100);
-        e.Graphics.DrawLine(pen, 0, headerPanel.ClientSize.Height - 1,
-            headerPanel.ClientSize.Width, headerPanel.ClientSize.Height - 1);
-    }
-
-    private void FooterPanel_Paint(object? sender, PaintEventArgs e)
-    {
-        using var pen = new Pen(UITheme.Neutral100);
-        e.Graphics.DrawLine(pen, 0, 0, footerPanel.ClientSize.Width, 0);
+        Body.Controls.Add(new Label
+        {
+            Text = $"Khôi phục Project “{projectName}”?\n\nCác thành viên có thể tiếp tục làm việc trong Project sau khi khôi phục.",
+            Dock = DockStyle.Fill,
+            AutoEllipsis = true,
+            ForeColor = UITheme.Ink
+        });
+        Confirm.Click += (_, _) => DialogResult = DialogResult.OK;
     }
 }
