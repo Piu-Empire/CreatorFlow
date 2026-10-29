@@ -13,7 +13,7 @@ public interface IContentDetailRepository
     /// <summary>Tên các nền tảng của Content đã PUBLISHED (không được bỏ chọn).</summary>
     Task<IReadOnlyList<string>> GetPublishedPlatformNamesAsync(long contentId, CancellationToken cancellationToken = default);
 
-    /// <summary>Tạo Content, đồng bộ content_platforms và ghi dòng lịch sử đầu tiên trong MỘT transaction. Trả về content_id mới.</summary>
+    /// <summary>Tạo Content, kịch bản, nền tảng, lịch sử và quan hệ nguồn trong MỘT transaction. Trả về content_id mới.</summary>
     Task<long> CreateAsync(NewContent content, CancellationToken cancellationToken = default);
 
     /// <summary>Ghi thông tin lập kế hoạch và đồng bộ content_platforms trong MỘT transaction.</summary>

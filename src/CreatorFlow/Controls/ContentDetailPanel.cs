@@ -5,6 +5,7 @@ using CreatorFlow.Forms.Board;
 using CreatorFlow.Models;
 using CreatorFlow.Repositories.Interfaces;
 using CreatorFlow.Services;
+using CreatorFlow.Services.AI;
 using CreatorFlow.Services.Backends;
 using CreatorFlow.Services.Exceptions;
 using CreatorFlow.Theme;
@@ -27,10 +28,12 @@ public partial class ContentDetailPanel : UserControl
     private ContentService? _contentService;
     private IContentDetailBackend? _detailBackend;       // chế độ API: chi tiết/sửa/script/activity/workflow chạy qua CreatorFlow.Api
     private IAssignmentBackend? _assignmentBackend;      // chế độ API: giao việc
+    private IRepurposeAiService? _repurposeAi;
     private bool _apiPlatformsLoaded;
     private readonly Dictionary<long, ProjectRole?> _roleCache = new(); // chế độ API: 1 lần gọi vai trò cho mỗi lần mở Content (xoá ở đầu LoadContent)
 
     private ContentBoardCard? _current;
+    private Content? _currentDetail;
     private List<ProjectMemberInfo> _members = new();
     private int _selectedTabIndex = 0; // 0: Overview, 1: Script, 2: Checklist, 3: Activity, 4: References, 5: Metrics
     private bool _isDirty;
@@ -45,6 +48,16 @@ public partial class ContentDetailPanel : UserControl
 
     // Tab 1: Overview
     private readonly List<(Control Ctl, int GapAfter)> _overviewRows = new();
+    private readonly Label _lblSourceContent = new()
+    {
+        Font = UITheme.FontLabel,
+        ForeColor = UITheme.Neutral600,
+        AutoSize = false,
+        Height = 20,
+        BackColor = UITheme.White,
+        UseMnemonic = false,
+        Visible = false,
+    };
 
     // Index: 0 Pipeline Stage (chỉ đọc) · 1 Platform · 2 Priority · 3 Sprint · 4 Target Week · 5 Estimated Duration · 6 Content Type · 7 Planned Publish Date
 
@@ -93,6 +106,8 @@ public partial class ContentDetailPanel : UserControl
         _overviewRows.Clear();
         AddOverviewRow(_lblSecTitle, 6);
         AddOverviewRow(_boxTitle, 20);
+        _overviewHost.Controls.Add(_lblSourceContent);
+        AddOverviewRow(_lblSourceContent, 0);
         AddOverviewRow(_lblSecHook, 6);
         AddOverviewRow(_boxHook, 20);
         AddOverviewRow(_boxMeta, 20);
@@ -281,13 +296,23 @@ public partial class ContentDetailPanel : UserControl
         _layoutRetryCount = 0;
 
         int y = 20;
+        bool hasSourceContent = _currentDetail?.SourceContentId is not null;
         foreach (var (ctl, gap) in _overviewRows)
         {
             int h = ctl.Height;
+            int effectiveGap = gap;
+            if (ReferenceEquals(ctl, _boxTitle) && hasSourceContent)
+                effectiveGap = 8;
+            if (ReferenceEquals(ctl, _lblSourceContent))
+            {
+                h = hasSourceContent ? 20 : 0;
+                effectiveGap = hasSourceContent ? 12 : 0;
+                ctl.Visible = hasSourceContent;
+            }
             if (ReferenceEquals(ctl, _flowActions))
                 h = Math.Max(44, _flowActions.GetPreferredSize(new Size(w, 0)).Height);
             ctl.SetBounds(PadX, y, w, h);
-            y += h + gap;
+            y += h + effectiveGap;
         }
         y += 24;
 
@@ -342,12 +367,15 @@ public partial class ContentDetailPanel : UserControl
 
     // ---------- API công khai ----------
 
-    public void Initialize(WorkflowService workflowService, IActivityRepository activityRepo, IProjectMemberRepository memberRepo, ContentService contentService, ScriptService scriptService, IMetricBackend? metricBackend = null, bool loadLocalPlatforms = true, IContentDetailBackend? detailBackend = null, IAssignmentBackend? assignmentBackend = null)
+    public event EventHandler<ContentRepurposedEventArgs>? ContentRepurposed;
+
+    public void Initialize(WorkflowService workflowService, IActivityRepository activityRepo, IProjectMemberRepository memberRepo, ContentService contentService, ScriptService scriptService, IMetricBackend? metricBackend = null, bool loadLocalPlatforms = true, IContentDetailBackend? detailBackend = null, IAssignmentBackend? assignmentBackend = null, IRepurposeAiService? repurposeAi = null)
     {
         _scriptEditor.Initialize(scriptService, detailBackend);
         _detailBackend = detailBackend;
         _contentReferences.Initialize(detailBackend);
         _assignmentBackend = assignmentBackend;
+        _repurposeAi = repurposeAi;
         _apiPlatformsLoaded = false;
         _workflowService = workflowService;
         _activityRepo = activityRepo;
@@ -459,6 +487,8 @@ public partial class ContentDetailPanel : UserControl
 
         // Script, loại nội dung và ngày dự kiến đăng không nằm trong thẻ Board nên đọc riêng từ DB khi mở Content Detail.
         var detail = TryLoadDetail(card.ContentId);
+        _currentDetail = detail;
+        UpdateSourceContentLabel();
         _detailLoaded = detail != null;
         _persistedScript = detail?.Script ?? string.Empty;
         _contentReferences.LoadReferences(card.ContentId);
@@ -560,6 +590,8 @@ public partial class ContentDetailPanel : UserControl
         }
 
         _current = null;
+        _currentDetail = null;
+        UpdateSourceContentLabel();
         _isDirty = false;
         _scriptEditor.Reset();
         ShowEmptyState();
@@ -573,6 +605,8 @@ public partial class ContentDetailPanel : UserControl
     {
         InvalidateProjectPermissions();
         _current = null;
+        _currentDetail = null;
+        UpdateSourceContentLabel();
         _isDirty = false;
         _detailLoaded = false;
         _scriptEditor.Reset();
@@ -887,6 +921,9 @@ public partial class ContentDetailPanel : UserControl
         if (role is null) return;
         var canReview = role == ProjectRole.Owner || role == ProjectRole.Manager;
 
+        if (_detailBackend is not null && _repurposeAi is not null && _current.Status != ContentStatus.Archived)
+            AddActionButton("Tái sử dụng (AI)", RoundButtonStyle.Primary, OnRepurposeClicked);
+
         if (TaskRules.CanAssign(role) && _current.Status is not (ContentStatus.Published or ContentStatus.Archived))
             AddActionButton("Giao việc cho Creator", RoundButtonStyle.Primary, OnAssignClicked);
 
@@ -942,6 +979,51 @@ public partial class ContentDetailPanel : UserControl
             AutoSize = true,
             Padding = new Padding(0, 8, 0, 0),
         });
+    }
+
+    private void UpdateSourceContentLabel()
+    {
+        _lblSourceContent.Text = _currentDetail?.SourceContentId is long sourceContentId
+            ? $"Tái sử dụng từ CNT-{sourceContentId:000}"
+            : string.Empty;
+        _lblSourceContent.Visible = _currentDetail?.SourceContentId is not null;
+    }
+
+    private void OnRepurposeClicked(object? sender, EventArgs e)
+    {
+        if (_current is null || _detailBackend is null || _repurposeAi is null ||
+            _current.Status == ContentStatus.Archived || _currentDetail is null)
+            return;
+
+        string sourceScript = string.Empty;
+        bool scriptLoadFailed = false;
+        try
+        {
+            sourceScript = _detailBackend.OpenScript(_current.ContentId).Text;
+        }
+        catch (Exception ex) when (ex is ContentValidationException or UnauthorizedWorkflowActionException or
+                                   InvalidOperationException or ApiBusinessException or ApiException or TimeoutException)
+        {
+            scriptLoadFailed = true;
+        }
+
+        List<string> platforms;
+        try
+        {
+            platforms = _detailBackend.GetAvailablePlatforms();
+        }
+        catch (Exception ex) when (ex is ContentValidationException or UnauthorizedWorkflowActionException or
+                                   InvalidOperationException or ApiBusinessException or ApiException or TimeoutException)
+        {
+            MessageBox.Show(this, ex.Message, "Không tải được danh sách nền tảng", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        using var dialog = new RepurposeDialog(_current, _currentDetail, sourceScript, scriptLoadFailed,
+            platforms, _repurposeAi, _detailBackend, CurrentSession.CurrentUserId);
+        Form? owner = FindForm();
+        if (dialog.ShowDialog(owner ?? (IWin32Window)this) == DialogResult.OK)
+            ContentRepurposed?.Invoke(this, new ContentRepurposedEventArgs(dialog.CreatedContentId, _current.ContentId));
     }
 
     private void OnAssignClicked(object? sender, EventArgs e)
@@ -1285,4 +1367,11 @@ public sealed class ContentDetailTabBar : Panel
             }
         }
     }
+}
+
+public sealed class ContentRepurposedEventArgs(long derivedContentId, long sourceContentId) : EventArgs
+{
+    public long DerivedContentId { get; } = derivedContentId;
+
+    public long SourceContentId { get; } = sourceContentId;
 }

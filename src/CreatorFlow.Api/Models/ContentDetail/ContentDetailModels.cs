@@ -15,7 +15,8 @@ public sealed record ContentDetailRecord(
     DateOnly? PlannedPublishAt,
     long CreatedBy,
     IReadOnlyList<string> Platforms,
-    string Sprint = CreatorFlow.Contracts.ContentDetail.SprintCatalog.DefaultSprint);
+    string Sprint = CreatorFlow.Contracts.ContentDetail.SprintCatalog.DefaultSprint,
+    long? SourceContentId = null);
 
 /// <summary>Dữ liệu đã kiểm tra, sẵn sàng ghi. Priority là giá trị enum DB (UPPER).</summary>
 public sealed record ContentUpdate(
@@ -33,7 +34,9 @@ public sealed record NewContent(
     long ProjectId,
     string StatusDb,
     ContentUpdate Details,
-    long CreatedBy);
+    long CreatedBy,
+    long? SourceContentId = null,
+    string Script = "");
 
 /// <summary>Script thô đang lưu (null = chưa có) cùng thông tin để tính quyền.</summary>
 public sealed record ScriptRecord(long ContentId, long ProjectId, string Status, long CreatedBy, string? Script);

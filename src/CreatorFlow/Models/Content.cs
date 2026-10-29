@@ -17,6 +17,9 @@ public sealed record Content
 
     public long? SourceIdeaId { get; set; }
 
+    /// <summary>Content nguồn nếu nội dung này là bản tái sử dụng.</summary>
+    public long? SourceContentId { get; set; }
+
     /// <summary>Alias của SourceIdeaId.</summary>
     public long? IdeaId
     {

@@ -400,8 +400,9 @@ public sealed class ProjectShellTests
             var sidebar = Field<SidebarControl>(fixture.Shell, "_sidebarControl");
             var items = ((System.Collections.IEnumerable)Field<object>(sidebar, "_items")).Cast<object>().ToArray();
             var titles = items.Select(item => (string)item.GetType().GetField("Title")!.GetValue(item)!).ToArray();
-            foreach (string title in new[] { "Kho Content", "Backlog", "Calendar", "My Tasks", "Invitations", "Project Settings" })
+            foreach (string title in new[] { "Kho Content", "Backlog", "Calendar", "My Tasks", "Project Settings" })
                 CollectionAssert.Contains(titles, title);
+            CollectionAssert.DoesNotContain(titles, "Invitations");
             Assert.AreEqual(admin, titles.Contains("Quản trị người dùng"));
             if (admin)
             {

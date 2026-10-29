@@ -18,7 +18,8 @@ public sealed record ContentDetailResponse(
     long CreatedBy,
     IReadOnlyList<string> Platforms,
     string Role,
-    string Sprint = SprintCatalog.DefaultSprint);
+    string Sprint = SprintCatalog.DefaultSprint,
+    long? SourceContentId = null);
 
 /// <summary>Sửa thông tin lập kế hoạch của Content (Status chỉ đổi qua Workflow). Người sửa lấy từ JWT.</summary>
 public sealed record UpdateContentRequest(
@@ -45,7 +46,9 @@ public sealed record CreateContentRequest(
     DateOnly? PlannedPublishAt,
     IReadOnlyList<string>? Platforms,
     long? AssigneeUserId,
-    string? Sprint = null);
+    string? Sprint = null,
+    long? SourceContentId = null,
+    string? Script = null);
 
 /// <summary>Tên các nền tảng đang bật — nguồn cho menu chọn platform.</summary>
 public sealed record PlatformOptionsResponse(IReadOnlyList<string> Platforms);

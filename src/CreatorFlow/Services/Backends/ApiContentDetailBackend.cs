@@ -34,7 +34,9 @@ public sealed class ApiContentDetailBackend(ApiClient api, UserSession session) 
             ApiTaskMapper.ToDateOnly(draft.PlannedPublishAt),
             draft.Platforms,
             draft.AssigneeUserId,
-            draft.Sprint);
+            draft.Sprint,
+            draft.SourceContentId,
+            draft.Script);
         return ApiTaskCall.Run(() => api.CreateContentAsync(projectId, request, ApiTaskCall.BearerOf(session)), session).ContentId;
     }
 
@@ -53,6 +55,7 @@ public sealed class ApiContentDetailBackend(ApiClient api, UserSession session) 
             Deadline = ApiTaskMapper.ToDateTime(r.Deadline),
             PlannedPublishAt = ApiTaskMapper.ToDateTime(r.PlannedPublishAt),
             CreatedBy = r.CreatedBy,
+            SourceContentId = r.SourceContentId,
         };
     }
 
