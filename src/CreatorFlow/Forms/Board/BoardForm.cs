@@ -47,6 +47,7 @@ public partial class BoardForm : Form, IMessageFilter
     private readonly IReviewQueueBackend? _reviewQueueBackend;
     private readonly INotificationBackend? _notificationBackend;
     private readonly IMetricBackend? _metricBackend;
+    private readonly IStatisticsBackend? _statisticsBackend;
     private readonly IAIService? _aiService;
     private readonly IRepurposeAiService? _repurposeAi;
     private NotificationPanelControl? _notificationPanel;
@@ -109,6 +110,7 @@ public partial class BoardForm : Form, IMessageFilter
         IAssignmentBackend? assignmentBackend = null,
         IReviewQueueBackend? reviewQueueBackend = null,
         INotificationBackend? notificationBackend = null,
+        IStatisticsBackend? statisticsBackend = null,
         IAIService? aiService = null,
         IRepurposeAiService? repurposeAi = null)
     {
@@ -132,6 +134,7 @@ public partial class BoardForm : Form, IMessageFilter
         _reviewQueueBackend = reviewQueueBackend;
         _notificationBackend = notificationBackend;
         _metricBackend = metrics;
+        _statisticsBackend = statisticsBackend;
         _aiService = aiService;
         _repurposeAi = repurposeAi;
         _topHeaderControl.BellClicked += async (_, _) => await OnBellClickedAsync();
@@ -1144,7 +1147,7 @@ public partial class BoardForm : Form, IMessageFilter
             return;
         }
 
-        var page = new ProjectReportsControl(_metricBackend, CurrentSession.CurrentProjectId) { Dock = DockStyle.Fill };
+        var page = new ProjectReportsControl(_metricBackend, CurrentSession.CurrentProjectId, _statisticsBackend) { Dock = DockStyle.Fill };
         ShowProjectPage(page, "Báo cáo Metrics");
         _sidebarControl.SetActiveMenu("Reports");
     }
