@@ -22,7 +22,7 @@ Ngày: 27/10/2026. Môi trường: Docker local (`deploy/docker/compose.dev.yml`
 
 ## 2. Kiểm chứng SQL thật (API local)
 
-`GET /api/projects/1/statistics/creators` (project "Tết 2026", đăng nhập `an@demo.vn`):
+`GET /api/projects/1/statistics/creators` (project mẫu trên DB local):
 
 | Creator | Total | In Progress | Published | Overdue | Views | Engagement |
 | :--- | --: | --: | --: | --: | --: | --: |
@@ -33,10 +33,10 @@ Ngày: 27/10/2026. Môi trường: Docker local (`deploy/docker/compose.dev.yml`
 
 - `?creatorId=2` → chỉ còn dòng Minh, dòng "Toàn Project" **không đổi** (25/11/14/3).
 - Content ARCHIVED của Minh (13 content nếu tính cả archived) **không** xuất hiện: Total = 12.
-- Project thứ hai "Hè 2026": Minh = 3 content / 2 published / 30.000 views → chứng minh số không bị
+- Project thứ hai trên DB local: Minh = 3 content / 2 published / 30.000 views → chứng minh số không bị
   cộng dồn giữa project (AC2), và đổi project thì số đổi theo (AC1).
 
-## 3. Cách mở app demo
+## 3. Cách mở app để kiểm chứng
 
 Điều kiện: Docker Desktop đang chạy, container `creatorflow-dev-db-1` + `creatorflow-dev-api-1` up
 (`docker compose --env-file deploy/docker/.env -f deploy/docker/compose.dev.yml ps`).
@@ -47,19 +47,16 @@ $env:Api__BaseUrl = "http://localhost:5080/"
 .\src\CreatorFlow\bin\Debug\net10.0-windows\CreatorFlow.exe
 ```
 
-Đăng nhập: `an@demo.vn` / `Demo@123` → chọn project **Tết 2026** → sidebar **Reports**.
+Đăng nhập bằng tài khoản có sẵn trên DB local → chọn project mẫu → sidebar **Reports**.
 
 Trong màn Reports:
 1. Bấm **Creator & Project** (cạnh nút "Hiệu suất").
-2. Xem bảng: dòng **Toàn Project** in đậm + 3 dòng Minh/Lan/Huy.
+2. Xem bảng: dòng **Toàn Project** in đậm + các dòng creator của project.
 3. Đổi combo **Creator** → bảng còn đúng dòng người đó; dòng Toàn Project giữ nguyên.
-4. Đổi project sang **Hè 2026** → bảng còn Minh 3 / 1 / 2 / 0, 30.000 views.
-
-Dữ liệu mẫu tái tạo được bằng `docs/tasks/scrum-55-thong-ke-creator-va-project/demo-seed.sql`
-(chỉ dùng cho DB local; không chạy trên DB dùng chung).
+4. Đổi project → bảng đổi theo số của project mới.
 
 ## 4. Chưa kiểm chứng
 
 - Chưa chạy trên DB dev/server dùng chung (không cần cho task này).
 - Chưa test UI ở DPI/độ phân giải khác; chưa chụp ảnh màn hình.
-- Chưa commit/push/tạo PR — chờ người dùng nghiệm thu.
+- Đã push nhánh `feature/SCRUM-55-thong-ke-creator-va-project`; PR vào `develop` chưa tạo.

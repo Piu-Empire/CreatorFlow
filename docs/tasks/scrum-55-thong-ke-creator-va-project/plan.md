@@ -82,22 +82,14 @@ Dòng "Toàn project" tính bằng tổng các creator **trong project**, không
 | S-10 | Chọn Creator ở combo | Chỉ còn dòng creator đó; dòng project không đổi |
 | S-11 | Chọn "Tất cả Creator" | Trở lại đủ danh sách |
 
-## 5. Demo để bạn duyệt (app + data mẫu)
+## 5. Kiểm chứng trên app
 
 App WinForms luôn chạy qua API (`Api:BaseUrl` trong `appsettings.Local.json`, hiện trỏ
-`https://creatorflow-dev-api.onrender.com/`). Vì vậy "mở app + data mẫu" cần chốt **dùng DB nào**:
+`https://creatorflow-dev-api.onrender.com/`). Kiểm chứng màn hình được thực hiện trên DB local
+(`localhost:5080`, `Api__BaseUrl` qua biến môi trường, không commit) để không ghi vào DB dùng chung.
 
-- **PA-A (đề xuất): Docker local** — `db` + `api` tại `localhost:5080`, áp schema vào DB dev riêng, tạo dữ liệu mẫu
-  bằng tay (1 project, 3 tài khoản, ~10 content đủ trạng thái/trễ, metrics cho một số content). Cách ly hoàn toàn,
-  không ảnh hưởng team. Cần: Docker Desktop đang chạy + quyền ghi DB local + đổi `Api:BaseUrl` tạm về localhost (hoặc
-  dùng biến môi trường/không commit).
-- **PA-B: DB dev dùng chung** (API onrender) — tạo project mẫu trên môi trường team. Nhanh nhưng **ghi vào dữ liệu
-  dùng chung**, cần bạn xác nhận rõ và cần tài khoản đăng nhập.
-- **PA-C: chỉ đọc dữ liệu có sẵn** trên môi trường dev dùng chung — không tạo dữ liệu; chỉ chứng minh màn hình chạy
-  và số khớp bằng truy vấn đối chiếu.
-
-Kịch bản demo (giống requirements): project "Tết 2026", 3 creator với số liệu chênh lệch rõ; sau đó lọc từng creator
-và đổi project để chứng minh AC1/AC2.
+Kịch bản: mở màn Reports → **Creator & Project**; lọc từng creator và đổi project để chứng minh AC1/AC2.
+Dữ liệu dùng cho kiểm chứng chỉ tồn tại ở DB local, không nằm trong repo.
 
 ## 6. Rủi ro
 
@@ -105,11 +97,9 @@ và đổi project để chứng minh AC1/AC2.
 - **Creator đã rời project** vẫn là `created_by` của content: chốt loại khỏi danh sách creator nhưng **vẫn nằm trong
   tổng project** (nếu không, tổng sẽ thiếu). Cần bạn xác nhận cách này.
 - **Local mode không có metrics**: màn chỉ có số khi chạy server mode; app hiện luôn server mode nên không ảnh hưởng.
-- **Dữ liệu mẫu**: nếu chọn PA-B sẽ ghi vào DB dùng chung — chỉ làm khi bạn xác nhận.
-- **Không tự tạo branch/commit/push**: chờ bạn chỉ định branch đích.
 
 ## 7. Cổng kiểm chứng
 
-`requirements → duyệt → plan (file này) → duyệt → code → build/unit test → demo app + data mẫu → bạn duyệt`.
+`requirements → duyệt → plan (file này) → duyệt → code → build/unit test → kiểm chứng trên app → bạn duyệt`.
 Trước khi build/chạy app/ghi dữ liệu phải theo `post-change-test-workflow` (trình checklist, chờ duyệt). Trong lúc test
 chỉ quan sát, không sửa code; phát hiện lỗi thì quay lại `bug-investigation-workflow`.
