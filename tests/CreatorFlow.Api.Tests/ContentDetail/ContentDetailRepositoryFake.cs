@@ -62,7 +62,9 @@ internal sealed class ContentDetailRepositoryFake : IContentDetailRepository
         Rows[id] = new Row
         {
             Detail = new ContentDetailRecord(id, content.ProjectId, d.Title, d.Description, d.ContentType, Pascal(content.StatusDb),
-                Pascal(d.PriorityDb), d.Deadline, d.PlannedPublishAt, content.CreatedBy, d.Platforms.OrderBy(p => p, StringComparer.Ordinal).ToArray(), d.Sprint),
+                Pascal(d.PriorityDb), d.Deadline, d.PlannedPublishAt, content.CreatedBy, d.Platforms.OrderBy(p => p, StringComparer.Ordinal).ToArray(), d.Sprint,
+                content.SourceContentId),
+            Script = string.IsNullOrWhiteSpace(content.Script) ? null : content.Script,
         };
         return Task.FromResult(id);
     }

@@ -48,6 +48,7 @@ public partial class BoardForm : Form, IMessageFilter
     private readonly INotificationBackend? _notificationBackend;
     private readonly IMetricBackend? _metricBackend;
     private readonly IAIService? _aiService;
+    private readonly IRepurposeAiService? _repurposeAi;
     private NotificationPanelControl? _notificationPanel;
     private long? _reopenContentId; // chế độ API: mở lại drawer của thẻ này sau khi Board tải lại (sau khi lưu/đổi trạng thái/giao việc)
     private readonly IMyTaskBackend? _taskBackend;
@@ -91,9 +92,9 @@ public partial class BoardForm : Form, IMessageFilter
         IMyTaskBackend tasks, IIdeaBackend ideas, IBoardBackend board, IContentDetailBackend detail,
         IAssignmentBackend assignments, IReviewQueueBackend reviews, INotificationBackend notifications,
         IMetricBackend metrics, ProjectInvitationService invitations, InvitationInboxService inbox,
-        IAIService? aiService = null)
+        IAIService? aiService = null, IRepurposeAiService? repurposeAi = null)
         : this(null!, null!, null!, null!, null!, null!, null!, script, null!, auth, metrics,
-            invitations, inbox, projects, tasks, ideas, board, detail, assignments, reviews, notifications, aiService)
+            invitations, inbox, projects, tasks, ideas, board, detail, assignments, reviews, notifications, aiService, repurposeAi)
     {
         ArgumentNullException.ThrowIfNull(auth);
         ArgumentNullException.ThrowIfNull(projects);
@@ -128,7 +129,8 @@ public partial class BoardForm : Form, IMessageFilter
         IAssignmentBackend? assignmentBackend = null,
         IReviewQueueBackend? reviewQueueBackend = null,
         INotificationBackend? notificationBackend = null,
-        IAIService? aiService = null)
+        IAIService? aiService = null,
+        IRepurposeAiService? repurposeAi = null)
     {
         InitializeComponent();
         _workflowService = workflowService;
@@ -151,6 +153,7 @@ public partial class BoardForm : Form, IMessageFilter
         _notificationBackend = notificationBackend;
         _metricBackend = metrics;
         _aiService = aiService;
+        _repurposeAi = repurposeAi;
         _topHeaderControl.BellClicked += async (_, _) => await OnBellClickedAsync();
         _topHeaderControl.SetNotificationsEnabled(_notificationBackend is not null);
         InitializeProjects(projects);
@@ -171,8 +174,9 @@ public partial class BoardForm : Form, IMessageFilter
         _pnlDrawerHost.Paint += PnlDrawerHost_Paint;
         BuildColumns();
 
-        _contentDetailPanel.Initialize(_workflowService, _activityRepository, _memberRepository, _contentService, scriptService, metrics, loadLocalPlatforms: projects is null, detailBackend: detailBackend, assignmentBackend: assignmentBackend);
+        _contentDetailPanel.Initialize(_workflowService, _activityRepository, _memberRepository, _contentService, scriptService, metrics, loadLocalPlatforms: projects is null, detailBackend: detailBackend, assignmentBackend: assignmentBackend, repurposeAi: _repurposeAi);
         _contentDetailPanel.ContentChanged += (_, _) => { if (_projects is not null) _reopenContentId = _selectedContentId; ReloadBoard(); _toast.ShowToast(this, "Cap nhat thanh cong!"); };
+        _contentDetailPanel.ContentRepurposed += OnContentRepurposed;
         _contentDetailPanel.CloseRequested += (_, _) => CloseDrawer();
 
         _topHeaderControl.NewContentClicked += (_, _) => OpenCreateContentDialog();
@@ -213,6 +217,12 @@ public partial class BoardForm : Form, IMessageFilter
             Application.AddMessageFilter(this);
             ReloadBoard();
         };
+    }
+
+    private void OnContentRepurposed(object? sender, ContentRepurposedEventArgs e)
+    {
+        ReloadBoard();
+        _toast.ShowToast(this, $"Da tao CNT-{e.DerivedContentId:000} tu CNT-{e.SourceContentId:000}");
     }
 
     // Handler đặt tên (Designer không đọc được lambda trong InitializeComponent)

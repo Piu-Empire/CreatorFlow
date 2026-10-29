@@ -32,7 +32,9 @@ static class Program
         {
             using var api = ApiClient.Create(ApiClientConfiguration.Load());
             var session = new UserSession();
-            var aiService = AIFactory.Create();
+            AIOptions aiOptions = AIFactory.FromEnvironment();
+            var aiService = new AIService(new HttpClient(), aiOptions);
+            var repurposeAi = new RepurposeAiService(aiService, aiOptions.Validate() is null);
             var scriptService = new ScriptService(api, session, new ScriptAiService(aiService));
             using var projects = new ProjectApiFacade(api, session);
             var taskBackend = new ApiMyTaskBackend(api, session);
@@ -58,7 +60,7 @@ static class Program
             using var context = new AuthenticationApplicationContext(auth, () =>
                 new BoardForm(auth, projects, scriptService, taskBackend, ideaBackend, boardBackend,
                     detailBackend, assignmentBackend, reviewQueueBackend, notificationBackend,
-                    metricBackend, invitations, invitationInbox, aiService), projects, invitationInbox);
+                    metricBackend, invitations, invitationInbox, aiService, repurposeAi), projects, invitationInbox);
             Application.Run(context);
         }
         catch (InvalidOperationException)
