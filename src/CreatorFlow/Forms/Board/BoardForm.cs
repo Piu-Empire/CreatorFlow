@@ -59,6 +59,8 @@ public partial class BoardForm : Form, IMessageFilter
     private ProfileControl? _profile;
     private AdminUserManagementControl? _admin;
     private AdminReportsControl? _reports;
+    private AdminPlansControl? _adminPlans;
+    private AdminStatisticsControl? _adminStatistics;
     private CalendarControl? _calendar;
     private DashboardControl? _dashboard;
     private readonly CancellationTokenSource _authLifetime = new();
@@ -149,6 +151,8 @@ public partial class BoardForm : Form, IMessageFilter
             _sidebarControl.ProfileRequested += async (_, _) => await OpenProfileAsync();
             _sidebarControl.AdminWorkspaceRequested += async (_, _) => await OpenAdminAsync();
             _sidebarControl.AdminReportsRequested += async (_, _) => await OpenReportsAsync();
+            _sidebarControl.AdminPlansRequested += async (_, _) => await OpenAdminPlansAsync();
+            _sidebarControl.AdminStatisticsRequested += async (_, _) => await OpenAdminStatisticsAsync();
             _sidebarControl.CalendarRequested += (_, _) => OpenCalendar();
             _sidebarControl.SummaryRequested += (_, _) => OpenDashboard();
             _sidebarControl.AiAssistantRequested += (_, _) => OpenAiAssistant();
@@ -184,6 +188,8 @@ public partial class BoardForm : Form, IMessageFilter
             CloseProfile();
             CloseAdmin();
             CloseReports();
+            CloseAdminPlans();
+            CloseAdminStatistics();
             CloseCalendar();
             CloseDashboard();
             _sidebarControl.SetActiveMenu("Board");
@@ -601,7 +607,7 @@ public partial class BoardForm : Form, IMessageFilter
     {
         // New Content is available over Project Settings; its modal opens above the settings page.
         // Other workspaces and Profile keep their existing navigation/unsaved-state behavior.
-        if (!HasProjectContext || _profile is not null || _admin is not null || _reports is not null || _calendar is not null || _dashboard is not null) return;
+        if (!HasProjectContext || _profile is not null || _admin is not null || _reports is not null || _adminPlans is not null || _adminStatistics is not null || _calendar is not null || _dashboard is not null) return;
         bool viaApi = _projects is not null;
         if (viaApi && (_detailBackend is null || _assignmentBackend is null)) { ShowUnavailableModule("Tạo Content"); return; }
 
@@ -901,6 +907,8 @@ public partial class BoardForm : Form, IMessageFilter
         CloseProfile();
         CloseAdmin();
         CloseReports();
+        CloseAdminPlans();
+        CloseAdminStatistics();
         CloseCalendar();
         CloseDashboard();
         using var queueForm = _reviewQueueBackend is not null
@@ -1003,6 +1011,8 @@ public partial class BoardForm : Form, IMessageFilter
         CloseProjectPage();
         CloseAdmin();
         CloseReports();
+        CloseAdminPlans();
+        CloseAdminStatistics();
         CloseCalendar();
         CloseDashboard();
         var profile = new ProfileControl(_auth) { Dock = DockStyle.Fill };
@@ -1042,6 +1052,8 @@ public partial class BoardForm : Form, IMessageFilter
         CloseProjectPage();
         CloseProfile();
         CloseReports();
+        CloseAdminPlans();
+        CloseAdminStatistics();
         CloseCalendar();
         CloseDashboard();
         var admin = new AdminUserManagementControl(_auth, _toast) { Dock = DockStyle.Fill };
@@ -1075,6 +1087,8 @@ public partial class BoardForm : Form, IMessageFilter
         CloseProjectPage();
         CloseProfile();
         CloseAdmin();
+        CloseAdminPlans();
+        CloseAdminStatistics();
         CloseCalendar();
         CloseDashboard();
         var reports = new AdminReportsControl(_auth, _toast) { Dock = DockStyle.Fill };
@@ -1101,6 +1115,76 @@ public partial class BoardForm : Form, IMessageFilter
         UpdateProjectContext();
     }
 
+    private async Task OpenAdminPlansAsync()
+    {
+        if (_auth is null || !_auth.Session.IsAuthenticated || _adminPlans is not null) return;
+        if (_auth.Session.CurrentUser?.IsSystemAdmin != true || !CanLeaveProjectPage()) return;
+        CloseProjectPage();
+        CloseProfile();
+        CloseAdmin();
+        CloseReports();
+        CloseAdminStatistics();
+        CloseCalendar();
+        CloseDashboard();
+        var plans = new AdminPlansControl(_auth, _toast) { Dock = DockStyle.Fill };
+        _adminPlans = plans;
+        _pnlDrawerHost.Visible = false;
+        _pnlBoardArea.Visible = false;
+        _pnlMain.Controls.Add(plans);
+        plans.BringToFront();
+        _sidebarControl.SetActiveMenu("Gói dịch vụ");
+        _topHeaderControl.SetAuthenticatedPage("Gói dịch vụ");
+        await plans.LoadAsync();
+    }
+
+    private void CloseAdminPlans()
+    {
+        if (_adminPlans is null) return;
+        AdminPlansControl plans = _adminPlans;
+        _adminPlans = null;
+        _pnlMain.Controls.Remove(plans);
+        plans.Dispose();
+        _sidebarControl.SetActiveMenu("Board");
+        _pnlBoardArea.Visible = true;
+        _topHeaderControl.SetAuthenticatedPage("Board");
+        UpdateProjectContext();
+    }
+
+    private async Task OpenAdminStatisticsAsync()
+    {
+        if (_auth is null || !_auth.Session.IsAuthenticated || _adminStatistics is not null) return;
+        if (_auth.Session.CurrentUser?.IsSystemAdmin != true || !CanLeaveProjectPage()) return;
+        CloseProjectPage();
+        CloseProfile();
+        CloseAdmin();
+        CloseReports();
+        CloseAdminPlans();
+        CloseCalendar();
+        CloseDashboard();
+        var statistics = new AdminStatisticsControl(_auth) { Dock = DockStyle.Fill };
+        _adminStatistics = statistics;
+        _pnlDrawerHost.Visible = false;
+        _pnlBoardArea.Visible = false;
+        _pnlMain.Controls.Add(statistics);
+        statistics.BringToFront();
+        _sidebarControl.SetActiveMenu("Thống kê hệ thống");
+        _topHeaderControl.SetAuthenticatedPage("Thống kê hệ thống");
+        await statistics.LoadAsync();
+    }
+
+    private void CloseAdminStatistics()
+    {
+        if (_adminStatistics is null) return;
+        AdminStatisticsControl statistics = _adminStatistics;
+        _adminStatistics = null;
+        _pnlMain.Controls.Remove(statistics);
+        statistics.Dispose();
+        _sidebarControl.SetActiveMenu("Board");
+        _pnlBoardArea.Visible = true;
+        _topHeaderControl.SetAuthenticatedPage("Board");
+        UpdateProjectContext();
+    }
+
     private void OpenCalendar()
     {
         if (_calendar is not null || !CanLeaveProjectPage()) return;
@@ -1108,6 +1192,8 @@ public partial class BoardForm : Form, IMessageFilter
         CloseProfile();
         CloseAdmin();
         CloseReports();
+        CloseAdminPlans();
+        CloseAdminStatistics();
         CloseDashboard();
         var calendar = new CalendarControl { Dock = DockStyle.Fill };
         // Server mode: Lịch chỉ chạy khi có nguồn card từ server; unavailable thì không cấp provider.
@@ -1159,6 +1245,8 @@ public partial class BoardForm : Form, IMessageFilter
         CloseProfile();
         CloseAdmin();
         CloseReports();
+        CloseAdminPlans();
+        CloseAdminStatistics();
         CloseCalendar();
         var dashboard = new DashboardControl { Dock = DockStyle.Fill };
         dashboard.CardProvider = () => HasProjectContext ? _allCards : null;

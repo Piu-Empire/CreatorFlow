@@ -57,6 +57,11 @@ builder.Services.AddScoped<IAdminUserRepository, AdminUserRepository>();
 builder.Services.AddScoped<AdminUserService>();
 builder.Services.AddScoped<IAdminReportRepository, AdminReportRepository>();
 builder.Services.AddScoped<AdminReportService>();
+builder.Services.AddScoped<ISubscriptionRepository, SubscriptionRepository>(); // SCRUM-23: đăng ký gói
+builder.Services.AddScoped<AdminPlanService>();
+builder.Services.AddScoped<AdminSubscriptionService>();
+builder.Services.AddScoped<IAdminStatisticsRepository, AdminStatisticsRepository>();
+builder.Services.AddScoped<AdminStatisticsService>();
 builder.Services.AddScoped<ITaskRepository, TaskRepository>(); // BƯỚC 0a: thiếu, MetricService cần GetRoleAsync/GetContentAsync
 builder.Services.AddScoped<IMetricRepository, MetricRepository>();
 builder.Services.AddScoped<MetricService>();

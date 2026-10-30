@@ -70,6 +70,8 @@ public partial class BoardForm
                 CloseProfile();
                 CloseAdmin();
                 CloseReports();
+                CloseAdminPlans();
+                CloseAdminStatistics();
                 CloseCalendar();
                 _sidebarControl.SetActiveMenu("Board");
                 ReloadBoard();

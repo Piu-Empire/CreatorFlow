@@ -160,6 +160,8 @@ public partial class BoardForm
         CloseProfile();
         CloseAdmin();
         CloseReports();
+        CloseAdminPlans();
+        CloseAdminStatistics();
         CloseCalendar();
         CloseDashboard();
         _pnlBoardArea.Visible = true;
