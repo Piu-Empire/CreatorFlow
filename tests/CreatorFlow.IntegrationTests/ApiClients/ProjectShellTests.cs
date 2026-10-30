@@ -9,6 +9,7 @@ using CreatorFlow.Contracts.ContentDetail;
 using CreatorFlow.Contracts.Projects;
 using CreatorFlow.Contracts.Users;
 using CreatorFlow.Contracts.Tasks;
+using CreatorFlow.Contracts.Metrics;
 using CreatorFlow.Services.Exceptions;
 using CreatorFlow.Controls;
 using CreatorFlow.Controls.ContentLibrary;
@@ -399,8 +400,9 @@ public sealed class ProjectShellTests
             var sidebar = Field<SidebarControl>(fixture.Shell, "_sidebarControl");
             var items = ((System.Collections.IEnumerable)Field<object>(sidebar, "_items")).Cast<object>().ToArray();
             var titles = items.Select(item => (string)item.GetType().GetField("Title")!.GetValue(item)!).ToArray();
-            foreach (string title in new[] { "Kho Content", "Backlog", "Calendar", "My Tasks", "Invitations", "Project Settings" })
+            foreach (string title in new[] { "Kho Content", "Backlog", "Calendar", "My Tasks", "Project Settings" })
                 CollectionAssert.Contains(titles, title);
+            CollectionAssert.DoesNotContain(titles, "Invitations");
             Assert.AreEqual(admin, titles.Contains("Quản trị người dùng"));
             if (admin)
             {
@@ -594,6 +596,139 @@ public sealed class ProjectShellTests
         });
     }
 
+    [TestMethod]
+    public void Reports_OnLoad401_ClearsTokenImmediately_ThenReturnsToLoginWithoutDisposedException()
+    {
+        RunSta(() =>
+        {
+            using var fixture = new UxFixture(metricsBackend: true);
+            fixture.Projects.Context.Apply(new(81, "A", "OWNER", "ACTIVE"));
+            using var context = CreateApplicationContext(fixture);
+            var failures = new List<Exception>();
+            ThreadExceptionEventHandler handler = (_, e) => failures.Add(e.Exception);
+            Application.ThreadException += handler;
+            try
+            {
+                fixture.MetricResponse = () => Task.FromResult(Error(401));
+                typeof(BoardForm).GetMethod("OpenProjectReports", BindingFlags.Instance | BindingFlags.NonPublic)!
+                    .Invoke(fixture.Shell, null);
+
+                Assert.IsFalse(fixture.Session.IsAuthenticated);
+                Assert.IsNull(fixture.Session.AccessToken);
+                Assert.IsFalse(fixture.Shell.IsDisposed, "Shell disposal must wait until the current UI handler finishes.");
+                Application.DoEvents();
+                Assert.AreEqual("CreatorFlow.Forms.AuthenticationHostForm", context.MainForm?.GetType().FullName);
+                Assert.IsTrue(fixture.Shell.IsDisposed);
+                Assert.AreEqual(0, failures.Count, string.Join(Environment.NewLine, failures));
+                Assert.AreEqual(1, Application.OpenForms.Cast<Form>().Count(form => form.GetType().FullName == "CreatorFlow.Forms.AuthenticationHostForm"));
+            }
+            finally
+            {
+                Application.ThreadException -= handler;
+                context.ExitThread(); context.MainForm?.Dispose();
+            }
+        });
+    }
+
+    [TestMethod]
+    public void Logout_RepeatedSessionClears_ReturnToOneLoginHost()
+    {
+        RunSta(() =>
+        {
+            using var fixture = new UxFixture();
+            fixture.Projects.Context.Apply(new(81, "A", "OWNER", "ACTIVE"));
+            using var context = CreateApplicationContext(fixture);
+            try
+            {
+                fixture.Session.Clear();
+                fixture.Session.Clear();
+                Assert.IsNull(fixture.Session.AccessToken);
+                Assert.IsFalse(fixture.Shell.IsDisposed);
+                Application.DoEvents();
+                Assert.AreEqual("CreatorFlow.Forms.AuthenticationHostForm", context.MainForm?.GetType().FullName);
+                Assert.IsTrue(fixture.Shell.IsDisposed);
+                Assert.AreEqual(1, Application.OpenForms.Cast<Form>().Count(form => form.GetType().FullName == "CreatorFlow.Forms.AuthenticationHostForm"));
+            }
+            finally { context.ExitThread(); context.MainForm?.Dispose(); }
+        });
+    }
+
+    [TestMethod]
+    public void QueuedSessionCleanup_DoesNotCloseOrClearAReplacementLogin()
+    {
+        RunSta(() =>
+        {
+            using var fixture = new UxFixture();
+            fixture.Projects.Context.Apply(new(81, "A", "OWNER", "ACTIVE"));
+            using var context = CreateApplicationContext(fixture);
+            try
+            {
+                fixture.Session.Clear();
+                Assert.IsTrue(fixture.Session.TrySetLogin(new LoginResponse("replacement", DateTimeOffset.UtcNow.AddMinutes(30),
+                    new(43, "replacement@example.test", "Replacement", false)), fixture.Session.Generation));
+                Application.DoEvents();
+                Assert.AreSame(fixture.Shell, context.MainForm);
+                Assert.IsFalse(fixture.Shell.IsDisposed);
+                Assert.IsTrue(fixture.Session.IsAuthenticated);
+                Assert.AreEqual(43L, fixture.Session.CurrentUser!.UserId);
+            }
+            finally { context.ExitThread(); context.MainForm?.Dispose(); }
+        });
+    }
+
+    [TestMethod]
+    public void Reports_401DuringLoadSummary_DoesNotWriteErrorToDisposedControl()
+    {
+        RunSta(() =>
+        {
+            using var fixture = new UxFixture();
+            using var page = new ProjectReportsControl(new ApiMetricBackend(fixture.Api, fixture.Session), 81);
+            fixture.MetricResponse = () => Task.FromResult(Error(401));
+            fixture.Session.Cleared += (_, _) => page.Dispose();
+            page.LoadSummary("content");
+            Assert.IsTrue(page.IsDisposed);
+            Assert.IsNull(fixture.Session.AccessToken);
+        });
+    }
+
+    [TestMethod]
+    public void SessionClear_WithSettingsSubscribed_FinishesOnceAndReturnsToLogin()
+    {
+        RunSta(() =>
+        {
+            using var fixture = new UxFixture();
+            fixture.Projects.Context.Apply(new(81, "A", "OWNER", "ACTIVE"));
+            using var context = CreateApplicationContext(fixture);
+            using var settings = new ProjectSettingsControl(fixture.Projects);
+            settings.CreateControl();
+            Complete(settings.LoadProjectAsync());
+            int clears = 0;
+            fixture.Session.Cleared += (_, _) => clears++;
+            int requestsBeforeClear = fixture.Paths.Count;
+            try
+            {
+                fixture.Session.Clear();
+                Assert.AreEqual(1, clears, "Settings must not re-enter Session.Clear while loading without credentials.");
+                Assert.AreEqual(requestsBeforeClear, fixture.Paths.Count);
+                Assert.IsNull(fixture.Session.AccessToken);
+                Application.DoEvents();
+                Assert.AreEqual("CreatorFlow.Forms.AuthenticationHostForm", context.MainForm?.GetType().FullName);
+                Assert.IsTrue(fixture.Shell.IsDisposed);
+            }
+            finally { context.ExitThread(); context.MainForm?.Dispose(); }
+        });
+    }
+
+    private static ApplicationContext CreateApplicationContext(UxFixture fixture)
+    {
+        Type type = typeof(BoardForm).Assembly.GetType("CreatorFlow.AuthenticationApplicationContext", throwOnError: true)!;
+        var context = (ApplicationContext)Activator.CreateInstance(type,
+            new object?[] { new AuthApiFacade(fixture.Api, fixture.Session), new Func<BoardForm>(() => fixture.Shell), fixture.Projects, null })!;
+        type.GetMethod("SwitchMainForm", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(context, new object[] { fixture.Shell });
+        Field<System.Windows.Forms.Timer>(fixture.Shell, "_projectTimer").Stop();
+        return context;
+    }
+
     private static T Field<T>(object target, string name) => (T)target.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(target)!;
     private static Task InvokeTask(object target, string name, params object[] args) => (Task)target.GetType().GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(target, args)!;
     private static void Complete(Task task)
@@ -628,8 +763,9 @@ public sealed class ProjectShellTests
         public static Task<HttpResponseMessage> Detail(long id, string role) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(new ProjectResponse(id, id == 81 ? "A" : id == 82 ? "Archived B" : "C", "Description", "Owner", role, id == 82 ? "ARCHIVED" : "ACTIVE", DateTimeOffset.UtcNow)) });
         public Func<Task<HttpResponseMessage>>? ListResponse { get; set; }
         public Func<Task<HttpResponseMessage>>? TaskResponse { get; set; }
+        public Func<Task<HttpResponseMessage>>? MetricResponse { get; set; }
         public bool ContentBackends { get; }
-        public UxFixture(bool systemAdmin = false, bool contentBackends = false)
+        public UxFixture(bool systemAdmin = false, bool contentBackends = false, bool metricsBackend = false)
         {
             ContentBackends = contentBackends;
             http = new HttpClient(new UxHandler(this)) { BaseAddress = new("http://fixture.test/") }; api = new ApiClient(http);
@@ -645,7 +781,8 @@ public sealed class ProjectShellTests
                 new MyTaskService(tasks, members, uow),
                 new ScriptService(new InMemoryContentScriptRepository(), new InMemoryContentDetailsRepository(), new InMemoryPlatformRepository(), members, tasks, uow, new NotConfiguredAiService()),
                 new IdeaService(new InMemoryIdeaRepository(withSeed: false), members, history, uow),
-                auth: new AuthApiFacade(api, Session), projects: Projects, taskBackend: new ApiMyTaskBackend(api, Session),
+                auth: new AuthApiFacade(api, Session), metrics: metricsBackend ? new ApiMetricBackend(api, Session) : null,
+                projects: Projects, taskBackend: new ApiMyTaskBackend(api, Session),
                 boardBackend: contentBackends ? new ApiBoardBackend(api, Session) : null,
                 detailBackend: contentBackends ? new ApiContentDetailBackend(api, Session) : null,
                 assignmentBackend: contentBackends ? new ApiAssignmentBackend(api, Session) : null);
@@ -657,9 +794,11 @@ public sealed class ProjectShellTests
             protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
             {
                 string path = request.RequestUri!.AbsolutePath; fixture.Paths.Add(path); fixture.Methods.Add(request.Method);
+                if (path == "/api/auth/capabilities") return Reply(new AuthCapabilitiesResponse(false, false));
                 if (request.Method == HttpMethod.Get && path == "/api/users/me/avatar") return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
                 if (request.Method == HttpMethod.Get && path == "/api/users/me") return Reply(new ProfileResponse(42, "fixture@example.test", "Fixture", "Active", fixture.Session.CurrentUser!.IsSystemAdmin, null));
                 if (path.EndsWith("/my-role")) return Reply(new ProjectRoleResponse(fixture.CurrentRole == "OWNER" ? "Owner" : fixture.CurrentRole == "MANAGER" ? "Manager" : "Creator"));
+                if (path.EndsWith("/metrics/summary")) return fixture.MetricResponse?.Invoke() ?? Reply(new MetricsSummaryResponse(81, "content", []));
                 if (path.EndsWith("/my-tasks")) return fixture.TaskResponse?.Invoke() ?? Reply(new MyTasksResponse([TaskItem(long.Parse(path.Split('/')[3]))]));
                 if (path == "/api/platforms") return Reply(new PlatformOptionsResponse(["TikTok", "YouTube"]));
                 if (path.EndsWith("/assignable-members")) return Reply(new AssignableMembersResponse([new(7, "Creator One", "Creator")]));

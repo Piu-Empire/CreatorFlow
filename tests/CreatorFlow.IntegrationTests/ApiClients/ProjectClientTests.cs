@@ -18,6 +18,37 @@ public sealed class ProjectClientTests
         var session = new UserSession(); session.TrySetLogin(new LoginResponse("fixture-token", DateTimeOffset.UtcNow.AddMinutes(30), new(42, "fixture@example.test", "Fixture", false)), 0); return session;
     }
     [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task UnauthenticatedRequests_DoNotRepeatClearOrSendHttp_ExpiredCredentialsAreRemoved(bool expired)
+    {
+        var session = expired ? Session() : new UserSession();
+        if (expired) typeof(UserSession).GetProperty(nameof(UserSession.ExpiresAtUtc))!
+            .SetValue(session, DateTimeOffset.UtcNow.AddMinutes(-1));
+        long initialGeneration = session.Generation;
+        int clears = 0, requests = 0;
+        session.Cleared += (_, _) => clears++;
+        using var http = new HttpClient(new Handler((_, _) =>
+        {
+            requests++;
+            throw new AssertFailedException("Unauthenticated request must not reach HTTP.");
+        })) { BaseAddress = new("http://fixture.test/") };
+        using var api = new ApiClient(http);
+        using var projects = new ProjectApiFacade(api, session);
+
+        for (int attempt = 0; attempt < 2; attempt++)
+        {
+            var error = await Assert.ThrowsExactlyAsync<ApiBusinessException>(() => projects.ListAsync(default));
+            Assert.AreEqual(HttpStatusCode.Unauthorized, error.StatusCode);
+        }
+
+        Assert.AreEqual(expired ? 1 : 0, clears);
+        Assert.AreEqual(initialGeneration + (expired ? 1 : 0), session.Generation);
+        Assert.IsNull(session.AccessToken);
+        Assert.IsNull(session.CurrentUser);
+        Assert.AreEqual(0, requests);
+    }
+    [TestMethod]
     public void Context_RejectsArchivedAndClearsIdNameRole()
     {
         var context = new ProjectContext(); context.Apply(new(81, "A", "OWNER", "ACTIVE")); long version = context.Generation;

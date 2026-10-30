@@ -47,7 +47,8 @@ public sealed record CreateContentRequest(
     IReadOnlyList<string>? Platforms,
     long? AssigneeUserId,
     string? Sprint = null,
-    long? SourceContentId = null);
+    long? SourceContentId = null,
+    string? Script = null);
 
 /// <summary>Tên các nền tảng đang bật — nguồn cho menu chọn platform.</summary>
 public sealed record PlatformOptionsResponse(IReadOnlyList<string> Platforms);

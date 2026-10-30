@@ -1,9 +1,9 @@
-using CreatorFlow.Models;
+﻿using CreatorFlow.Models;
 
 namespace CreatorFlow.Services.AI;
 
 /// <summary>
-/// Tách output AI Repurpose thành Tiêu đề / Mô tả / Kịch bản (SCRUM-59).
+/// Tách output AI Repurpose thành Tiêu đề / Mô tả / Kịch bản (SCRUM-38).
 /// Chịu lỗi: thiếu mốc thì đưa toàn bộ text vào Kịch bản và đánh dấu IsStructured=false.
 /// Hàm thuần, kiểm thử offline.
 /// </summary>

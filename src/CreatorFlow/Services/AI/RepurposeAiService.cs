@@ -1,34 +1,40 @@
-using CreatorFlow.AI.Models;
+﻿using CreatorFlow.AI.Models;
 using CreatorFlow.Models;
 using AiClient = CreatorFlow.AI.IAIService;
 
 namespace CreatorFlow.Services.AI;
 
 /// <summary>
-/// Cài đặt thật của <see cref="IRepurposeAiService"/> (SCRUM-59): adapter nối cổng Repurpose với
+/// Cài đặt thật của <see cref="IRepurposeAiService"/> (SCRUM-38): adapter nối cổng Repurpose với
 /// lõi AI client <see cref="AiClient"/> (tái dùng SCRUM-57/58, key ở .env — POC client).
 /// Lỗi mạng/timeout trả Failure thay vì ném ra UI.
 /// </summary>
 public sealed class RepurposeAiService : IRepurposeAiService
 {
     private readonly AiClient? _ai;
+    private readonly bool _isConfigured;
 
-    public RepurposeAiService(AiClient? ai) => _ai = ai;
+    public RepurposeAiService(AiClient? ai, bool? isConfigured = null)
+    {
+        _ai = ai;
+        _isConfigured = isConfigured ?? (ai is not null);
+    }
 
-    public bool IsConfigured => _ai is not null;
+    public bool IsConfigured => _ai is not null && _isConfigured;
 
     public async Task<RepurposeAiResponse> RequestRepurposeAsync(
         RepurposeAiRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        if (_ai is null)
+        AiClient? aiClient = _ai;
+        if (aiClient is null || !_isConfigured)
             return RepurposeAiResponse.Failure(NotConfiguredAiService.Message);
 
         AiResult result;
         try
         {
-            result = await _ai.AskAsync(RepurposeAiPromptBuilder.Build(request), cancellationToken);
+            result = await aiClient.AskAsync(RepurposeAiPromptBuilder.Build(request), cancellationToken);
         }
         catch (OperationCanceledException)
         {

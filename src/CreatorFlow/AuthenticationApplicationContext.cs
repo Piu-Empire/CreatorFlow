@@ -44,11 +44,12 @@ internal sealed class AuthenticationApplicationContext : ApplicationContext
         CurrentSession.CurrentProjectName = string.Empty;
         CurrentSession.CurrentUserRole = null;
         if (MainForm is not (BoardForm or ProjectSelectionForm)) return;
-        if (!switching) ShowLogin();
-        else if (MainForm is { IsHandleCreated: true, IsDisposed: false } pending)
+        long generation = auth.Session.Generation;
+        if (MainForm is { IsHandleCreated: true, IsDisposed: false } pending)
             pending.BeginInvoke(new Action(() =>
             {
-                if (ReferenceEquals(MainForm, pending) && !auth.Session.IsAuthenticated) ShowLogin();
+                if (!switching && !pending.IsDisposed && ReferenceEquals(MainForm, pending) &&
+                    generation == auth.Session.Generation && !auth.Session.IsAuthenticated) ShowLogin();
             }));
     }
 

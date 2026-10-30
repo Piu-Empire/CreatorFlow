@@ -1,0 +1,242 @@
+{
+  "Branch": "SCRUM-61-Tích-hợp-các-module-trên-develop",
+  "BaseCommit": "646b365e2567fa5a2b802befdb53a7cfe10a9787",
+  "Validation": "Release build; API 479/479 and client 428/428 non-DB tests passed",
+  "Files": [
+    {
+      "Path": "docs/tasks/scrum-61-module-integration/implementation-notes.md",
+      "State": "present",
+      "Sha256": "3D7652463B03E3FBE105311B80FA13FCFD40788376798D9CA9495A2DF0CFCD39"
+    },
+    {
+      "Path": "docs/tasks/scrum-61-module-integration/integration-matrix.md",
+      "State": "present",
+      "Sha256": "39343ED7375FC1AEA82F2D5168D4D213D62F3A43B29E57B03744D84688C2F3B9"
+    },
+    {
+      "Path": "docs/tasks/scrum-61-module-integration/plan.md",
+      "State": "present",
+      "Sha256": "9E547247445E298B6AFED106866CA5196AD7EE46BA5BAB3358CEB97B7D8985F2"
+    },
+    {
+      "Path": "docs/tasks/scrum-61-module-integration/release-review.md",
+      "State": "present",
+      "Sha256": "E9C27689BC3BA53DE47F33802E2DC7A425A39538346A0D3CA2925A621A4A9E42"
+    },
+    {
+      "Path": "docs/tasks/scrum-61-module-integration/requirements.md",
+      "State": "present",
+      "Sha256": "1A0A97A11970991147BCC7600DAC80E2C3FD3118B14953A0285816E8A6C7ADB0"
+    },
+    {
+      "Path": "docs/tasks/scrum-61-module-integration/test-plan.md",
+      "State": "present",
+      "Sha256": "F97B42279BF3909CBD9B569E48BBF1BBCA145F52A1389E29D18BC1A5C5B60953"
+    },
+    {
+      "Path": "docs/tasks/scrum-61-module-integration/test-results.md",
+      "State": "present",
+      "Sha256": "22B05CDBAD9A9388960EE861CAD610EFD327E1D067FF53F3406B1BF2A727DB89"
+    },
+    {
+      "Path": "README.md",
+      "State": "present",
+      "Sha256": "C3FAE2B8C289E6799F27D0B0C1894380940CB2302B7B693FEC5AFC89B6CD7BE4"
+    },
+    {
+      "Path": "src/CreatorFlow.Api/Program.cs",
+      "State": "present",
+      "Sha256": "09F502E12E179DF755EC73D7FE1621A95EA9D01A706D5887E0012E38574427D0"
+    },
+    {
+      "Path": "src/CreatorFlow/appsettings.json",
+      "State": "present",
+      "Sha256": "33E42B37EE9B5AEF3FC76806AE6E8A9DBCF7CC07C1A80409F6B80727384EF97D"
+    },
+    {
+      "Path": "src/CreatorFlow/Controls/ContentDetailPanel.cs",
+      "State": "present",
+      "Sha256": "49431A3B4664548589275316460B2552D6A2FFEBD428BBCD8F9C245BDBD02DAA"
+    },
+    {
+      "Path": "src/CreatorFlow/Controls/ScriptEditorControl.cs",
+      "State": "present",
+      "Sha256": "47237720CE5B6C8EE04A7958D3D8A850E50303E95B24EF2C9102CD3269B98B89"
+    },
+    {
+      "Path": "src/CreatorFlow/CreatorFlow.csproj",
+      "State": "present",
+      "Sha256": "62817DCD56FB367142ACD311321072D4980C61C62BAA93D4F65EC88D11CDCE1A"
+    },
+    {
+      "Path": "src/CreatorFlow/Data/DbConfig.cs",
+      "State": "deleted",
+      "Sha256": null
+    },
+    {
+      "Path": "src/CreatorFlow/Data/DbSessionExtensions.cs",
+      "State": "deleted",
+      "Sha256": null
+    },
+    {
+      "Path": "src/CreatorFlow/Data/IDbSession.cs",
+      "State": "deleted",
+      "Sha256": null
+    },
+    {
+      "Path": "src/CreatorFlow/Data/NpgsqlUnitOfWork.cs",
+      "State": "deleted",
+      "Sha256": null
+    },
+    {
+      "Path": "src/CreatorFlow/Forms/Board/BoardForm.cs",
+      "State": "present",
+      "Sha256": "E33D210560B13DB2E7FC8D99A58C15BBF38B8F26E99E00E55048B8B5CA2FE170"
+    },
+    {
+      "Path": "src/CreatorFlow/Forms/Board/BoardForm.Projects.cs",
+      "State": "present",
+      "Sha256": "85113A0956C2E47659F6022654BA40DDA8E0B94639BF65509480614345A13CD2"
+    },
+    {
+      "Path": "src/CreatorFlow/Program.cs",
+      "State": "present",
+      "Sha256": "97ECB266D6236EE80A972180C20F57DB46F09009636C9FC294F050997327D33C"
+    },
+    {
+      "Path": "src/CreatorFlow/Repositories/Implementations/ActivityRepository.cs",
+      "State": "deleted",
+      "Sha256": null
+    },
+    {
+      "Path": "src/CreatorFlow/Repositories/Implementations/ApiAssigneeBoardRepository.cs",
+      "State": "present",
+      "Sha256": "9A4B7ECB826C9D5B747D169E5DB690A6543219534100F392D52B6EBFC830F86D"
+    },
+    {
+      "Path": "src/CreatorFlow/Repositories/Implementations/BoardRepository.cs",
+      "State": "deleted",
+      "Sha256": null
+    },
+    {
+      "Path": "src/CreatorFlow/Repositories/Implementations/ContentDetailsRepository.cs",
+      "State": "deleted",
+      "Sha256": null
+    },
+    {
+      "Path": "src/CreatorFlow/Repositories/Implementations/ContentRepository.cs",
+      "State": "deleted",
+      "Sha256": null
+    },
+    {
+      "Path": "src/CreatorFlow/Repositories/Implementations/ContentScriptRepository.cs",
+      "State": "deleted",
+      "Sha256": null
+    },
+    {
+      "Path": "src/CreatorFlow/Repositories/Implementations/ContentStatusHistoryRepository.cs",
+      "State": "deleted",
+      "Sha256": null
+    },
+    {
+      "Path": "src/CreatorFlow/Repositories/Implementations/IdeaRepository.cs",
+      "State": "deleted",
+      "Sha256": null
+    },
+    {
+      "Path": "src/CreatorFlow/Repositories/Implementations/MyTaskRepository.cs",
+      "State": "deleted",
+      "Sha256": null
+    },
+    {
+      "Path": "src/CreatorFlow/Repositories/Implementations/PlatformRepository.cs",
+      "State": "deleted",
+      "Sha256": null
+    },
+    {
+      "Path": "src/CreatorFlow/Repositories/Implementations/ProjectMemberRepository.cs",
+      "State": "deleted",
+      "Sha256": null
+    },
+    {
+      "Path": "src/CreatorFlow/Repositories/Implementations/ReviewQueueRepository.cs",
+      "State": "deleted",
+      "Sha256": null
+    },
+    {
+      "Path": "src/CreatorFlow/Repositories/Implementations/ReviewRepository.cs",
+      "State": "deleted",
+      "Sha256": null
+    },
+    {
+      "Path": "src/CreatorFlow/Services/AuthApiFacade.cs",
+      "State": "present",
+      "Sha256": "340AB1E9B6A576AC5DFF1A9D7B2BB47591FC4DE0A16CD97C0C76D7466BE5FE56"
+    },
+    {
+      "Path": "src/CreatorFlow/Services/Backends/ApiIdeaBackend.cs",
+      "State": "present",
+      "Sha256": "19CDD96836A4EF45081875D80E807E3F44B72718418A41C0BD5F7CEE8D030C63"
+    },
+    {
+      "Path": "src/CreatorFlow/Services/Backends/ApiTaskCall.cs",
+      "State": "present",
+      "Sha256": "A0046E1082841889DE8333529A549A6B7A21048AC82DF596C1C3536AA0B8BFC1"
+    },
+    {
+      "Path": "src/CreatorFlow/Services/ContentWorkflowPolicy.cs",
+      "State": "present",
+      "Sha256": "46C032C6D4E0589C8F4AF4BB6186AC014D494462D0239005AD9AD7B47588535F"
+    },
+    {
+      "Path": "src/CreatorFlow/Services/ScriptService.cs",
+      "State": "present",
+      "Sha256": "309E796348BAA132098E0B89AA1C75DD5AE8F96B2AED6934FCB68CA894038E76"
+    },
+    {
+      "Path": "tests/CreatorFlow.Api.Tests/Api/ProjectAuthorizationTests.cs",
+      "State": "present",
+      "Sha256": "7CAB0FB391512BD5AC1061FF0A3FB4F241C4B633185F7E2023C16A0D02B55C47"
+    },
+    {
+      "Path": "tests/CreatorFlow.Api.Tests/Database/ContentPlanningPersistenceTests.cs",
+      "State": "present",
+      "Sha256": "DB92EF4084B257CC8325786451FDC6451B637BD168DA069738D1A0349FBD3ACF"
+    },
+    {
+      "Path": "tests/CreatorFlow.Api.Tests/Database/ContentReferenceRepositoryIntegrationTests.cs",
+      "State": "present",
+      "Sha256": "E358CE0538BE43558F7601E410A4A1C3687DCA85D276F45D2536231C2CE0CEA9"
+    },
+    {
+      "Path": "tests/CreatorFlow.Api.Tests/Database/IdeaPersistenceTests.cs",
+      "State": "present",
+      "Sha256": "E0C52DE16BE4DBC00FE95395A1727FA63651E4872A614AA1C6EB268232B86C7E"
+    },
+    {
+      "Path": "tests/CreatorFlow.IntegrationTests/ApiClients/ModuleIntegrationTests.cs",
+      "State": "present",
+      "Sha256": "BACD3457E1FF2D488AEDC8CBD992511120C339E59901F20A887BE714B5F849EC"
+    },
+    {
+      "Path": "tests/CreatorFlow.IntegrationTests/Database/ContentPlanningIntegrationTests.cs",
+      "State": "deleted",
+      "Sha256": null
+    },
+    {
+      "Path": "tests/CreatorFlow.IntegrationTests/Database/ContentPlatformIntegrationTests.cs",
+      "State": "deleted",
+      "Sha256": null
+    },
+    {
+      "Path": "tests/CreatorFlow.IntegrationTests/Database/IdeaConvertToContentIntegrationTests.cs",
+      "State": "deleted",
+      "Sha256": null
+    },
+    {
+      "Path": "tests/CreatorFlow.IntegrationTests/Database/IdeaRepositoryIntegrationTests.cs",
+      "State": "deleted",
+      "Sha256": null
+    }
+  ]
+}

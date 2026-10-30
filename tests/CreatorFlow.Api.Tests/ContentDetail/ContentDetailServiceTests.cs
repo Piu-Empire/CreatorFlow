@@ -144,6 +144,88 @@ public sealed class ContentDetailServiceTests
     }
 
     [TestMethod]
+    public async Task Create_RepurposePersistsSourceAndScript_WithoutChangingSource()
+    {
+        var f = new Fixture(CreatorId);
+        ContentDetailRecord original = f.Repo.Rows[OwnContent].Detail;
+        const string script = "[Hook] Mở đầu mới\n[CTA] Theo dõi";
+
+        var result = await f.Service.CreateAsync(ProjectId, New() with
+        {
+            SourceContentId = OwnContent,
+            Script = script,
+            Platforms = ["YouTube"],
+        });
+
+        Assert.IsTrue(result.Succeeded);
+        Assert.AreEqual(OwnContent, result.Value!.SourceContentId);
+        Assert.AreEqual(OwnContent, f.Repo.LastCreated!.SourceContentId);
+        Assert.AreEqual(script, f.Repo.LastCreated.Script);
+        Assert.AreEqual("IDEA", f.Repo.LastCreated.StatusDb);
+        Assert.AreEqual(original, f.Repo.Rows[OwnContent].Detail);
+        Assert.AreEqual(script, f.Repo.Rows[result.Value.ContentId].Script);
+    }
+
+    [TestMethod]
+    [DataRow(9999L)]
+    [DataRow(ForeignContent)]
+    public async Task Create_RepurposeRejectsMissingOrCrossProjectSource(long sourceContentId)
+    {
+        var f = new Fixture(OwnerId);
+        ContentDetailRecord original = f.Repo.Rows[OwnContent].Detail;
+
+        var result = await f.Service.CreateAsync(ProjectId,
+            New() with { SourceContentId = sourceContentId });
+
+        Assert.AreEqual(400, result.Status);
+        Assert.AreEqual("sourceContentId", result.ErrorField);
+        Assert.IsNull(f.Repo.LastCreated);
+        Assert.AreEqual(original, f.Repo.Rows[OwnContent].Detail);
+    }
+
+    [TestMethod]
+    public async Task Create_RepurposeRejectsNonPositiveSourceId()
+    {
+        var f = new Fixture(OwnerId);
+
+        var result = await f.Service.CreateAsync(ProjectId, New() with { SourceContentId = 0 });
+
+        Assert.AreEqual(400, result.Status);
+        Assert.AreEqual("sourceContentId", result.ErrorField);
+        Assert.IsNull(f.Repo.LastCreated);
+    }
+
+    [TestMethod]
+    public async Task Create_RepurposeRequiresOnePlatformNotAlreadyOnSource()
+    {
+        var f = new Fixture(OwnerId);
+        f.Repo.Rows[OwnContent].Detail = f.Repo.Rows[OwnContent].Detail with { Platforms = ["TikTok"] };
+
+        var result = await f.Service.CreateAsync(ProjectId, New() with
+        {
+            SourceContentId = OwnContent,
+            Platforms = ["TikTok", "YouTube"],
+        });
+
+        Assert.AreEqual(400, result.Status);
+        Assert.AreEqual("platforms", result.ErrorField);
+        Assert.IsNull(f.Repo.LastCreated);
+    }
+
+    [TestMethod]
+    public async Task Create_RepurposeRejectsOverlongScript()
+    {
+        var f = new Fixture(OwnerId);
+
+        var result = await f.Service.CreateAsync(ProjectId,
+            New() with { SourceContentId = OwnContent, Script = new string('x', ContentDetailService.MaxScriptLength + 1) });
+
+        Assert.AreEqual(400, result.Status);
+        Assert.AreEqual("script", result.ErrorField);
+        Assert.IsNull(f.Repo.LastCreated);
+    }
+
+    [TestMethod]
     public async Task Create_NotMember_Returns403_AndNotSignedIn_Returns401()
     {
         Assert.AreEqual(403, (await new Fixture(OutsiderId).Service.CreateAsync(ProjectId, New())).Status);
@@ -178,42 +260,6 @@ public sealed class ContentDetailServiceTests
 
         Assert.AreEqual(400, result.Status);
         Assert.AreEqual("status", result.ErrorField);
-        Assert.IsNull(f.Repo.LastCreated);
-    }
-
-    [TestMethod]
-    public async Task Create_WithSourceContent_StoresSourceForRepurpose()
-    {
-        var f = new Fixture(OwnerId);
-
-        var result = await f.Service.CreateAsync(ProjectId, New() with { SourceContentId = OwnContent });
-
-        Assert.IsTrue(result.Succeeded);
-        Assert.AreEqual(OwnContent, f.Repo.LastCreated!.SourceContentId);
-        Assert.AreEqual(OwnContent, result.Value!.SourceContentId);
-    }
-
-    [TestMethod]
-    public async Task Create_SourceNotFound_Returns400OnSourceField()
-    {
-        var f = new Fixture(OwnerId);
-
-        var result = await f.Service.CreateAsync(ProjectId, New() with { SourceContentId = 9999 });
-
-        Assert.AreEqual(400, result.Status);
-        Assert.AreEqual("sourceContentId", result.ErrorField);
-        Assert.IsNull(f.Repo.LastCreated);
-    }
-
-    [TestMethod]
-    public async Task Create_SourceFromAnotherProject_Returns400OnSourceField()
-    {
-        var f = new Fixture(OwnerId);
-
-        var result = await f.Service.CreateAsync(ProjectId, New() with { SourceContentId = ForeignContent });
-
-        Assert.AreEqual(400, result.Status);
-        Assert.AreEqual("sourceContentId", result.ErrorField);
         Assert.IsNull(f.Repo.LastCreated);
     }
 

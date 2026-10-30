@@ -1,10 +1,10 @@
-using CreatorFlow.Models;
+﻿using CreatorFlow.Models;
 using CreatorFlow.Services.AI;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace CreatorFlow.IntegrationTests.Shared;
 
-/// <summary>SCRUM-59: tách output AI Repurpose thành 3 phần, chịu lỗi khi thiếu mốc.</summary>
+/// <summary>SCRUM-38: tách output AI Repurpose thành 3 phần, chịu lỗi khi thiếu mốc.</summary>
 [TestClass]
 public sealed class RepurposeAiResponseParserTests
 {

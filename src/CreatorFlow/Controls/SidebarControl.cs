@@ -28,15 +28,9 @@ public class SidebarControl : UserControl
     public event EventHandler? AiAssistantRequested;
     public event EventHandler? ProjectSettingsRequested;
     public event EventHandler? InvitationsRequested;
-    public event EventHandler? ProfileRequested;
 
     public event EventHandler? ProjectSelectionRequested;
     private readonly Button _projectButton;
-    private readonly Button _accountButton;
-    private string _accountName = string.Empty;
-    private string _accountEmail = string.Empty;
-    private Image? _accountAvatar;
-    private bool _accountHovered;
     public bool ProjectManagementEnabled { get; set; }
     public Point ProjectMenuScreenLocation => _projectButton.PointToScreen(new Point(0, _projectButton.Height + 4));
     public int ProjectMenuAnchorWidth => _projectButton.Width;
@@ -84,33 +78,10 @@ public class SidebarControl : UserControl
         BackColor = UITheme.Black;
         DoubleBuffered = true;
         BuildNavItems();
-        _accountButton = new Button
-        {
-            Name = "authenticatedAccount",
-            Text = string.Empty,
-            Bounds = new Rectangle(14, 68, Width - 28, 60),
-            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
-            FlatStyle = FlatStyle.Flat,
-            BackColor = UITheme.Black,
-            UseVisualStyleBackColor = false,
-            Cursor = Cursors.Hand,
-            Visible = false,
-            TabIndex = 0,
-            AccessibleRole = AccessibleRole.PushButton
-        };
-        _accountButton.FlatAppearance.BorderSize = 0;
-        _accountButton.Paint += PaintAccount;
-        _accountButton.MouseEnter += (_, _) => { _accountHovered = true; _accountButton.Invalidate(); };
-        _accountButton.MouseLeave += (_, _) => { _accountHovered = false; _accountButton.Invalidate(); };
-        _accountButton.GotFocus += (_, _) => _accountButton.Invalidate();
-        _accountButton.LostFocus += (_, _) => _accountButton.Invalidate();
-        _accountButton.Click += (_, _) => ProfileRequested?.Invoke(this, EventArgs.Empty);
-        Controls.Add(_accountButton);
-
         _projectButton = new Button
         {
             Text = "Chưa chọn dự án",
-            Bounds = new Rectangle(14, 138, Width - 28, 60),
+            Bounds = new Rectangle(14, 68, Width - 28, 60),
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
             FlatStyle = FlatStyle.Flat,
             BackColor = UITheme.Neutral900,
@@ -141,67 +112,6 @@ public class SidebarControl : UserControl
         Controls.Add(_projectButton);
     }
 
-    public void SetAuthenticatedAccount(string name, string email, Image? avatar)
-    {
-        _accountName = name;
-        _accountEmail = email;
-        Image? previous = _accountAvatar;
-        _accountAvatar = avatar;
-        if (!ReferenceEquals(previous, avatar)) previous?.Dispose();
-        _accountButton.AccessibleName = $"Mở hồ sơ cá nhân của {name}";
-        _accountButton.Visible = true;
-        _accountButton.Invalidate();
-        Invalidate();
-    }
-
-    private void PaintAccount(object? sender, PaintEventArgs e)
-    {
-        var g = e.Graphics;
-        g.SmoothingMode = SmoothingMode.AntiAlias;
-        g.Clear(UITheme.Black);
-        var bounds = new Rectangle(0, 0, _accountButton.Width - 1, _accountButton.Height - 1);
-        using var path = UITheme.CreateRoundedRectanglePath(bounds, 10);
-        using var fill = new SolidBrush(_accountHovered ? UITheme.Neutral800 : UITheme.Neutral900);
-        using var border = new Pen(UITheme.Neutral800);
-        g.FillPath(fill, path);
-        g.DrawPath(border, path);
-        var avatarBounds = new Rectangle(12, 12, 36, 36);
-        if (_accountAvatar is null)
-        {
-            string[] words = _accountName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            string initials = words.Length == 0 ? "?" :
-                (System.Globalization.StringInfo.GetNextTextElement(words[0]) +
-                 (words.Length > 1 ? System.Globalization.StringInfo.GetNextTextElement(words[^1]) : string.Empty)).ToUpperInvariant();
-            UITheme.DrawAvatar(g, initials, avatarBounds, UITheme.White, UITheme.Black, UITheme.FontLabelBold);
-        }
-        else
-        {
-            var state = g.Save();
-            using var circle = new GraphicsPath();
-            circle.AddEllipse(avatarBounds);
-            g.SetClip(circle);
-            g.DrawImage(_accountAvatar, avatarBounds);
-            g.Restore(state);
-        }
-        const TextFormatFlags flags = TextFormatFlags.Left | TextFormatFlags.VerticalCenter |
-            TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis;
-        int textWidth = Math.Max(0, bounds.Width - 72);
-        TextRenderer.DrawText(g, _accountName, UITheme.FontBodyBold, new Rectangle(60, 10, textWidth, 20), UITheme.White, flags);
-        TextRenderer.DrawText(g, _accountEmail, UITheme.FontLabel, new Rectangle(60, 30, textWidth, 18), UITheme.SidebarTextMuted, flags);
-        if (_accountButton.Focused) ControlPaint.DrawFocusRectangle(g, Rectangle.Inflate(bounds, -4, -4), UITheme.White, UITheme.Neutral900);
-    }
-
-    protected override void Dispose(bool disposing)
-    {
-        if (disposing)
-        {
-            _accountAvatar?.Dispose();
-            _accountAvatar = null;
-            _accountName = _accountEmail = string.Empty;
-        }
-        base.Dispose(disposing);
-    }
-
     public void SetProjectName(string? name)
     {
         _projectButton.Text = string.IsNullOrWhiteSpace(name) ? "Chưa chọn dự án" : name;
@@ -214,7 +124,7 @@ public class SidebarControl : UserControl
         _items.Clear();
         _groups.Clear();
 
-        int y = 212;
+        int y = 172;
         _groups.Add(("PROJECT", y)); y += 26;
         _items.Add(new NavItem { Title = "Summary", Icon = NavIcon.Summary, Y = y, AlwaysEnabled = true, Action = () => SummaryRequested?.Invoke(this, EventArgs.Empty) }); y += ItemStep;
         _items.Add(new NavItem { Title = "Board", Icon = NavIcon.Board, Y = y, IsActive = true, AlwaysEnabled = true, Action = () => BoardRequested?.Invoke(this, EventArgs.Empty) }); y += ItemStep;
@@ -224,13 +134,13 @@ public class SidebarControl : UserControl
         _items.Add(new NavItem { Title = "Reports", Icon = NavIcon.Chart, Y = y, Action = () => ReportsRequested?.Invoke(this, EventArgs.Empty) }); y += ItemStep;
 
         y += 10;
-        _groups.Add(("AI", y)); y += 26;
-        _items.Add(new NavItem { Title = "AI Assistant", Icon = NavIcon.Sparkle, Y = y, AlwaysEnabled = true, Action = () => AiAssistantRequested?.Invoke(this, EventArgs.Empty) }); y += ItemStep;
-
-        y += 10;
         _groups.Add(("WORK", y)); y += 26;
         _items.Add(new NavItem { Title = "My Tasks", Icon = NavIcon.Check, Y = y, Badge = () => MyWorkCount, Action = () => MyTasksRequested?.Invoke(this, EventArgs.Empty) }); y += ItemStep;
         _items.Add(new NavItem { Title = "Review Queue", Icon = NavIcon.Review, Y = y, Badge = () => ReviewQueueCount, Action = () => ReviewQueueRequested?.Invoke(this, EventArgs.Empty) }); y += ItemStep;
+
+        y += 10;
+        _groups.Add(("AI", y)); y += 26;
+        _items.Add(new NavItem { Title = "AI Assistant", Icon = NavIcon.Sparkle, Y = y, AlwaysEnabled = true, Action = () => AiAssistantRequested?.Invoke(this, EventArgs.Empty) });
 
         if (_isSystemAdmin)
         {
@@ -270,8 +180,7 @@ public class SidebarControl : UserControl
             });
         }
 
-        // Neo đáy: cách đáy 100px (phía trên dòng trạng thái); Invitations nằm ngay phía trên Project Settings.
-        _items.Add(new NavItem { Title = "Invitations", Icon = NavIcon.List, Y = 144, AnchorBottom = true, AlwaysEnabled = true, Action = () => InvitationsRequested?.Invoke(this, EventArgs.Empty) });
+        // Neo đáy: Project Settings nằm phía trên dòng trạng thái.
         _items.Add(new NavItem { Title = "Project Settings", Icon = NavIcon.Gear, Y = 100, AnchorBottom = true, Action = () => ProjectSettingsRequested?.Invoke(this, EventArgs.Empty) });
     }
 
@@ -284,13 +193,13 @@ public class SidebarControl : UserControl
     public void ScrollNavigation(int delta)
     {
         int bottom = _items.Where(item => !item.AnchorBottom).Select(item => item.Y + ItemH).DefaultIfEmpty(0).Max();
-        int max = Math.Max(0, bottom - Math.Max(212, Height - 152));
+        int max = Math.Max(0, bottom - Math.Max(172, Height - 152));
         _navScrollOffset = Math.Clamp(_navScrollOffset - delta / 120 * ItemStep, 0, max);
         Invalidate();
     }
 
     private bool IsNavigationVisible(NavItem item) => item.AnchorBottom ||
-        GetItemRect(item).Top >= 212 && GetItemRect(item).Bottom <= Height - 152;
+        GetItemRect(item).Top >= 172 && GetItemRect(item).Bottom <= Height - 152;
 
     protected override void OnMouseMove(MouseEventArgs e)
     {
@@ -341,7 +250,7 @@ public class SidebarControl : UserControl
 
         // 3. Nhãn nhóm
         foreach (var (text, y) in _groups)
-            if (y - _navScrollOffset >= 212 && y - _navScrollOffset + 20 <= Height - 152)
+            if (y - _navScrollOffset >= 172 && y - _navScrollOffset + 20 <= Height - 152)
                 TextRenderer.DrawText(g, text, UITheme.FontMicro, new Rectangle(22, y - _navScrollOffset, Width - 44, 20), UITheme.SidebarTextMuted, tf);
 
         // 4. Đường kẻ trên vùng đáy

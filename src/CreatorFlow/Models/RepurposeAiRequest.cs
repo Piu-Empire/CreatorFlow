@@ -1,9 +1,9 @@
-using CreatorFlow.Models.Enums;
+﻿using CreatorFlow.Models.Enums;
 
 namespace CreatorFlow.Models;
 
 /// <summary>
-/// Dữ liệu gửi AI cho Repurpose (SCRUM-59): thông tin Content gốc + platform đích + yêu cầu thêm.
+/// Dữ liệu gửi AI cho Repurpose (SCRUM-38): thông tin Content gốc + platform đích + yêu cầu thêm.
 /// AI tự ghép thành prompt; request không chứa prompt dựng sẵn.
 /// </summary>
 public sealed record RepurposeAiRequest

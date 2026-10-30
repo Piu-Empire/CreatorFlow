@@ -30,6 +30,7 @@ public sealed class ProjectReportsControl : UserControl
     private readonly IStatisticsBackend? _statisticsBackend;
     private readonly IPerformanceAiService? _performanceAi;
     private readonly long _projectId;
+    private readonly Func<bool>? _isCurrent;
 
     private readonly Panel _metricsView;
     private readonly DataGridView _grid;
@@ -73,13 +74,15 @@ public sealed class ProjectReportsControl : UserControl
 
     public ProjectReportsControl(
         IMetricBackend backend, long projectId, IStatisticsBackend? statisticsBackend = null,
-        IPerformanceAiService? performanceAi = null, IBoardBackend? boardBackend = null)
+        IPerformanceAiService? performanceAi = null, IBoardBackend? boardBackend = null,
+        Func<bool>? isCurrent = null)
     {
         _backend = backend;
         _statisticsBackend = statisticsBackend;
         _performanceAi = performanceAi;
         _boardBackend = boardBackend;
         _projectId = projectId;
+        _isCurrent = isCurrent;
         BackColor = UITheme.Neutral50;
         Padding = new Padding(32, 24, 32, 24);
 
@@ -571,6 +574,7 @@ public sealed class ProjectReportsControl : UserControl
             }, token);
 
             token.ThrowIfCancellationRequested();
+            if (!CanUpdate) return;
 
             BindCharts(cards, contentSummary, platformSummary, metricsError);
             _chartsStatus.Visible = false;
@@ -581,7 +585,7 @@ public sealed class ProjectReportsControl : UserControl
         }
         catch (Exception ex)
         {
-            SetChartsUnavailable("Không tải được dữ liệu biểu đồ: " + ex.Message, UITheme.Danger);
+            if (CanUpdate) SetChartsUnavailable("Không tải được dữ liệu biểu đồ: " + ex.Message, UITheme.Danger);
         }
     }
 
@@ -704,6 +708,7 @@ public sealed class ProjectReportsControl : UserControl
     /// <summary>Tải và hiển thị tổng hợp theo chiều <paramref name="groupBy"/> (content/creator/platform/project).</summary>
     public void LoadSummary(string groupBy)
     {
+        if (!CanUpdate) return;
         _current = groupBy;
         UpdateButtons();
 
@@ -718,8 +723,10 @@ public sealed class ProjectReportsControl : UserControl
             return;
         }
 
-        Render(response);
+        if (CanUpdate) Render(response);
     }
+
+    private bool CanUpdate => !IsDisposed && !Disposing && (_isCurrent?.Invoke() ?? true);
 
     private void Render(MetricsSummaryResponse response)
     {

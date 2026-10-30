@@ -91,6 +91,29 @@ public partial class BoardForm : Form, IMessageFilter
         _ideaService = null!;
     }
 
+    /// <summary>Composition root của ứng dụng: các nguồn dữ liệu đều là API backend.</summary>
+    public BoardForm(AuthApiFacade auth, ProjectApiFacade projects, ScriptService script,
+        IMyTaskBackend tasks, IIdeaBackend ideas, IBoardBackend board, IContentDetailBackend detail,
+        IAssignmentBackend assignments, IReviewQueueBackend reviews, INotificationBackend notifications,
+        IMetricBackend metrics, ProjectInvitationService invitations, InvitationInboxService inbox,
+        IStatisticsBackend? statisticsBackend = null,
+        IAIService? aiService = null, IRepurposeAiService? repurposeAi = null,
+        IPerformanceAiService? performanceAi = null)
+        : this(null!, null!, null!, null!, null!, null!, null!, script, null!, auth, metrics,
+            invitations, inbox, projects, tasks, ideas, board, detail, assignments, reviews, notifications,
+            statisticsBackend, aiService, repurposeAi, performanceAi)
+    {
+        ArgumentNullException.ThrowIfNull(auth);
+        ArgumentNullException.ThrowIfNull(projects);
+        ArgumentNullException.ThrowIfNull(board);
+        ArgumentNullException.ThrowIfNull(detail);
+        ArgumentNullException.ThrowIfNull(assignments);
+        ArgumentNullException.ThrowIfNull(tasks);
+        ArgumentNullException.ThrowIfNull(ideas);
+        ArgumentNullException.ThrowIfNull(reviews);
+        ArgumentNullException.ThrowIfNull(notifications);
+    }
+
     public BoardForm(
         WorkflowService workflowService,
         IBoardRepository boardRepository,
@@ -147,11 +170,10 @@ public partial class BoardForm : Form, IMessageFilter
         InitializeProjects(projects);
         if (auth is not null)
         {
-            _sidebarControl.SetAuthenticatedAccount(auth.Session.CurrentUser?.DisplayName ?? string.Empty,
-                auth.Session.CurrentUser?.Email ?? string.Empty, null);
+            _topHeaderControl.SetAuthenticatedAccount(auth.Session.CurrentUser?.DisplayName ?? string.Empty, null);
             _sidebarControl.SetSystemAdmin(auth.Session.CurrentUser?.IsSystemAdmin == true);
             Shown += async (_, _) => await RefreshAuthenticatedAvatarAsync();
-            _sidebarControl.ProfileRequested += async (_, _) => await OpenProfileAsync();
+            _topHeaderControl.ProfileRequested += async (_, _) => await OpenProfileAsync();
             _sidebarControl.AdminWorkspaceRequested += async (_, _) => await OpenAdminAsync();
             _sidebarControl.AdminReportsRequested += async (_, _) => await OpenReportsAsync();
             _sidebarControl.AdminPlansRequested += async (_, _) => await OpenAdminPlansAsync();
@@ -552,7 +574,7 @@ public partial class BoardForm : Form, IMessageFilter
                         return;
 
                     default:
-                        var apiNext = _workflowService.GetNextSimpleStatus(card.Status);
+                        var apiNext = ContentWorkflowPolicy.GetNextSimpleStatus(card.Status);
                         if (!apiNext.HasValue) return;
                         _detailBackend.ChangeStatus(card.ContentId, apiNext.Value);
                         break;
@@ -576,7 +598,7 @@ public partial class BoardForm : Form, IMessageFilter
                     return;
 
                 default:
-                    var next = _workflowService.GetNextSimpleStatus(card.Status);
+                    var next = ContentWorkflowPolicy.GetNextSimpleStatus(card.Status);
                     if (!next.HasValue) return;
                     _workflowService.ChangeStatus(card.ContentId, next.Value, CurrentSession.CurrentUserId);
                     break;
@@ -745,7 +767,7 @@ public partial class BoardForm : Form, IMessageFilter
             }
             catch (Exception error) when (error is IdeaValidationException or UnauthorizedWorkflowActionException)
             {
-                _sidebarControl.BacklogCount = 0;
+                _toast.ShowToast(this, "Không làm mới được số ý tưởng: " + error.Message);
             }
             _sidebarControl.Invalidate();
         }
@@ -803,7 +825,7 @@ public partial class BoardForm : Form, IMessageFilter
             }
             catch (Exception error) when (error is IdeaValidationException or UnauthorizedWorkflowActionException)
             {
-                _sidebarControl.BacklogCount = 0;
+                _toast.ShowToast(this, "Không làm mới được số ý tưởng: " + error.Message);
             }
             _sidebarControl.Invalidate();
         }
@@ -875,10 +897,15 @@ public partial class BoardForm : Form, IMessageFilter
     }
 
     /// <summary>Mở drawer chi tiết cho Content theo Id (kể cả khi thẻ đang bị ẩn bởi bộ lọc tìm kiếm/platform).</summary>
-    private void OpenContentById(long contentId)
+    private async void OpenContentById(long contentId)
     {
         if (!HasProjectContext) return;
-        if (_projects is not null) { ShowUnavailableModule("Chi tiết Content"); return; }
+        if (_projects is not null)
+        {
+            if (!CanLeaveProjectPage()) return;
+            await OpenGlobalContentAsync(contentId, CurrentSession.CurrentProjectId, _auth?.Session.Generation ?? 0);
+            return;
+        }
         var card = _allCards.FirstOrDefault(c => c.ContentId == contentId);
         if (card is null)
         {
@@ -1211,6 +1238,7 @@ public partial class BoardForm : Form, IMessageFilter
         _sidebarControl.SetActiveMenu("Calendar");
         _topHeaderControl.SetAuthenticatedPage("Lịch Content");
         calendar.RefreshData();
+        if (_projects is not null && _boardBackend is not null) _ = LoadServerBoardAsync();
     }
 
     private void CloseCalendar()
@@ -1236,9 +1264,14 @@ public partial class BoardForm : Form, IMessageFilter
             return;
         }
 
-        var page = new ProjectReportsControl(_metricBackend, CurrentSession.CurrentProjectId, _statisticsBackend, _performanceAi, _boardBackend) { Dock = DockStyle.Fill };
+        long authGeneration = _auth?.Session.Generation ?? 0;
+        long? projectGeneration = _projects?.Context.Generation;
+        var page = new ProjectReportsControl(_metricBackend, CurrentSession.CurrentProjectId,
+            _statisticsBackend, _performanceAi, _boardBackend,
+            () => !IsDisposed && (_auth is null || _auth.Session.IsAuthenticated && _auth.Session.Generation == authGeneration) &&
+                (_projects is null || _projects.Context.Generation == projectGeneration)) { Dock = DockStyle.Fill };
         ShowProjectPage(page, "Báo cáo Metrics");
-        _sidebarControl.SetActiveMenu("Reports");
+        if (!IsDisposed) _sidebarControl.SetActiveMenu("Reports");
     }
 
     private void OpenDashboard()
@@ -1309,8 +1342,8 @@ public partial class BoardForm : Form, IMessageFilter
                 !_auth.Session.IsAuthenticated || _auth.Session.Generation != sessionGeneration)
             { return; }
             var currentUser = _auth.Session.CurrentUser!;
-            _sidebarControl.SetAuthenticatedAccount(currentUser.DisplayName, currentUser.Email, avatar);
-            avatar = null; // Sidebar now owns the image.
+            _topHeaderControl.SetAuthenticatedAccount(currentUser.DisplayName, avatar);
+            avatar = null; // Header now owns the image.
         }
         catch (OperationCanceledException) when (_authLifetime.IsCancellationRequested) { }
         finally { avatar?.Dispose(); }

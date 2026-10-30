@@ -1,11 +1,11 @@
-using CreatorFlow.Models;
+﻿using CreatorFlow.Models;
 using CreatorFlow.Models.Enums;
 using CreatorFlow.Services.AI;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace CreatorFlow.IntegrationTests.Shared;
 
-/// <summary>SCRUM-59: prompt Repurpose gửi đúng platform đích + thông tin Content gốc.</summary>
+/// <summary>SCRUM-38: prompt Repurpose gửi đúng platform đích + thông tin Content gốc.</summary>
 [TestClass]
 public sealed class RepurposeAiPromptBuilderTests
 {

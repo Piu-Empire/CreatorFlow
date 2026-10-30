@@ -1,10 +1,10 @@
-using System.Text;
+﻿using System.Text;
 using CreatorFlow.Models;
 
 namespace CreatorFlow.Services.AI;
 
 /// <summary>
-/// Dựng prompt Repurpose (SCRUM-59) từ Content gốc + platform đích.
+/// Dựng prompt Repurpose (SCRUM-38) từ Content gốc + platform đích.
 /// Hàm thuần, không gọi mạng nên kiểm thử được offline.
 /// </summary>
 public static class RepurposeAiPromptBuilder

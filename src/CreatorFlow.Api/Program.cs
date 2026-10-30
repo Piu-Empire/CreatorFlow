@@ -62,7 +62,6 @@ builder.Services.AddScoped<AdminPlanService>();
 builder.Services.AddScoped<AdminSubscriptionService>();
 builder.Services.AddScoped<IAdminStatisticsRepository, AdminStatisticsRepository>();
 builder.Services.AddScoped<AdminStatisticsService>();
-builder.Services.AddScoped<ITaskRepository, TaskRepository>(); // BƯỚC 0a: thiếu, MetricService cần GetRoleAsync/GetContentAsync
 builder.Services.AddScoped<IMetricRepository, MetricRepository>();
 builder.Services.AddScoped<MetricService>();
 builder.Services.AddScoped<IStatisticsRepository, StatisticsRepository>(); // SCRUM-55: thống kê theo Creator

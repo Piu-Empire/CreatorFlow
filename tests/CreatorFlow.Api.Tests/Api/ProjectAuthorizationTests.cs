@@ -29,6 +29,30 @@ namespace CreatorFlow.Api.Tests.Api;
 public sealed class ProjectAuthorizationTests
 {
     [TestMethod]
+    public async Task ProjectAndWorkflowEndpoints_ShareStateAcrossSubmitRejectResubmitApproveAndPublish()
+    {
+        await using var f = await Fixture.StartAsync("OWNER");
+        f.Workflow.Contents[10] = f.Workflow.Contents[10] with { Status = CreatorFlow.Api.Models.Workflow.WorkflowContentStatus.Editing };
+        using var access = await f.Client.GetAsync("/api/projects/8/access");
+        Assert.AreEqual(HttpStatusCode.OK, access.StatusCode);
+        using var submit = await f.Client.PostAsJsonAsync("/api/contents/10/review", new SubmitReviewRequest("Initial submission"));
+        Assert.AreEqual(HttpStatusCode.OK, submit.StatusCode);
+        Assert.AreEqual(CreatorFlow.Api.Models.Workflow.WorkflowContentStatus.Review, f.Workflow.Contents[10].Status);
+        using var reject = await f.Client.PutAsJsonAsync("/api/contents/10/review/decision", new ReviewDecisionRequest(false, "Revise the script"));
+        Assert.AreEqual(HttpStatusCode.OK, reject.StatusCode);
+        Assert.AreEqual(CreatorFlow.Api.Models.Workflow.WorkflowContentStatus.Editing, f.Workflow.Contents[10].Status);
+        using var resubmit = await f.Client.PostAsJsonAsync("/api/contents/10/review", new SubmitReviewRequest("Revised"));
+        Assert.AreEqual(HttpStatusCode.OK, resubmit.StatusCode);
+        using var approve = await f.Client.PutAsJsonAsync("/api/contents/10/review/decision", new ReviewDecisionRequest(true));
+        Assert.AreEqual(HttpStatusCode.OK, approve.StatusCode);
+        using var publish = await f.Client.PutAsJsonAsync("/api/contents/10/status", new ChangeContentStatusRequest("Published"));
+        Assert.AreEqual(HttpStatusCode.OK, publish.StatusCode);
+        Assert.AreEqual(CreatorFlow.Api.Models.Workflow.WorkflowContentStatus.Published, f.Workflow.Contents[10].Status);
+        Assert.AreEqual(5, f.Workflow.Writes.Count);
+        Assert.IsTrue(f.Workflow.Writes.All(write => write.Actor == 42));
+    }
+
+    [TestMethod]
     public async Task JwtSubjectDeterminesActor_ClientRoleClaimsQueryAndHeadersDoNotElevate()
     {
         await using var f = await Fixture.StartAsync("CREATOR");

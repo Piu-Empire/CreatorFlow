@@ -35,7 +35,8 @@ public sealed class ApiContentDetailBackend(ApiClient api, UserSession session) 
             draft.Platforms,
             draft.AssigneeUserId,
             draft.Sprint,
-            draft.SourceContentId);
+            draft.SourceContentId,
+            draft.Script);
         return ApiTaskCall.Run(() => api.CreateContentAsync(projectId, request, ApiTaskCall.BearerOf(session)), session).ContentId;
     }
 

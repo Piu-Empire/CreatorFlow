@@ -17,7 +17,7 @@ public sealed record Content
 
     public long? SourceIdeaId { get; set; }
 
-    /// <summary>Content gốc nếu Content này được tạo bằng AI Repurpose (bảng content_relations).</summary>
+    /// <summary>Content nguồn nếu nội dung này là bản tái sử dụng.</summary>
     public long? SourceContentId { get; set; }
 
     /// <summary>Alias của SourceIdeaId.</summary>

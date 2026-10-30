@@ -1,6 +1,6 @@
-namespace CreatorFlow.Models;
+﻿namespace CreatorFlow.Models;
 
-/// <summary>Kết quả AI Repurpose (SCRUM-59). Title/Description có thể null khi AI trả sai định dạng.</summary>
+/// <summary>Kết quả AI Repurpose (SCRUM-38). Title/Description có thể null khi AI trả sai định dạng.</summary>
 public sealed record RepurposeAiResponse(
     bool Succeeded,
     string? Title,

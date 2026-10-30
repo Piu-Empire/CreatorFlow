@@ -62,6 +62,7 @@ public partial class BoardForm
     }
     private void ShowProjectPage(Control page, string title)
     {
+        if (IsDisposed || Disposing || page.IsDisposed) { page.Dispose(); return; }
         _projectSwitch?.Cancel();
         ++_switchSequence;
 
@@ -98,8 +99,9 @@ public partial class BoardForm
             _pnlMain.ResumeLayout(true);
         }
 
+        if (IsDisposed || Disposing || page.IsDisposed || !ReferenceEquals(_projectPage, page)) return;
         page.Visible = true;
-        page.Refresh();
+        if (!IsDisposed && !page.IsDisposed && ReferenceEquals(_projectPage, page)) page.Refresh();
     }
     private void CloseProjectMenu()
     {
@@ -152,7 +154,7 @@ public partial class BoardForm
         string profileDraft = DraftSnapshot(_profile), contentDraft = DraftSnapshot(_contentDetailPanel);
         bool dirty = _profile?.HasUnsavedChanges == true || _contentDetailPanel.HasUnsavedChanges;
         using var dialog = new CreatorFlow.Forms.Projects.CreateProjectDialog(_projects, dirty);
-        if (dialog.ShowDialog(this) == DialogResult.OK && dialog.CreatedProject is { } created && !IsDisposed &&
+        if (dialog.ShowProjectDialog(this) == DialogResult.OK && dialog.CreatedProject is { } created && !IsDisposed &&
             generation == _projects.Context.Generation && authGeneration == _auth.Session.Generation &&
             profileDraft == DraftSnapshot(_profile) && contentDraft == DraftSnapshot(_contentDetailPanel))
             await SelectProjectCoreAsync(created.ProjectId, false);
@@ -256,8 +258,21 @@ public partial class BoardForm
     {
         if (IsDisposed || _projects is null) return;
         _contentDetailPanel.InvalidateProjectPermissions();
-        CloseProjectMenu();
         UpdateProjectContext();
+        if (_auth is not null && !_auth.Session.IsAuthenticated)
+        {
+            long generation = _auth.Session.Generation;
+            if (IsHandleCreated) BeginInvoke(new Action(() =>
+            {
+                if (IsDisposed || generation != _auth.Session.Generation || _auth.Session.IsAuthenticated) return;
+                _recentProjects.Clear();
+                _projectSwitch?.Cancel(); ResetProjectState();
+                foreach (Form child in OwnedForms) child.Close();
+                CloseProjectMenu(); CloseProjectPage(); CloseProfile(); CloseDashboard();
+            }));
+            return;
+        }
+        CloseProjectMenu();
         if (_projects.Context.Current is not null)
         {
             if (_projectPage is null && _profile is null && _admin is null && _reports is null && _adminPlans is null && _adminStatistics is null && _calendar is null) RenderServerWorkspace();
@@ -405,6 +420,11 @@ public partial class BoardForm
         {
             if (state is not null) state.Text = "Không tải được Board: " + error;
             _dashboard?.ShowMessage("Không tải được dữ liệu. " + (error ?? "Kiểm tra kết nối và thử lại."));
+            if (_calendar is not null)
+            {
+                _calendar.UnavailableReason = "Không tải được dữ liệu. " + error;
+                _calendar.RefreshData();
+            }
             return;
         }
 
@@ -417,7 +437,16 @@ public partial class BoardForm
         _sidebarControl.MyWorkCount = _allCards.Count(c => c.Assignees.Any(a => a.UserId == me && a.Status != CreatorFlow.Models.Enums.AssignmentStatus.Completed));
         if (state is not null) state.Visible = false;
         ApplyFilters();
-        if (_ideaBackend is not null) _sidebarControl.BacklogCount = _ideaBackend.CountBacklog(project.ProjectId, me);
+        if (_ideaBackend is not null)
+        {
+            try { _sidebarControl.BacklogCount = _ideaBackend.CountBacklog(project.ProjectId, me); }
+            catch (Exception backlogError) when (backlogError is CreatorFlow.Services.Exceptions.IdeaValidationException or
+                CreatorFlow.Services.Exceptions.ContentValidationException or CreatorFlow.Services.Exceptions.UnauthorizedWorkflowActionException or InvalidOperationException)
+            {
+                if (Valid()) _toast.ShowToast(this, "Không làm mới được số ý tưởng: " + backlogError.Message);
+            }
+        }
+        if (!Valid()) return;
         _sidebarControl.Invalidate();
 
         // Sau khi lưu/đổi trạng thái/giao việc: mở lại drawer của thẻ vừa thao tác (nạp lại dữ liệu mới nhất từ API).
@@ -429,6 +458,11 @@ public partial class BoardForm
 
         // Dashboard đang mở: cập nhật 6 chỉ số theo dữ liệu vừa tải.
         _dashboard?.RefreshData();
+        if (_calendar is not null)
+        {
+            _calendar.UnavailableReason = null;
+            _calendar.RefreshData();
+        }
     }
     private async void ShowUnavailableModule(string module)
     {

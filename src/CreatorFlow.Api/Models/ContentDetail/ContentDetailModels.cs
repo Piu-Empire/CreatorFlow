@@ -35,7 +35,8 @@ public sealed record NewContent(
     string StatusDb,
     ContentUpdate Details,
     long CreatedBy,
-    long? SourceContentId = null);
+    long? SourceContentId = null,
+    string Script = "");
 
 /// <summary>Script thô đang lưu (null = chưa có) cùng thông tin để tính quyền.</summary>
 public sealed record ScriptRecord(long ContentId, long ProjectId, string Status, long CreatedBy, string? Script);

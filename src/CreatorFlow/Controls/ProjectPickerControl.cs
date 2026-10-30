@@ -32,7 +32,7 @@ public sealed class ProjectPickerControl : UserControl
         header.CreateRequested += (_, _) =>
         {
             using var dialog = new CreateProjectDialog(projects);
-            if (dialog.ShowDialog(this) == DialogResult.OK && dialog.CreatedProject is { } result) ProjectCreated?.Invoke(result);
+            if (dialog.ShowProjectDialog(this) == DialogResult.OK && dialog.CreatedProject is { } result) ProjectCreated?.Invoke(result);
         };
         header.ReloadRequested += async (_, _) => await ReloadAsync();
         UiTheme.AddRow(layout, header, 24); UiTheme.AddRow(layout, message);
@@ -126,7 +126,7 @@ public sealed class ProjectPickerControl : UserControl
         if (restoreInProgress || IsDisposed || lifetime.IsCancellationRequested) return;
         using (var confirm = new RestoreProjectDialog(item.Name))
         {
-            if (confirm.ShowDialog(this) != DialogResult.OK || IsDisposed || lifetime.IsCancellationRequested) return;
+            if (confirm.ShowProjectDialog(this) != DialogResult.OK || IsDisposed || lifetime.IsCancellationRequested) return;
         }
 
         restoreInProgress = true;

@@ -139,6 +139,17 @@ public sealed class ContentDetailService(
         ProjectRole? role = await taskRepository.GetRoleAsync(projectId, user.UserId, token);
         if (role is null) return NotMember<ContentDetailResponse>();
 
+        ContentDetailRecord? sourceContent = null;
+        if (request.SourceContentId is long sourceContentId)
+        {
+            if (sourceContentId <= 0)
+                return Validation<ContentDetailResponse>("Content gốc không hợp lệ.", "sourceContentId");
+
+            sourceContent = await repository.GetDetailAsync(sourceContentId, token);
+            if (sourceContent is null || sourceContent.ProjectId != projectId)
+                return Validation<ContentDetailResponse>("Content gốc không tồn tại trong Project này.", "sourceContentId");
+        }
+
         string statusName = string.IsNullOrWhiteSpace(request.Status) ? "Idea" : request.Status.Trim();
         if (statusName.Equals("Review", StringComparison.OrdinalIgnoreCase))
             return Validation<ContentDetailResponse>("Không thể tạo trực tiếp ở giai đoạn Review. Hãy tạo ở Editing rồi Submit Review.", "status");
@@ -149,8 +160,16 @@ public sealed class ContentDetailService(
             request.Deadline, request.PlannedPublishAt);
         if (check.Error is { } planningError) return planningError.As<ContentDetailResponse>();
 
+        string script = NormalizeScript(request.Script);
+        if (script.Length > MaxScriptLength)
+            return Validation<ContentDetailResponse>($"Kịch bản tối đa {MaxScriptLength:N0} ký tự (hiện có {script.Length:N0}).", "script");
+
         (List<string> platforms, string? platformError) = await ResolvePlatformsAsync(request.Platforms, token);
         if (platformError is not null) return Validation<ContentDetailResponse>(platformError, "platforms");
+
+        if (sourceContent is not null &&
+            (platforms.Count != 1 || sourceContent.Platforms.Contains(platforms[0], StringComparer.OrdinalIgnoreCase)))
+            return Validation<ContentDetailResponse>("Bản tái sử dụng cần đúng một nền tảng chưa có trên Content gốc.", "platforms");
 
         string requestedSprint = string.IsNullOrWhiteSpace(request.Sprint) ? SprintCatalog.DefaultSprint : request.Sprint;
         if (!SprintCatalog.TryNormalize(requestedSprint, out string sprint))
@@ -168,19 +187,9 @@ public sealed class ContentDetailService(
                 return Validation<ContentDetailResponse>("Chỉ có thể giao Content cho thành viên có vai trò Creator.", "assigneeUserId");
         }
 
-        // Repurpose (SCRUM-59): Content gốc phải tồn tại và thuộc đúng Project.
-        if (request.SourceContentId is long sourceContentId)
-        {
-            ContentDetailRecord? source = await repository.GetDetailAsync(sourceContentId, token);
-            if (source is null)
-                return Validation<ContentDetailResponse>("Không tìm thấy Content gốc.", "sourceContentId");
-            if (source.ProjectId != projectId)
-                return Validation<ContentDetailResponse>("Content gốc không thuộc Project này.", "sourceContentId");
-        }
-
         long contentId = await repository.CreateAsync(new NewContent(projectId, statusDb,
             new ContentUpdate(check.Title, check.Description, check.ContentType, check.PriorityDb, request.Deadline, request.PlannedPublishAt, platforms, sprint),
-            user.UserId, request.SourceContentId), token);
+            user.UserId, request.SourceContentId, script), token);
 
         if (request.AssigneeUserId is long assignee)
             await taskRepository.ApplyAssignmentsAsync(contentId, user.UserId, Array.Empty<long>(),

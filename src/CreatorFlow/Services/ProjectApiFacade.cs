@@ -64,7 +64,11 @@ public sealed class ProjectApiFacade : IDisposable
 
     private async Task<T> Send<T>(HttpMethod method, string path, object? body, CancellationToken token)
     {
-        if (!session.IsAuthenticated) { session.Clear(); throw new ApiBusinessException(HttpStatusCode.Unauthorized, "unauthorized", "Vui lòng đăng nhập lại."); }
+        if (!session.IsAuthenticated)
+        {
+            if (session.AccessToken is not null || session.CurrentUser is not null) session.Clear();
+            throw new ApiBusinessException(HttpStatusCode.Unauthorized, "unauthorized", "Vui lòng đăng nhập lại.");
+        }
         long generation = session.Generation;
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(token, lifetime.Token);
         try

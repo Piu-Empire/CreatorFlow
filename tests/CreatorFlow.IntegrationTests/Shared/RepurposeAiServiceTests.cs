@@ -1,4 +1,4 @@
-using CreatorFlow.AI;
+﻿using CreatorFlow.AI;
 using CreatorFlow.AI.Models;
 using CreatorFlow.Models;
 using CreatorFlow.Models.Enums;
@@ -7,7 +7,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace CreatorFlow.IntegrationTests.Shared;
 
-/// <summary>SCRUM-59: RepurposeAiService nối cổng Repurpose với lõi AI client và map kết quả/lỗi đúng.</summary>
+/// <summary>SCRUM-38: RepurposeAiService nối cổng Repurpose với lõi AI client và map kết quả/lỗi đúng.</summary>
 [TestClass]
 public sealed class RepurposeAiServiceTests
 {
@@ -15,6 +15,32 @@ public sealed class RepurposeAiServiceTests
     public async Task Request_NoClient_ReturnsNotConfigured()
     {
         var service = new RepurposeAiService(null);
+
+        RepurposeAiResponse response = await service.RequestRepurposeAsync(NewRequest());
+
+        Assert.IsFalse(service.IsConfigured);
+        Assert.IsFalse(response.Succeeded);
+        Assert.AreEqual(NotConfiguredAiService.Message, response.ErrorMessage);
+    }
+
+    [TestMethod]
+    public async Task Request_ClientWithoutConfiguration_DoesNotCallAi()
+    {
+        var client = new FakeAiClient(new AiResult { Success = true, Content = "unused" });
+        var service = new RepurposeAiService(client, isConfigured: false);
+
+        RepurposeAiResponse response = await service.RequestRepurposeAsync(NewRequest());
+
+        Assert.IsFalse(service.IsConfigured);
+        Assert.IsFalse(response.Succeeded);
+        Assert.AreEqual(NotConfiguredAiService.Message, response.ErrorMessage);
+        Assert.IsNull(client.LastPrompt);
+    }
+
+    [TestMethod]
+    public async Task Request_NullClientWithConfigurationFlagTrue_ReturnsNotConfigured()
+    {
+        var service = new RepurposeAiService(null, isConfigured: true);
 
         RepurposeAiResponse response = await service.RequestRepurposeAsync(NewRequest());
 

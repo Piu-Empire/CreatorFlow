@@ -1,5 +1,4 @@
 using CreatorFlow.ApiClients;
-using CreatorFlow.Controls;
 using CreatorFlow.Contracts.Projects;
 using CreatorFlow.Helpers;
 using CreatorFlow.Services;
@@ -7,105 +6,44 @@ using CreatorFlow.Theme;
 
 namespace CreatorFlow.Forms.Projects;
 
-public sealed partial class CreateProjectDialog : Form
+public sealed class CreateProjectDialog : ProjectModalForm
 {
     private readonly ProjectApiFacade projects;
     private readonly CancellationTokenSource lifetime = new();
     private readonly TextBox name = new() { MaxLength = 0, AccessibleName = "Tên Project" };
     private readonly TextBox description = new()
     {
-        MaxLength = 0,
-        Multiline = true,
-        AcceptsReturn = true,
-        ScrollBars = ScrollBars.Vertical,
-        AccessibleName = "Mô tả"
+        MaxLength = 0, Multiline = true, AcceptsReturn = true,
+        ScrollBars = ScrollBars.Vertical, AccessibleName = "Mô tả"
     };
-    private readonly Label message = new()
-    {
-        AutoSize = true,
-        Visible = false,
-        ForeColor = UITheme.Danger,
-        Font = UITheme.FontBody
-    };
-    private Panel nameField = null!;
-    private Panel descriptionField = null!;
+    private readonly Label message = new() { AutoSize = true, Visible = false, ForeColor = UITheme.Danger };
+    private readonly Panel nameField;
+    private readonly Panel descriptionField;
     private bool released;
-
     public ProjectResponse? CreatedProject { get; private set; }
 
     public CreateProjectDialog(ProjectApiFacade projects, bool discardDraft = false)
+        : base("Tạo Project", discardDraft ? "Project mới sẽ được mở sau khi tạo. Bản nháp chưa lưu sẽ bị bỏ." : "Tạo không gian làm việc cho nội dung và thành viên của bạn.", "Tạo Project", 288)
     {
         this.projects = projects;
-        InitializeComponent();
-        Font = UITheme.FontBody;
-        BackColor = UITheme.White;
-        headerPanel.BackColor = UITheme.White;
-        bodyPanel.BackColor = UITheme.White;
-        footerPanel.BackColor = UITheme.Neutral50;
-        titleLabel.Font = UITheme.FontPageTitle;
-        titleLabel.ForeColor = UITheme.Ink;
-        explanationLabel.ForeColor = UITheme.Neutral600;
-
-        var subtitle = discardDraft
-            ? "Project mới sẽ được mở sau khi tạo. Bản nháp chưa lưu sẽ bị bỏ."
-            : "Tạo không gian làm việc cho nội dung và thành viên của bạn.";
-        explanationLabel.Text = subtitle;
-        BuildFields();
-        confirm.Click += Save;
+        var layout = UiTheme.CreateFormBody();
+        layout.ColumnStyles.Add(new(SizeType.Percent, 100));
+        nameField = UiTheme.AddField(layout, "Tên Project", name);
+        descriptionField = UiTheme.AddField(layout, "Mô tả (tùy chọn)", description);
+        descriptionField.Controls["fieldBorder"]!.Height = 100;
+        UiTheme.AddRow(layout, message, 0);
+        layout.SizeChanged += (_, _) => message.MaximumSize = new(Math.Max(1, layout.ClientSize.Width), 0);
+        Body.Controls.Add(layout);
+        Confirm.Click += Save;
         Shown += (_, _) => name.Focus();
-    }
-
-    private void BuildFields()
-    {
-        var fields = UiTheme.CreateFormBody();
-        fields.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-
-        nameField = UiTheme.AddField(fields, "Tên Project", name);
-        descriptionField = UiTheme.AddField(fields, "Mô tả (tùy chọn)", description);
-        nameField.Controls["fieldBorder"]!.Height = 56;
-        descriptionField.Controls["fieldBorder"]!.Height = 160;
-
-        StyleField(nameField);
-        StyleField(descriptionField);
-        UiTheme.AddRow(fields, message, 0);
-        fields.SizeChanged += (_, _) => message.MaximumSize = new Size(Math.Max(1, fields.ClientSize.Width), 0);
-        bodyPanel.Controls.Add(fields);
-    }
-
-    private static void StyleField(Panel field)
-    {
-        var label = field.Controls.OfType<Label>()
-            .First(control => control.Name != "fieldError");
-        label.ForeColor = UITheme.Ink;
-        label.Font = new Font("Segoe UI", 12F, FontStyle.Bold);
-
-        if (field.Controls["fieldBorder"] is Panel border && border.Controls.OfType<TextBox>().FirstOrDefault() is { } input)
-        {
-            input.Font = new Font("Segoe UI", 12F);
-            input.AccessibleName = label.Text;
-            border.Invalidate();
-        }
-    }
-
-    private void HeaderPanel_Paint(object? sender, PaintEventArgs e)
-    {
-        using var pen = new Pen(UITheme.Neutral100);
-        e.Graphics.DrawLine(pen, 0, headerPanel.ClientSize.Height - 1,
-            headerPanel.ClientSize.Width, headerPanel.ClientSize.Height - 1);
-    }
-
-    private void FooterPanel_Paint(object? sender, PaintEventArgs e)
-    {
-        using var pen = new Pen(UITheme.Neutral100);
-        e.Graphics.DrawLine(pen, 0, 0, footerPanel.ClientSize.Width, 0);
     }
 
     private async void Save(object? sender, EventArgs e)
     {
-        if (!confirm.Enabled) return;
+        if (!Confirm.Enabled) return;
         UiTheme.SetFieldError(nameField, null);
         UiTheme.SetFieldError(descriptionField, null);
-        confirm.Enabled = false;
+        Confirm.Enabled = false;
         message.Text = "Đang tạo Project…";
         message.Visible = true;
 
@@ -135,7 +73,7 @@ public sealed partial class CreateProjectDialog : Form
         }
         finally
         {
-            if (!IsDisposed) confirm.Enabled = true;
+            if (!IsDisposed) Confirm.Enabled = true;
         }
     }
 

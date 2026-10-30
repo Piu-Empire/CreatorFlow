@@ -1,4 +1,3 @@
-using System.Net;
 using CreatorFlow.ApiClients;
 using CreatorFlow.Contracts.Ideas;
 using CreatorFlow.Models;
@@ -15,30 +14,20 @@ namespace CreatorFlow.Services.Backends;
 public sealed class ApiIdeaBackend(ApiClient api, UserSession session) : IIdeaBackend
 {
     private readonly Dictionary<long, ProjectRole> _roles = new();
+    private long _roleGeneration = -1;
 
     private T Run<T>(Func<Task<T>> call)
     {
-        long generation = session.Generation;
         try
         {
-            return Task.Run(call).GetAwaiter().GetResult();
+            return ApiTaskCall.Run(call, session);
         }
-        catch (ApiBusinessException ex)
+        catch (UnauthorizedWorkflowActionException)
         {
-            if (generation == session.Generation)
-            {
-                if (ex.StatusCode == HttpStatusCode.Unauthorized) session.Clear();
-                if (ex.StatusCode == HttpStatusCode.Forbidden)
-                {
-                    _roles.Clear();
-                    session.NotifyAuthorizationRejected(generation);
-                }
-            }
-            throw ex.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden
-                ? new UnauthorizedWorkflowActionException(ex.Message)
-                : new IdeaValidationException(ex.Message);
+            _roles.Clear();
+            throw;
         }
-        catch (ApiException ex)
+        catch (Exception ex) when (ex is ContentValidationException or InvalidOperationException)
         {
             throw new IdeaValidationException(ex.Message); // mất mạng / quá thời gian chờ
         }
@@ -51,6 +40,7 @@ public sealed class ApiIdeaBackend(ApiClient api, UserSession session) : IIdeaBa
     public List<Idea> GetIdeas(long projectId, long userId, IdeaFilter? filter = null)
     {
         filter ??= new IdeaFilter();
+        if (_roleGeneration != session.Generation) { _roles.Clear(); _roleGeneration = session.Generation; }
         var response = Run(() => api.GetIdeasAsync(projectId, filter.SearchText, filter.Status?.ToString(), filter.Tag, Bearer));
         if (Enum.TryParse<ProjectRole>(response.MyRole, out var role)) _roles[projectId] = role;
         return response.Ideas.Select(ToIdea).ToList();
@@ -61,8 +51,7 @@ public sealed class ApiIdeaBackend(ApiClient api, UserSession session) : IIdeaBa
 
     public int CountBacklog(long projectId, long userId)
     {
-        try { return GetIdeas(projectId, userId, new IdeaFilter { Status = IdeaStatus.Backlog }).Count; }
-        catch (Exception ex) when (ex is IdeaValidationException or UnauthorizedWorkflowActionException) { return 0; }
+        return GetIdeas(projectId, userId, new IdeaFilter { Status = IdeaStatus.Backlog }).Count;
     }
 
     // ---------- Quyền (chỉ để bật/tắt nút; Backend kiểm tra lại khi ghi) ----------
@@ -77,6 +66,11 @@ public sealed class ApiIdeaBackend(ApiClient api, UserSession session) : IIdeaBa
 
     private ProjectRole? RoleOf(long projectId)
     {
+        if (_roleGeneration != session.Generation)
+        {
+            _roles.Clear();
+            _roleGeneration = session.Generation;
+        }
         if (_roles.TryGetValue(projectId, out var cached)) return cached;
         try
         {
