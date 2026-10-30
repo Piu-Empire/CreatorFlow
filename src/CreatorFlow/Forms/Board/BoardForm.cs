@@ -50,6 +50,7 @@ public partial class BoardForm : Form, IMessageFilter
     private readonly IStatisticsBackend? _statisticsBackend;
     private readonly IAIService? _aiService;
     private readonly IRepurposeAiService? _repurposeAi;
+    private readonly IPerformanceAiService? _performanceAi;
     private NotificationPanelControl? _notificationPanel;
     private long? _reopenContentId; // chế độ API: mở lại drawer của thẻ này sau khi Board tải lại (sau khi lưu/đổi trạng thái/giao việc)
     private readonly IMyTaskBackend? _taskBackend;
@@ -112,7 +113,8 @@ public partial class BoardForm : Form, IMessageFilter
         INotificationBackend? notificationBackend = null,
         IStatisticsBackend? statisticsBackend = null,
         IAIService? aiService = null,
-        IRepurposeAiService? repurposeAi = null)
+        IRepurposeAiService? repurposeAi = null,
+        IPerformanceAiService? performanceAi = null)
     {
         InitializeComponent();
         _workflowService = workflowService;
@@ -137,6 +139,7 @@ public partial class BoardForm : Form, IMessageFilter
         _statisticsBackend = statisticsBackend;
         _aiService = aiService;
         _repurposeAi = repurposeAi;
+        _performanceAi = performanceAi;
         _topHeaderControl.BellClicked += async (_, _) => await OnBellClickedAsync();
         _topHeaderControl.SetNotificationsEnabled(_notificationBackend is not null);
         InitializeProjects(projects);
@@ -1147,7 +1150,7 @@ public partial class BoardForm : Form, IMessageFilter
             return;
         }
 
-        var page = new ProjectReportsControl(_metricBackend, CurrentSession.CurrentProjectId, _statisticsBackend) { Dock = DockStyle.Fill };
+        var page = new ProjectReportsControl(_metricBackend, CurrentSession.CurrentProjectId, _statisticsBackend, _performanceAi) { Dock = DockStyle.Fill };
         ShowProjectPage(page, "Báo cáo Metrics");
         _sidebarControl.SetActiveMenu("Reports");
     }
