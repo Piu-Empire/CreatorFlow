@@ -6,9 +6,11 @@ using CreatorFlow.Repositories;
 using CreatorFlow.Api.Authentication;
 using CreatorFlow.Api.Repositories.Admin;
 using CreatorFlow.Api.Repositories.Metrics;
+using CreatorFlow.Api.Repositories.Statistics;
 using CreatorFlow.Api.Repositories.Tasks;
 using CreatorFlow.Api.Services.Admin;
 using CreatorFlow.Api.Services.Metrics;
+using CreatorFlow.Api.Services.Statistics;
 using Microsoft.AspNetCore.Authorization;
 using CreatorFlow.Api.Configuration;
 using CreatorFlow.Api.Services.Auth;
@@ -55,8 +57,15 @@ builder.Services.AddScoped<IAdminUserRepository, AdminUserRepository>();
 builder.Services.AddScoped<AdminUserService>();
 builder.Services.AddScoped<IAdminReportRepository, AdminReportRepository>();
 builder.Services.AddScoped<AdminReportService>();
+builder.Services.AddScoped<ISubscriptionRepository, SubscriptionRepository>(); // SCRUM-23: đăng ký gói
+builder.Services.AddScoped<AdminPlanService>();
+builder.Services.AddScoped<AdminSubscriptionService>();
+builder.Services.AddScoped<IAdminStatisticsRepository, AdminStatisticsRepository>();
+builder.Services.AddScoped<AdminStatisticsService>();
 builder.Services.AddScoped<IMetricRepository, MetricRepository>();
 builder.Services.AddScoped<MetricService>();
+builder.Services.AddScoped<IStatisticsRepository, StatisticsRepository>(); // SCRUM-55: thống kê theo Creator
+builder.Services.AddScoped<StatisticsService>();
 builder.Services.AddAuthorizationBuilder().AddPolicy("SystemAdminOnly", policy =>
     policy.RequireAssertion(context =>
         context.Resource is HttpContext http &&
@@ -122,6 +131,7 @@ app.MapUserEndpoints();
 app.MapAdminEndpoints();
 app.MapReportEndpoints();
 app.MapMetricEndpoints();
+app.MapStatisticsEndpoints();
 app.MapTaskEndpoints();
 app.MapWorkflowEndpoints();
 app.MapReviewQueueEndpoints();

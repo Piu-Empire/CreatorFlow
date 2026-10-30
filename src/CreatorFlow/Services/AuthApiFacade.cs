@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http;
 using CreatorFlow.ApiClients;
+using CreatorFlow.Contracts.Admin;
 using CreatorFlow.Contracts.Auth;
 using CreatorFlow.Contracts.Users;
 using CreatorFlow.Contracts.Search;
@@ -255,6 +256,112 @@ public sealed class AuthApiFacade(ApiClient api, UserSession session)
         catch (ApiBusinessException exception) { HandleUnauthorized(exception, credentials.Value.Generation); return AdminReportHandleResult.Failure(exception.Message); }
         catch (ApiException exception) { return AdminReportHandleResult.Failure(exception.Message); }
     }
+    // SCRUM-23: gói dịch vụ, đăng ký gói và thống kê hệ thống.
+
+    public async Task<AdminPlansResult> GetAdminPlansAsync(CancellationToken token = default)
+    {
+        var credentials = Credentials();
+        if (credentials is null) return AdminPlansResult.Failure("Vui lòng đăng nhập lại.");
+        try
+        {
+            var response = await api.GetAdminPlansAsync(credentials.Value.Token, token);
+            if (credentials.Value.Generation != session.Generation) return AdminPlansResult.Failure("Phiên đã kết thúc.");
+            return AdminPlansResult.Success(response);
+        }
+        catch (ApiBusinessException exception) { HandleUnauthorized(exception, credentials.Value.Generation); return AdminPlansResult.Failure(exception.Message); }
+        catch (ApiException exception) { return AdminPlansResult.Failure(exception.Message); }
+    }
+
+    public async Task<AdminPlanSaveResult> CreateAdminPlanAsync(CreatePlanRequest request,
+        CancellationToken token = default)
+    {
+        var credentials = Credentials();
+        if (credentials is null) return AdminPlanSaveResult.Failure("Vui lòng đăng nhập lại.");
+        try
+        {
+            var response = await api.CreateAdminPlanAsync(request, credentials.Value.Token, token);
+            if (credentials.Value.Generation != session.Generation) return AdminPlanSaveResult.Failure("Phiên đã kết thúc.");
+            return AdminPlanSaveResult.Success(response);
+        }
+        catch (ApiBusinessException exception) { HandleUnauthorized(exception, credentials.Value.Generation); return AdminPlanSaveResult.Failure(exception.Message); }
+        catch (ApiException exception) { return AdminPlanSaveResult.Failure(exception.Message); }
+    }
+
+    public async Task<AdminPlanSaveResult> UpdateAdminPlanAsync(long planId, UpdatePlanRequest request,
+        CancellationToken token = default)
+    {
+        var credentials = Credentials();
+        if (credentials is null) return AdminPlanSaveResult.Failure("Vui lòng đăng nhập lại.");
+        try
+        {
+            var response = await api.UpdateAdminPlanAsync(planId, request, credentials.Value.Token, token);
+            if (credentials.Value.Generation != session.Generation) return AdminPlanSaveResult.Failure("Phiên đã kết thúc.");
+            return AdminPlanSaveResult.Success(response);
+        }
+        catch (ApiBusinessException exception) { HandleUnauthorized(exception, credentials.Value.Generation); return AdminPlanSaveResult.Failure(exception.Message); }
+        catch (ApiException exception) { return AdminPlanSaveResult.Failure(exception.Message); }
+    }
+
+    public async Task<AdminSubscriptionsResult> GetAdminSubscriptionsAsync(string? status, long? planId,
+        string? search, int limit, int offset, CancellationToken token = default)
+    {
+        var credentials = Credentials();
+        if (credentials is null) return AdminSubscriptionsResult.Failure("Vui lòng đăng nhập lại.");
+        try
+        {
+            var response = await api.GetAdminSubscriptionsAsync(status, planId, search, limit, offset,
+                credentials.Value.Token, token);
+            if (credentials.Value.Generation != session.Generation) return AdminSubscriptionsResult.Failure("Phiên đã kết thúc.");
+            return AdminSubscriptionsResult.Success(response);
+        }
+        catch (ApiBusinessException exception) { HandleUnauthorized(exception, credentials.Value.Generation); return AdminSubscriptionsResult.Failure(exception.Message); }
+        catch (ApiException exception) { return AdminSubscriptionsResult.Failure(exception.Message); }
+    }
+
+    public async Task<AdminSubscriptionSaveResult> CreateAdminSubscriptionAsync(CreateSubscriptionRequest request,
+        CancellationToken token = default)
+    {
+        var credentials = Credentials();
+        if (credentials is null) return AdminSubscriptionSaveResult.Failure("Vui lòng đăng nhập lại.");
+        try
+        {
+            var response = await api.CreateAdminSubscriptionAsync(request, credentials.Value.Token, token);
+            if (credentials.Value.Generation != session.Generation) return AdminSubscriptionSaveResult.Failure("Phiên đã kết thúc.");
+            return AdminSubscriptionSaveResult.Success(response);
+        }
+        catch (ApiBusinessException exception) { HandleUnauthorized(exception, credentials.Value.Generation); return AdminSubscriptionSaveResult.Failure(exception.Message); }
+        catch (ApiException exception) { return AdminSubscriptionSaveResult.Failure(exception.Message); }
+    }
+
+    public async Task<AdminSubscriptionSaveResult> UpdateAdminSubscriptionAsync(long subscriptionId,
+        UpdateSubscriptionRequest request, CancellationToken token = default)
+    {
+        var credentials = Credentials();
+        if (credentials is null) return AdminSubscriptionSaveResult.Failure("Vui lòng đăng nhập lại.");
+        try
+        {
+            var response = await api.UpdateAdminSubscriptionAsync(subscriptionId, request, credentials.Value.Token, token);
+            if (credentials.Value.Generation != session.Generation) return AdminSubscriptionSaveResult.Failure("Phiên đã kết thúc.");
+            return AdminSubscriptionSaveResult.Success(response);
+        }
+        catch (ApiBusinessException exception) { HandleUnauthorized(exception, credentials.Value.Generation); return AdminSubscriptionSaveResult.Failure(exception.Message); }
+        catch (ApiException exception) { return AdminSubscriptionSaveResult.Failure(exception.Message); }
+    }
+
+    public async Task<AdminStatisticsResult> GetAdminStatisticsAsync(CancellationToken token = default)
+    {
+        var credentials = Credentials();
+        if (credentials is null) return AdminStatisticsResult.Failure("Vui lòng đăng nhập lại.");
+        try
+        {
+            var response = await api.GetAdminStatisticsAsync(credentials.Value.Token, token);
+            if (credentials.Value.Generation != session.Generation) return AdminStatisticsResult.Failure("Phiên đã kết thúc.");
+            return AdminStatisticsResult.Success(response);
+        }
+        catch (ApiBusinessException exception) { HandleUnauthorized(exception, credentials.Value.Generation); return AdminStatisticsResult.Failure(exception.Message); }
+        catch (ApiException exception) { return AdminStatisticsResult.Failure(exception.Message); }
+    }
+
     private static UserProfile ToProfile(ProfileResponse profile)
     {
         if (!Enum.TryParse(profile.AccountStatus, true, out CreatorFlow.Models.Enums.AccountStatus status) || !Enum.IsDefined(status))

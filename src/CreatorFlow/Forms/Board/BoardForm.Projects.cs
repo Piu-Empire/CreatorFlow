@@ -77,6 +77,8 @@ public partial class BoardForm
             CloseProfile();
             CloseAdmin();
             CloseReports();
+            CloseAdminPlans();
+            CloseAdminStatistics();
             CloseCalendar();
             CloseDashboard();
 
@@ -230,7 +232,7 @@ public partial class BoardForm
             _projects.Context.Apply(access); ResetProjectState();
             _recentProjects.Remove(id); _recentProjects.Insert(0, id);
             if (_recentProjects.Count > 5) _recentProjects.RemoveRange(5, _recentProjects.Count - 5);
-            CloseProjectPage(); CloseProfile(); CloseAdmin(); CloseReports(); CloseCalendar(); ReloadBoard();
+            CloseProjectPage(); CloseProfile(); CloseAdmin(); CloseReports(); CloseAdminPlans(); CloseAdminStatistics(); CloseCalendar(); ReloadBoard();
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested || IsDisposed || authGeneration != _auth.Session.Generation) { }
         catch (Exception error) when (error is ApiException or ApiBusinessException)
@@ -273,7 +275,7 @@ public partial class BoardForm
         CloseProjectMenu();
         if (_projects.Context.Current is not null)
         {
-            if (_projectPage is null && _profile is null && _admin is null && _reports is null && _calendar is null) RenderServerWorkspace();
+            if (_projectPage is null && _profile is null && _admin is null && _reports is null && _adminPlans is null && _adminStatistics is null && _calendar is null) RenderServerWorkspace();
             return;
         }
         if (_auth?.Session.IsAuthenticated != true) _recentProjects.Clear();
@@ -346,7 +348,7 @@ public partial class BoardForm
         _modulePageHeader.SetContentCreationEnabled(current && CanCreateContentViaApi);
         foreach (var column in _columns.Values) column.SourceAvailable = false;
         ApplyFilters();
-        if (_projectPage is not null || _profile is not null || _admin is not null || _reports is not null || _calendar is not null) return;
+        if (_projectPage is not null || _profile is not null || _admin is not null || _reports is not null || _adminPlans is not null || _adminStatistics is not null || _calendar is not null) return;
 
         // Dashboard đang mở: giữ trang đứng yên, chỉ nạp lại card của Project mới rồi cập nhật số liệu (AC1).
         if (_dashboard is not null)
@@ -403,7 +405,7 @@ public partial class BoardForm
         long generation = _projects.Context.Generation;
         long? authGeneration = _auth?.Session.Generation;
         bool Valid() => !IsDisposed && version == _boardLoadSequence && generation == _projects.Context.Generation &&
-            authGeneration == _auth?.Session.Generation && _projectPage is null && _profile is null && _admin is null && _reports is null;
+            authGeneration == _auth?.Session.Generation && _projectPage is null && _profile is null && _admin is null && _reports is null && _adminPlans is null && _adminStatistics is null && _calendar is null;
 
         List<CreatorFlow.Models.ContentBoardCard>? cards = null;
         string? error = null;

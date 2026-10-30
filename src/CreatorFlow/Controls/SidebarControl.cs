@@ -21,6 +21,8 @@ public class SidebarControl : UserControl
     public event EventHandler? IdeaBankRequested;
     public event EventHandler? AdminWorkspaceRequested;
     public event EventHandler? AdminReportsRequested;
+    public event EventHandler? AdminPlansRequested;
+    public event EventHandler? AdminStatisticsRequested;
     public event EventHandler? ReportsRequested;
     public event EventHandler? CalendarRequested;
     public event EventHandler? AiAssistantRequested;
@@ -159,6 +161,22 @@ public class SidebarControl : UserControl
                 Y = y,
                 AlwaysEnabled = true,
                 Action = () => AdminReportsRequested?.Invoke(this, EventArgs.Empty)
+            }); y += ItemStep;
+            _items.Add(new NavItem
+            {
+                Title = "Gói dịch vụ",
+                Icon = NavIcon.Gear,
+                Y = y,
+                AlwaysEnabled = true,
+                Action = () => AdminPlansRequested?.Invoke(this, EventArgs.Empty)
+            }); y += ItemStep;
+            _items.Add(new NavItem
+            {
+                Title = "Thống kê hệ thống",
+                Icon = NavIcon.Chart,
+                Y = y,
+                AlwaysEnabled = true,
+                Action = () => AdminStatisticsRequested?.Invoke(this, EventArgs.Empty)
             });
         }
 

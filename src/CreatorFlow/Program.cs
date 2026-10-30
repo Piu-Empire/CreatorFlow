@@ -35,10 +35,13 @@ static class Program
             AIOptions aiOptions = AIFactory.FromEnvironment();
             var aiService = new AIService(new HttpClient(), aiOptions);
             var repurposeAi = new RepurposeAiService(aiService, aiOptions.Validate() is null);
+            // SCRUM-60: AI nhận xét hiệu suất từ Metrics đã lưu (cùng lõi AI client).
+            var performanceAi = new PerformanceAiService(aiService);
             var scriptService = new ScriptService(api, session, new ScriptAiService(aiService));
             using var projects = new ProjectApiFacade(api, session);
             var taskBackend = new ApiMyTaskBackend(api, session);
             var auth = new AuthApiFacade(api, session); var metricBackend = new ApiMetricBackend(api, session);
+            var statisticsBackend = new ApiStatisticsBackend(api, session); // SCRUM-55
             var ideaBackend = new ApiIdeaBackend(api, session);
             var boardBackend = new ApiBoardBackend(api, session);
             var detailBackend = new ApiContentDetailBackend(api, session);
@@ -60,7 +63,8 @@ static class Program
             using var context = new AuthenticationApplicationContext(auth, () =>
                 new BoardForm(auth, projects, scriptService, taskBackend, ideaBackend, boardBackend,
                     detailBackend, assignmentBackend, reviewQueueBackend, notificationBackend,
-                    metricBackend, invitations, invitationInbox, aiService, repurposeAi), projects, invitationInbox);
+                    metricBackend, invitations, invitationInbox,
+                    statisticsBackend, aiService, repurposeAi, performanceAi), projects, invitationInbox);
             Application.Run(context);
         }
         catch (InvalidOperationException)
