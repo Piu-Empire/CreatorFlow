@@ -1,5 +1,6 @@
 using CreatorFlow.Contracts.Metrics;
 using CreatorFlow.Contracts.Statistics;
+using CreatorFlow.Controls.Charts;
 using CreatorFlow.Models;
 using CreatorFlow.Services;
 using CreatorFlow.Services.AI;
@@ -41,6 +42,7 @@ public sealed class ProjectReportsControl : UserControl
     private readonly ComboBox _creatorFilter;
     private readonly RoundedButton _metricsViewButton;
     private readonly RoundedButton _statsViewButton;
+    private readonly RoundedButton _chartsViewButton = new();
     private readonly RoundedButton _aiAnalyzeButton = new();
     private readonly RoundedButton _aiCopyButton = new();
     private readonly RoundedButton _aiCloseButton = new();
@@ -51,6 +53,17 @@ public sealed class ProjectReportsControl : UserControl
     private RichTextBox _aiText = null!;
     private readonly List<CreatorFilterOption> _creatorOptions = new();
 
+    // SCRUM-54: view Biểu đồ dùng dữ liệu Board + Metrics đã lưu; mỗi ô là một BarChartPanel.
+    private readonly Panel _chartsView;
+    private readonly Label _chartsStatus;
+    private readonly BarChartPanel _statusChart = new();
+    private readonly BarChartPanel _platformChart = new();
+    private readonly BarChartPanel _timelineChart = new();
+    private readonly BarChartPanel _performanceChart = new();
+    private readonly IBoardBackend? _boardBackend;
+    private CancellationTokenSource? _chartCts;
+    private bool _chartsLoaded;
+
     private CancellationTokenSource? _aiCts;
     private bool _aiBusy;
     private bool _loadingCreators;
@@ -60,11 +73,12 @@ public sealed class ProjectReportsControl : UserControl
 
     public ProjectReportsControl(
         IMetricBackend backend, long projectId, IStatisticsBackend? statisticsBackend = null,
-        IPerformanceAiService? performanceAi = null)
+        IPerformanceAiService? performanceAi = null, IBoardBackend? boardBackend = null)
     {
         _backend = backend;
         _statisticsBackend = statisticsBackend;
         _performanceAi = performanceAi;
+        _boardBackend = boardBackend;
         _projectId = projectId;
         BackColor = UITheme.Neutral50;
         Padding = new Padding(32, 24, 32, 24);
@@ -125,10 +139,16 @@ public sealed class ProjectReportsControl : UserControl
             Size = new Size(170, 34),
             Margin = new Padding(0, 0, 10, 0),
         };
-        _metricsViewButton.Click += (_, _) => ShowView(showStatistics: false);
-        _statsViewButton.Click += (_, _) => ShowView(showStatistics: true);
+        _chartsViewButton.Text = "Biểu đồ";
+        _chartsViewButton.Style = RoundButtonStyle.Secondary;
+        _chartsViewButton.Size = new Size(120, 34);
+        _chartsViewButton.Margin = new Padding(0, 0, 10, 0);
+        _metricsViewButton.Click += (_, _) => ShowView(ReportView.Metrics);
+        _statsViewButton.Click += (_, _) => ShowView(ReportView.Statistics);
+        _chartsViewButton.Click += (_, _) => ShowView(ReportView.Charts);
         viewButtons.Controls.Add(_metricsViewButton);
         viewButtons.Controls.Add(_statsViewButton);
+        viewButtons.Controls.Add(_chartsViewButton);
 
         // SCRUM-60: điểm vào AI phân tích, đặt bên phải thanh view.
         _aiAnalyzeButton.Text = "AI phân tích";
@@ -230,13 +250,64 @@ public sealed class ProjectReportsControl : UserControl
         _statsView.Controls.Add(_statsStatus);
         _statsView.Controls.Add(statsToolbar);
 
+        // SCRUM-54: lưới 2×2 biểu đồ; đặt trong panel cuộn để cửa sổ nhỏ không làm vỡ layout.
+        var chartsGrid = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            Height = 680,
+            ColumnCount = 2,
+            RowCount = 2,
+            BackColor = UITheme.Neutral50,
+            Padding = Padding.Empty,
+            Margin = Padding.Empty,
+        };
+        chartsGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        chartsGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        chartsGrid.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+        chartsGrid.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+        AddChartPanel(chartsGrid, _statusChart, 0, 0);
+        AddChartPanel(chartsGrid, _platformChart, 1, 0);
+        AddChartPanel(chartsGrid, _timelineChart, 0, 1);
+        AddChartPanel(chartsGrid, _performanceChart, 1, 1);
+
+        var chartsScroll = new Panel
+        {
+            Dock = DockStyle.Fill,
+            AutoScroll = true,
+            BackColor = UITheme.Neutral50,
+        };
+        chartsScroll.Controls.Add(chartsGrid);
+
+        _chartsStatus = new Label
+        {
+            Dock = DockStyle.Top,
+            Height = 26,
+            TextAlign = ContentAlignment.MiddleLeft,
+            Font = UITheme.FontBody,
+            ForeColor = UITheme.Neutral600,
+            BackColor = UITheme.Neutral50,
+            Visible = false,
+        };
+
+        _chartsView = new Panel { Dock = DockStyle.Fill, BackColor = UITheme.Neutral50, Visible = false };
+        _chartsView.Controls.Add(chartsScroll);
+        _chartsView.Controls.Add(_chartsStatus);
+
         Controls.Add(_metricsView);
         Controls.Add(_statsView);
+        Controls.Add(_chartsView);
         Controls.Add(BuildAiPanel());
         Controls.Add(viewBar);
         Controls.Add(header);
 
-        ShowView(showStatistics: false);
+        ShowView(ReportView.Metrics);
+    }
+
+    private static void AddChartPanel(TableLayoutPanel grid, Control panel, int column, int row)
+    {
+        panel.Dock = DockStyle.Fill;
+        panel.Margin = new Padding(0, 0, column == 0 ? 12 : 0, row == 0 ? 12 : 0);
+        grid.Controls.Add(panel, column, row);
     }
 
     /// <summary>SCRUM-60: panel kết quả AI dưới bảng; ẩn cho tới khi người dùng bấm "AI phân tích".</summary>
@@ -427,19 +498,207 @@ public sealed class ProjectReportsControl : UserControl
         LoadSummary(_current);
     }
 
-    /// <summary>Đổi giữa bảng hiệu suất và bảng thống kê Creator. Bảng thống kê chỉ tải lần đầu mở.</summary>
-    private void ShowView(bool showStatistics)
+    /// <summary>Đổi giữa bảng hiệu suất, bảng thống kê Creator và lưới biểu đồ. Mỗi view chỉ tải lần đầu mở.</summary>
+    private void ShowView(ReportView view)
     {
-        _metricsView.Visible = !showStatistics;
-        _statsView.Visible = showStatistics;
-        _metricsViewButton.Style = showStatistics ? RoundButtonStyle.Secondary : RoundButtonStyle.Primary;
-        _statsViewButton.Style = showStatistics ? RoundButtonStyle.Primary : RoundButtonStyle.Secondary;
+        _metricsView.Visible = view == ReportView.Metrics;
+        _statsView.Visible = view == ReportView.Statistics;
+        _chartsView.Visible = view == ReportView.Charts;
+        _metricsViewButton.Style = view == ReportView.Metrics ? RoundButtonStyle.Primary : RoundButtonStyle.Secondary;
+        _statsViewButton.Style = view == ReportView.Statistics ? RoundButtonStyle.Primary : RoundButtonStyle.Secondary;
+        _chartsViewButton.Style = view == ReportView.Charts ? RoundButtonStyle.Primary : RoundButtonStyle.Secondary;
 
-        if (showStatistics && !_statsLoaded)
+        if (view == ReportView.Statistics && !_statsLoaded)
         {
             _statsLoaded = true;
             LoadStatistics();
         }
+
+        if (view == ReportView.Charts && !_chartsLoaded)
+        {
+            _chartsLoaded = true;
+            _ = LoadChartsAsync();
+        }
+    }
+
+    /// <summary>
+    /// SCRUM-54: tải card của Board và 2 tổng hợp Metrics (content/platform) rồi vẽ 4 biểu đồ.
+    /// Card lỗi → cả view báo lỗi; Metrics lỗi → chỉ ô hiệu suất báo lỗi, 3 biểu đồ card vẫn hiện.
+    /// </summary>
+    private async Task LoadChartsAsync()
+    {
+        if (_boardBackend is null)
+        {
+            SetChartsUnavailable("Biểu đồ cần chạy ở chế độ máy chủ (đã kết nối database).", UITheme.Neutral600);
+            return;
+        }
+
+        _chartsStatus.Text = "Đang tải biểu đồ...";
+        _chartsStatus.ForeColor = UITheme.Neutral600;
+        _chartsStatus.Visible = true;
+
+        _chartCts?.Cancel();
+        _chartCts = new CancellationTokenSource();
+        CancellationToken token = _chartCts.Token;
+
+        try
+        {
+            List<ContentBoardCard> cards = await _boardBackend.GetBoardCardsAsync(_projectId, token);
+
+            string? metricsError = null;
+            MetricsSummaryResponse? contentSummary = null;
+            MetricsSummaryResponse? platformSummary = null;
+
+            await Task.Run(() =>
+            {
+                try
+                {
+                    contentSummary = _backend.GetMetricsSummary(_projectId, "content");
+                }
+                catch (Exception ex)
+                {
+                    metricsError = ex.Message;
+                }
+
+                try
+                {
+                    platformSummary = _backend.GetMetricsSummary(_projectId, "platform");
+                }
+                catch (Exception ex)
+                {
+                    metricsError ??= ex.Message;
+                }
+            }, token);
+
+            token.ThrowIfCancellationRequested();
+
+            BindCharts(cards, contentSummary, platformSummary, metricsError);
+            _chartsStatus.Visible = false;
+        }
+        catch (OperationCanceledException)
+        {
+            // Rời trang/đóng control: không hiện lỗi.
+        }
+        catch (Exception ex)
+        {
+            SetChartsUnavailable("Không tải được dữ liệu biểu đồ: " + ex.Message, UITheme.Danger);
+        }
+    }
+
+    private void SetChartsUnavailable(string message, Color color)
+    {
+        _statusChart.SetEmpty("Phân bố trạng thái Content", message);
+        _platformChart.SetEmpty("Content theo Platform", message);
+        _timelineChart.SetEmpty("Kế hoạch publish theo tháng", message);
+        _performanceChart.SetEmpty("Hiệu suất Content & Platform", message);
+        _chartsStatus.Text = message;
+        _chartsStatus.ForeColor = color;
+        _chartsStatus.Visible = true;
+    }
+
+    private void BindCharts(
+        List<ContentBoardCard> cards,
+        MetricsSummaryResponse? contentSummary,
+        MetricsSummaryResponse? platformSummary,
+        string? metricsError)
+    {
+        StatusChartData status = ChartDataBuilder.BuildStatus(cards);
+        _statusChart.SetBars(
+            "Phân bố trạng thái Content",
+            $"Tổng {status.Total:N0} Content trên Board (không gồm Archived).",
+            status.Buckets.Select(bucket => new ChartBar(
+                UITheme.GetStageDisplayName(bucket.Status),
+                bucket.Count,
+                bucket.Count.ToString("N0"),
+                $"{bucket.Percent:0.#}%",
+                UITheme.GetStageColor(bucket.Status))).ToList());
+
+        PlatformChartData platforms = ChartDataBuilder.BuildPlatforms(cards);
+        string platformCaption = platforms.Untagged > 0
+            ? $"{platforms.Total:N0} Content; {platforms.Untagged:N0} chưa gắn Platform. Một Content có thể thuộc nhiều Platform."
+            : $"{platforms.Total:N0} Content. Một Content có thể thuộc nhiều Platform.";
+        _platformChart.SetBars(
+            "Content theo Platform",
+            platformCaption,
+            platforms.Buckets.Select((bucket, index) => new ChartBar(
+                bucket.Name,
+                bucket.Count,
+                bucket.Count.ToString("N0"),
+                null,
+                BarPalette[index % BarPalette.Length])).ToList());
+
+        TimelineChartData timeline = ChartDataBuilder.BuildTimeline(cards);
+        string timelineCaption = timeline.NoDate > 0
+            ? $"Theo PlannedPublishAt (thiếu thì Deadline); {timeline.NoDate:N0} Content chưa có mốc thời gian."
+            : "Theo PlannedPublishAt của Content (thiếu thì Deadline).";
+        _timelineChart.SetBars(
+            "Kế hoạch publish theo tháng",
+            timelineCaption,
+            timeline.Buckets.Select(bucket => new ChartBar(
+                bucket.Month.ToString("MM/yyyy"),
+                bucket.Count,
+                bucket.Count.ToString("N0"),
+                null,
+                UITheme.Neutral700)).ToList());
+
+        if (contentSummary is null || platformSummary is null)
+        {
+            _performanceChart.SetEmpty(
+                "Hiệu suất Content & Platform",
+                "Không tải được Metrics: " + (metricsError ?? "không có dữ liệu."));
+            return;
+        }
+
+        PerformanceChartData performance = ChartDataBuilder.BuildPerformance(contentSummary, platformSummary);
+        if (performance.TopContents.Count == 0 && performance.Platforms.Count == 0)
+        {
+            _performanceChart.SetEmpty("Hiệu suất Content & Platform", "Chưa có Metrics đã lưu cho Project.");
+            return;
+        }
+
+        string performanceCaption = performance.ContentTotal == 0
+            ? "Chưa có Metrics đã lưu cho Project."
+            : $"Metrics đã lưu. Top {performance.TopContents.Count:N0}/{performance.ContentTotal:N0} Content theo Views.";
+        _performanceChart.SetData(
+            "Hiệu suất Content & Platform",
+            performanceCaption,
+            new[]
+            {
+                new ChartSection("Top Content theo Views",
+                    performance.TopContents.Select(row => new ChartBar(
+                        row.Name,
+                        row.Views,
+                        row.Views.ToString("N0"),
+                        EngagementHint(row),
+                        UITheme.Info)).ToList()),
+                new ChartSection("Platform theo Views",
+                    performance.Platforms.Select((row, index) => new ChartBar(
+                        row.Name,
+                        row.Views,
+                        row.Views.ToString("N0"),
+                        EngagementHint(row),
+                        BarPalette[index % BarPalette.Length])).ToList()),
+            });
+    }
+
+    private static string? EngagementHint(MetricsSummaryRow row) =>
+        row.Views == 0 ? null : $"{row.EngagementPercent:0.##}%";
+
+    private static readonly Color[] BarPalette =
+    [
+        UITheme.Info,
+        UITheme.AccentPurple,
+        UITheme.Success,
+        UITheme.Warning,
+        UITheme.StageScript,
+        UITheme.Neutral700,
+    ];
+
+    private enum ReportView
+    {
+        Metrics,
+        Statistics,
+        Charts,
     }
 
     /// <summary>Tải và hiển thị tổng hợp theo chiều <paramref name="groupBy"/> (content/creator/platform/project).</summary>
@@ -784,6 +1043,10 @@ public sealed class ProjectReportsControl : UserControl
             _aiCts?.Cancel();
             _aiCts?.Dispose();
             _aiCts = null;
+
+            _chartCts?.Cancel();
+            _chartCts?.Dispose();
+            _chartCts = null;
         }
 
         base.Dispose(disposing);

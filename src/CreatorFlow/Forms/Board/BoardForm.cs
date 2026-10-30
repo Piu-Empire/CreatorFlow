@@ -1236,7 +1236,7 @@ public partial class BoardForm : Form, IMessageFilter
             return;
         }
 
-        var page = new ProjectReportsControl(_metricBackend, CurrentSession.CurrentProjectId, _statisticsBackend, _performanceAi) { Dock = DockStyle.Fill };
+        var page = new ProjectReportsControl(_metricBackend, CurrentSession.CurrentProjectId, _statisticsBackend, _performanceAi, _boardBackend) { Dock = DockStyle.Fill };
         ShowProjectPage(page, "Báo cáo Metrics");
         _sidebarControl.SetActiveMenu("Reports");
     }
