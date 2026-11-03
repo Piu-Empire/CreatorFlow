@@ -110,6 +110,108 @@ public sealed class PlanRepository(IDbConnectionFactory connectionFactory) : IPl
         return MapPlan(reader);
     }
 
+    /// <summary>SCRUM-23: toàn bộ gói cho màn quản trị, gói mới nhất lên trước.</summary>
+    public async Task<IReadOnlyList<Plan>> GetAllAsync(
+        CancellationToken cancellationToken = default)
+    {
+        string sql = $"""
+            SELECT {SelectColumns}
+            FROM plans
+            ORDER BY plan_id;
+            """;
+
+        await using NpgsqlConnection connection =
+            await connectionFactory.OpenConnectionAsync(cancellationToken);
+        await using var command = new NpgsqlCommand(sql, connection);
+        await using NpgsqlDataReader reader =
+            await command.ExecuteReaderAsync(cancellationToken);
+
+        var plans = new List<Plan>();
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            plans.Add(MapPlan(reader));
+        }
+
+        return plans;
+    }
+
+    /// <summary>SCRUM-23: dùng để chặn trùng mã gói (không phân biệt hoa/thường).</summary>
+    public async Task<Plan?> GetByCodeAsync(
+        string code,
+        CancellationToken cancellationToken = default)
+    {
+        string sql = $"""
+            SELECT {SelectColumns}
+            FROM plans
+            WHERE lower(code) = lower(@code);
+            """;
+
+        await using NpgsqlConnection connection =
+            await connectionFactory.OpenConnectionAsync(cancellationToken);
+        await using var command = new NpgsqlCommand(sql, connection);
+        command.Parameters.AddWithValue("code", NpgsqlDbType.Varchar, code);
+
+        await using NpgsqlDataReader reader =
+            await command.ExecuteReaderAsync(cancellationToken);
+
+        return await reader.ReadAsync(cancellationToken)
+            ? MapPlan(reader)
+            : null;
+    }
+
+    /// <summary>SCRUM-23: cập nhật gói hiện có; null khi gói không tồn tại.</summary>
+    public async Task<Plan?> UpdateAsync(
+        Plan entity,
+        CancellationToken cancellationToken = default)
+    {
+        string sql = $"""
+            UPDATE plans
+            SET name = @name,
+                description = @description,
+                price_monthly = @price_monthly,
+                max_projects = @max_projects,
+                max_members = @max_members,
+                ai_request_limit = @ai_request_limit,
+                is_active = @is_active
+            WHERE plan_id = @plan_id
+            RETURNING {SelectColumns};
+            """;
+
+        await using NpgsqlConnection connection =
+            await connectionFactory.OpenConnectionAsync(cancellationToken);
+        await using var command = new NpgsqlCommand(sql, connection);
+        command.Parameters.AddWithValue("plan_id", NpgsqlDbType.Bigint, entity.PlanId);
+        command.Parameters.AddWithValue("name", NpgsqlDbType.Varchar, entity.Name);
+        command.Parameters.AddWithValue(
+            "description",
+            NpgsqlDbType.Text,
+            (object?)entity.Description ?? DBNull.Value);
+        command.Parameters.AddWithValue(
+            "price_monthly",
+            NpgsqlDbType.Numeric,
+            entity.PriceMonthly);
+        command.Parameters.AddWithValue(
+            "max_projects",
+            NpgsqlDbType.Integer,
+            (object?)entity.MaxProjects ?? DBNull.Value);
+        command.Parameters.AddWithValue(
+            "max_members",
+            NpgsqlDbType.Integer,
+            (object?)entity.MaxMembers ?? DBNull.Value);
+        command.Parameters.AddWithValue(
+            "ai_request_limit",
+            NpgsqlDbType.Integer,
+            (object?)entity.AiRequestLimit ?? DBNull.Value);
+        command.Parameters.AddWithValue("is_active", NpgsqlDbType.Boolean, entity.IsActive);
+
+        await using NpgsqlDataReader reader =
+            await command.ExecuteReaderAsync(cancellationToken);
+
+        return await reader.ReadAsync(cancellationToken)
+            ? MapPlan(reader)
+            : null;
+    }
+
     private static Plan MapPlan(NpgsqlDataReader reader)
     {
         int descriptionOrdinal = reader.GetOrdinal("description");

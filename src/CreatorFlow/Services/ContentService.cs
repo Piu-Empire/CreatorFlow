@@ -207,6 +207,15 @@ public class ContentService
 
         var role = EnsureIsProjectMember(projectId, userId);
 
+        // Repurpose (SCRUM-59): Content gốc phải tồn tại và thuộc đúng Project.
+        if (draft.SourceContentId is long sourceContentId)
+        {
+            var source = _contentRepo.GetById(sourceContentId)
+                ?? throw new ContentValidationException($"Không tìm thấy Content gốc #{sourceContentId}.");
+            if (source.ProjectId != projectId)
+                throw new ContentValidationException("Content gốc không thuộc Project này.");
+        }
+
         if (draft.AssigneeUserId is long assigneeId)
         {
             // Creator chỉ được tự nhận việc của nội dung mình tạo; giao cho người khác là việc của Owner/Manager.

@@ -50,6 +50,18 @@ public class InMemoryAssignmentRecord
     public DateTime? Deadline;
 }
 
+/// <summary>
+/// Một liên kết Content nguồn → Content phái sinh trong bộ nhớ — tương ứng bảng content_relations.
+/// </summary>
+public class InMemoryContentRelationRecord
+{
+    public long Id;
+    public long SourceContentId;
+    public long DerivedContentId;
+    public string RelationType = "REPURPOSED";
+    public long? CreatedBy;
+}
+
 /// <summary>Dữ liệu demo dùng chung cho mọi InMemory*Repository, sống suốt vòng đời ứng dụng (static).</summary>
 public static class InMemoryDataStore
 {
@@ -135,6 +147,9 @@ public static class InMemoryDataStore
     }
 
     public static readonly List<ContentStatusHistory> StatusHistory = new();
+
+    /// <summary>Liên kết nguồn → phái sinh (content_relations) trong bộ nhớ.</summary>
+    public static readonly List<InMemoryContentRelationRecord> ContentRelations = new();
 
     public static readonly List<Review> Reviews = new()
     {
